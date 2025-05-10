@@ -1148,8 +1148,16 @@ void SceneImpl::DefineImageMapHalf(const std::string &imgMapName,
 		unsigned short *pixels, const float gamma, const unsigned int channels,
 		const unsigned int width, const unsigned int height,
 		ChannelSelectionType selectionType, WrapType wrapType) {
-	API_BEGIN("{}, {}, {}, {}, {}, {}, {}, {}, {}", ToArgString(imgMapName), (void *)pixels, gamma, channels,
-			width, height, ToArgString(selectionType), ToArgString(wrapType));
+	API_BEGIN("{}, {}, {}, {}, {}, {}, {}, {}",
+            ToArgString(imgMapName),
+            (void *)pixels,
+            gamma,
+            channels,
+	    width,
+            height,
+            ToArgString(selectionType),
+            ToArgString(wrapType)
+        );
 
 	scene->DefineImageMap(imgMapName, (half *)pixels, channels, width, height,
 			slg::ImageMapConfig(
@@ -1165,8 +1173,16 @@ void SceneImpl::DefineImageMapFloat(const std::string &imgMapName,
 		float *pixels, const float gamma, const unsigned int channels,
 		const unsigned int width, const unsigned int height,
 		ChannelSelectionType selectionType, WrapType wrapType) {
-	API_BEGIN("{}, {}, {}, {}, {}, {}, {}, {}, {}", ToArgString(imgMapName), (void *)pixels, gamma, channels,
-			width, height, ToArgString(selectionType), ToArgString(wrapType));
+	API_BEGIN("{}, {}, {}, {}, {}, {}, {}, {}",
+            ToArgString(imgMapName),
+            (void *)pixels,
+            gamma,
+            channels,
+	    width,
+            height,
+            ToArgString(selectionType),
+            ToArgString(wrapType)
+        );
 
 	scene->DefineImageMap(imgMapName, pixels, channels, width, height,
 			slg::ImageMapConfig(
@@ -1804,9 +1820,9 @@ void RenderSessionImpl::SaveResumeFile(const std::string &fileName) {
 }
 
 
-auto fmt::formatter<luxcore::Camera::CameraType>::format(
+auto std::formatter<luxcore::Camera::CameraType>::format(
     luxcore::Camera::CameraType cam,
-    fmt::format_context& ctx
+    std::format_context& ctx
 ) const -> format_context::iterator {
 
   string_view name = "UNKNOWN";

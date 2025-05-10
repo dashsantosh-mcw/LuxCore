@@ -371,12 +371,12 @@ Camera::~Camera() {
 //------------------------------------------------------------------------------
 
 Scene *Scene::Create(const luxrays::Properties *resizePolicyProps) {
-	API_BEGIN("{}, {}", (void *)resizePolicyProps);
+	API_BEGIN("{}", (void *)resizePolicyProps);
 
 	Scene *result = new luxcore::detail::SceneImpl(resizePolicyProps);
 
 	API_RETURN("{}", (void *)result);
-	
+
 	return result;
 }
 
@@ -386,7 +386,7 @@ Scene *Scene::Create(const luxrays::Properties &props, const luxrays::Properties
 	Scene *result = new luxcore::detail::SceneImpl(resizePolicyProps);
 
 	API_RETURN("{}", (void *)result);
-	
+
 	return result;
 }
 
