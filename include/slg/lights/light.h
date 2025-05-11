@@ -19,8 +19,6 @@
 #ifndef _SLG_LIGHT_H
 #define	_SLG_LIGHT_H
 
-#include <boost/unordered_map.hpp>
-
 #include "luxrays/luxrays.h"
 #include "luxrays/core/geometry/vector.h"
 #include "luxrays/core/randomgen.h"
@@ -111,7 +109,7 @@ public:
 	
 	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
-	virtual void AddReferencedImageMaps(boost::unordered_set<const ImageMap *> &referencedImgMaps) const { }
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap *> &referencedImgMaps) const { }
 	virtual void UpdateVolumeReferences(const Volume *oldVol, const Volume *newVol);
 
 	static std::string LightSourceType2String(const LightSourceType type);

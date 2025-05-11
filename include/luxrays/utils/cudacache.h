@@ -20,8 +20,7 @@
 #define	_LUXRAYS_CUDACACHE_H
 
 #include <string>
-#include <boost/filesystem.hpp>
-#include <boost/unordered_map.hpp>
+#include <filesystem>
 
 #include "luxrays/utils/cuda.h"
 
@@ -57,7 +56,7 @@ public:
 		const std::string &kernelSource, const std::string &programName,
 		bool *cached, std::string *error);
 
-	static boost::filesystem::path GetCacheDir(const std::string &applicationName);
+	static std::filesystem::path GetCacheDir(const std::string &applicationName);
 
 private:
 	std::string appName;

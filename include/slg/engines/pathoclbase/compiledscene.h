@@ -21,8 +21,6 @@
 
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
-#include <boost/unordered_set.hpp>
-
 #include "slg/slg.h"
 #include "slg/editaction.h"
 
@@ -177,7 +175,7 @@ private:
 	const PathTracer *pathTracer;
 
 	size_t maxMemPageSize;
-	boost::unordered_set<std::string> enabledCode;
+	std::unordered_set<std::string> enabledCode;
 }; 
 
 }

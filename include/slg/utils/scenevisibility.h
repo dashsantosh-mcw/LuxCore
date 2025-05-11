@@ -44,8 +44,8 @@ protected:
 	public:
 		TraceVisibilityThread(SceneVisibility<T> &sv, const u_int index,
 				SobolSamplerSharedData &visibilitySobolSharedData,
-				IndexOctree<T> *particlesOctree, boost::mutex &particlesOctreeMutex,
-				boost::atomic<u_int> &globalVisibilityParticlesCount,
+				IndexOctree<T> *particlesOctree, std::mutex &particlesOctreeMutex,
+				std::atomic<u_int> &globalVisibilityParticlesCount,
 				u_int &visibilityCacheLookUp, u_int &visibilityCacheHits,
 				bool &visibilityWarmUp);
 		virtual ~TraceVisibilityThread();
@@ -57,20 +57,20 @@ protected:
 		void GenerateEyeRay(const Camera *camera, luxrays::Ray &eyeRay,
 				PathVolumeInfo &volInfo, Sampler *sampler, SampleResult &sampleResult) const;
 
-		void RenderFunc();
+		void RenderFunc(std::stop_token stop_token);
 
 		SceneVisibility<T> &sv;
 		const u_int threadIndex;
 
 		SobolSamplerSharedData &visibilitySobolSharedData;
 		IndexOctree<T> *particlesOctree;
-		boost::mutex &particlesOctreeMutex;
-		boost::atomic<u_int> &globalVisibilityParticlesCount;
+		std::mutex &particlesOctreeMutex;
+		std::atomic<u_int> &globalVisibilityParticlesCount;
 		u_int &visibilityCacheLookUp;
 		u_int &visibilityCacheHits;
 		bool &visibilityWarmUp;
 
-		boost::thread *renderThread;
+		std::jthread *renderThread;
 	};
 
 	virtual IndexOctree<T> *AllocOctree() const = 0;

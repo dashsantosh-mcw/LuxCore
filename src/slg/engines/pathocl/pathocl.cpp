@@ -26,8 +26,8 @@
 #include <string>
 #include <sstream>
 #include <stdexcept>
+#include <mutex>
 
-#include <boost/thread/mutex.hpp>
 #include <boost/lexical_cast.hpp>
 
 #include "luxrays/core/geometry/transform.h"
@@ -201,7 +201,7 @@ void PathOCLRenderEngine::MergeThreadFilms() {
 }
 
 void PathOCLRenderEngine::UpdateFilmLockLess() {
-	boost::unique_lock<boost::mutex> lock(*filmMutex);
+	std::unique_lock<std::mutex> lock(*filmMutex);
 
 	MergeThreadFilms();
 }
@@ -224,7 +224,7 @@ void PathOCLRenderEngine::UpdateTaskCount() {
 
 		// Compute the cap to the number of tasks
 		u_int taskCap = defaultTaskCount;
-		BOOST_FOREACH(DeviceDescription *devDesc, selectedDeviceDescs) {
+		for(DeviceDescription *devDesc: selectedDeviceDescs) {
 			if (devDesc->GetMaxMemory() <= 8ull* 1024ull * 1024ull * 1024ull) // For 8GB cards
 				taskCap = Min(taskCap, 256u * 1024u);
 			if (devDesc->GetMaxMemory() <= 4ull * 1024ull * 1024ull * 1024ull) // For 4GB cards

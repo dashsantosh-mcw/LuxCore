@@ -20,7 +20,6 @@
 #define	_SLG_COLORSPACECONVERTERS_H
 
 #include <string>
-#include <boost/unordered_map.hpp>
 
 #include <OpenColorIO/OpenColorIO.h>
 namespace OCIO = OCIO_NAMESPACE;
@@ -52,7 +51,7 @@ private:
 	void ConvertFromOpenColorIO(const std::string &configFileName,
 		const std::string &inputColorSpace, luxrays::Spectrum &c);
 
-	boost::unordered_map<std::string, OCIO::ConstCPUProcessorRcPtr> ocioProcessorCache;
+	std::unordered_map<std::string, OCIO::ConstCPUProcessorRcPtr> ocioProcessorCache;
 };
 
 }

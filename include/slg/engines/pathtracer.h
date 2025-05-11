@@ -19,8 +19,6 @@
 #ifndef _SLG_PATHTRACER_H
 #define	_SLG_PATHTRACER_H
 
-#include <boost/thread/mutex.hpp>
-
 #include "slg/slg.h"
 #include "slg/engines/cpurenderengine.h"
 #include "slg/samplers/sampler.h"
@@ -77,7 +75,7 @@ public:
 		ILLUMINATED, SHADOWED, NOT_VISIBLE
 	} DirectLightResult;
 
-	typedef boost::function<void(const LightPathInfo &pathInfo,
+	typedef std::function<void(const LightPathInfo &pathInfo,
 			const BSDF &, const u_int, const luxrays::Spectrum &,
 			std::vector<SampleResult> &sampleResults)> ConnectToEyeCallBackType;
 

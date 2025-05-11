@@ -19,7 +19,7 @@
 #include <math.h>
 
 #include <boost/format.hpp>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 #include "luxrays/utils/thread.h"
 #include "luxrays/utils/strutils.h"
@@ -105,12 +105,12 @@ bool PhotonGICache::IsDirectLightHitVisible(const EyePathInfo &pathInfo,
 
 void PhotonGICache::TracePhotons(const u_int seedBase, const u_int photonTracedCount,
 		const bool indirectCacheDone, const bool causticCacheDone,
-		boost::atomic<u_int> &globalIndirectPhotonsTraced, boost::atomic<u_int> &globalCausticPhotonsTraced,
-		boost::atomic<u_int> &globalIndirectSize, boost::atomic<u_int> &globalCausticSize) {
+		std::atomic<u_int> &globalIndirectPhotonsTraced, std::atomic<u_int> &globalCausticPhotonsTraced,
+		std::atomic<u_int> &globalIndirectSize, std::atomic<u_int> &globalCausticSize) {
 	const size_t renderThreadCount = GetHardwareThreadCount();
 	vector<TracePhotonsThread *> renderThreads(renderThreadCount, nullptr);
 
-	boost::atomic<u_int> globalPhotonsCounter(0);
+	std::atomic<u_int> globalPhotonsCounter(0);
 
 	// Create the photon tracing threads
 	for (size_t i = 0; i < renderThreadCount; ++i) {
@@ -163,10 +163,10 @@ void PhotonGICache::TracePhotons(const u_int seedBase, const u_int photonTracedC
 void PhotonGICache::TracePhotons(const bool indirectEnabled, const bool causticEnabled) {
 	const size_t renderThreadCount = GetHardwareThreadCount();
 
-	boost::atomic<u_int> globalIndirectPhotonsTraced(0);
-	boost::atomic<u_int> globalCausticPhotonsTraced(0);
-	boost::atomic<u_int> globalIndirectSize(0);
-	boost::atomic<u_int> globalCausticSize(0);
+	std::atomic<u_int> globalIndirectPhotonsTraced(0);
+	std::atomic<u_int> globalCausticPhotonsTraced(0);
+	std::atomic<u_int> globalIndirectSize(0);
+	std::atomic<u_int> globalCausticSize(0);
 
 	// Update the count only if I have traced this kind of photons
 	if (indirectEnabled)
@@ -365,14 +365,14 @@ void PhotonGICache::CreateRadiancePhotons() {
 
 void PhotonGICache::Preprocess(const u_int threadCnt) {
 	threadCount = threadCnt;
-	threadsSyncBarrier.reset(new boost::barrier(threadCount));
+	threadsSyncBarrier.reset(new std::barrier(threadCount, completion_t()));
 	lastUpdateSpp = 0;
 	updateSeedBase = 1;
 	finishUpdateFlag = false;
 
 	if (params.persistent.fileName != "") {
 		// Check if the file already exist
-		if (boost::filesystem::exists(params.persistent.fileName)) {
+		if (std::filesystem::exists(params.persistent.fileName)) {
 			// Load the cache from the file
 			LoadPersistentCache(params.persistent.fileName);
 

@@ -18,9 +18,8 @@
 
 #include <iostream>
 #include <memory>
+#include <unordered_set>
 #include <boost/format.hpp>
-#include <boost/foreach.hpp>
-#include <boost/unordered_set.hpp>
 
 #include "luxcoreapp.h"
 
@@ -286,7 +285,7 @@ void FilmOutputsWindow::Close() {
 }
 
 void FilmOutputsWindow::DeleteAllWindow() {
-	BOOST_FOREACH(FilmOutputWindowMap::value_type e, filmOutputWindows)
+	for(FilmOutputWindowMap::value_type e: filmOutputWindows)
 		DeleteWindow(e.first);
 }
 
@@ -438,8 +437,8 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 	//--------------------------------------------------------------------------
 
 	if (ImGui::CollapsingHeader("Current Film output(s)", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
-		boost::unordered_set<string> outputNames;
-		boost::unordered_map<string, unsigned int> typeCount;
+		std::unordered_set<string> outputNames;
+		std::unordered_map<string, unsigned int> typeCount;
 		vector<string> outputKeys = props.GetAllNames("film.outputs.");
 		for (vector<string>::const_iterator outputKey = outputKeys.begin(); outputKey != outputKeys.end(); ++outputKey) {
 			const string &key = *outputKey;
@@ -649,7 +648,7 @@ void FilmOutputsWindow::Draw() {
 
 	if (opened) {
 		// Draw all channel windows
-		BOOST_FOREACH(FilmOutputWindowMap::value_type e, filmOutputWindows)
+		for(FilmOutputWindowMap::value_type e: filmOutputWindows)
 			e.second->Draw();
 	} else
 		DeleteAllWindow();

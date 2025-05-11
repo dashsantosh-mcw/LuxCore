@@ -41,7 +41,7 @@ namespace sinks {
 				memory_buf_t formatted;
 				base_sink<Mutex>::formatter_->format(msg, formatted);
 
-				logHandler(fmt::to_string(formatted).c_str());
+				logHandler(formatted.c_str());
 			}
 		}
 		

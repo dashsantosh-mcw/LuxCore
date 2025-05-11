@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <mutex>
 #include <boost/format.hpp>
 
 #include "slg/engines/tilerepository.h"
@@ -296,7 +297,7 @@ TileRepository::~TileRepository() {
 void TileRepository::Clear() {
 	// Free all tiles in the 3 lists
 
-	BOOST_FOREACH(Tile *tile, tileList) {
+	for(Tile *tile: tileList) {
 		delete tile;
 	}
 
@@ -311,7 +312,7 @@ void TileRepository::Restart(Film *film, const u_int startPass, const u_int mult
 	pendingTiles.clear();
 	convergedTiles.clear();
 
-	BOOST_FOREACH(Tile *tile, tileList) {
+	for(Tile *tile: tileList) {
 		tile->Restart(startPass);
 		todoTiles.push(tile);		
 	}
@@ -326,19 +327,19 @@ void TileRepository::Restart(Film *film, const u_int startPass, const u_int mult
 }
 
 void TileRepository::GetPendingTiles(deque<const Tile *> &tiles) {
-	boost::unique_lock<boost::mutex> lock(tileMutex);
+	std::unique_lock<std::mutex> lock(tileMutex);
 
 	tiles.insert(tiles.end(), pendingTiles.begin(), pendingTiles.end());
 }
 
 void TileRepository::GetNotConvergedTiles(deque<const Tile *> &tiles) {
-	boost::unique_lock<boost::mutex> lock(tileMutex);
+	std::unique_lock<std::mutex> lock(tileMutex);
 
 	tiles.insert(tiles.end(), todoTiles.begin(), todoTiles.end());
 }
 
 void TileRepository::GetConvergedTiles(deque<const Tile *> &tiles) {
-	boost::unique_lock<boost::mutex> lock(tileMutex);
+	std::unique_lock<std::mutex> lock(tileMutex);
 
 	tiles.insert(tiles.end(), convergedTiles.begin(), convergedTiles.end());
 }
@@ -407,7 +408,7 @@ void TileRepository::InitTiles(const Film &film) {
 		tileList[i] = new Tile(this, film, i, coords[i].x, coords[i].y);
 
 	// Initialize also the TODO list
-	BOOST_FOREACH(Tile *tile, tileList)
+	for(Tile *tile: tileList)
 		todoTiles.push(tile);
 
 	done = false;
@@ -434,7 +435,7 @@ void TileRepository::SetDone(Film *film) {
 bool TileRepository::GetNewTileWork(TileWork &tileWork) {
 	// Look for the tile with less passes in pendingTiles
 	Tile *pendingTile = nullptr;
-	BOOST_FOREACH(Tile *tile, pendingTiles) {
+	for(Tile *tile: pendingTiles) {
 		if ((!tile->done) &&
 				(!pendingTile ||
 				(pendingTile->pass + pendingTile->pendingPasses > tile->pass + tile->pendingPasses)))
@@ -477,10 +478,10 @@ bool TileRepository::GetNewTileWork(TileWork &tileWork) {
 	return true;
 }
 
-bool TileRepository::NextTile(Film *film, boost::mutex *filmMutex,
+bool TileRepository::NextTile(Film *film, std::mutex *filmMutex,
 		TileWork &tileWork, Film *tileFilm) {
 	// Now I have to lock the repository
-	boost::unique_lock<boost::mutex> lock(tileMutex);
+	std::unique_lock<std::mutex> lock(tileMutex);
 
 	// Check if I have to add the tile to the film
 	if (tileWork.HasWork()) {
@@ -504,7 +505,7 @@ bool TileRepository::NextTile(Film *film, boost::mutex *filmMutex,
 		}
 
 		// Add the tile also to the global film
-		boost::unique_lock<boost::mutex> lock(*filmMutex);
+		std::unique_lock<std::mutex> lock(*filmMutex);
 
 		// This allow to avoid to have to clear the film
 		if (enableFirstPassClear && (tileWork.passToRender == 1)) {
@@ -549,7 +550,7 @@ bool TileRepository::NextTile(Film *film, boost::mutex *filmMutex,
 			// Check the status of pending tiles (one or more of them could be a
 			// copy of mine and now done)
 			bool pendingAllDone = true;
-			BOOST_FOREACH(Tile *tile, pendingTiles) {
+			for(Tile *tile: pendingTiles) {
 				if (!tile->done) {
 					pendingAllDone = false;
 					break;

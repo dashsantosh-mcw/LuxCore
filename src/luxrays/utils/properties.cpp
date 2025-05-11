@@ -23,14 +23,13 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <regex>
 
-#include <boost/foreach.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/regex.hpp>
 #include <boost/archive/iterators/base64_from_binary.hpp>
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
@@ -825,7 +824,7 @@ unsigned int Properties::GetSize() const {
 }
 
 Properties &Properties::Set(const Properties &props) {
-	BOOST_FOREACH(const string &name, props.GetAllNames()) {
+	for(const string &name: props.GetAllNames()) {
 		this->Set(props.Get(name));
 	}
 
@@ -833,11 +832,11 @@ Properties &Properties::Set(const Properties &props) {
 }
 
 Properties &Properties::Set(const Properties &props, const string &prefix) {
-	BOOST_FOREACH(const string &name, props.GetAllNames()) {
+	for(const string &name: props.GetAllNames()) {
 		Set(props.Get(name).AddedNamePrefix(prefix));
 	}
 
-	return *this;	
+	return *this;
 }
 
 Properties &Properties::SetFromStream(istream &stream) {
@@ -875,10 +874,10 @@ Properties &Properties::SetFromStream(istream &stream) {
 }
 
 Properties &Properties::SetFromFile(const string &fileName) {
-	// The use of boost::filesystem::path is required for UNICODE support: fileName
+	// The use of std::filesystem::path is required for UNICODE support: fileName
 	// is supposed to be UTF-8 encoded.
-	boost::filesystem::ifstream inFile(boost::filesystem::path(fileName),
-			boost::filesystem::ifstream::in); 
+	std::ifstream inFile(std::filesystem::path(fileName),
+			std::ifstream::in); 
 
 	if (inFile.fail())
 		throw runtime_error("Unable to open properties file: " + fileName);
@@ -899,10 +898,10 @@ Properties &Properties::SetFromString(const string &propDefinitions) {
 }
 
 void Properties::Save(const std::string &fileName) {
-	// The use of boost::filesystem::path is required for UNICODE support: fileName
+	// The use of std::filesystem::path is required for UNICODE support: fileName
 	// is supposed to be UTF-8 encoded.
-	boost::filesystem::ofstream outFile(boost::filesystem::path(fileName),
-			boost::filesystem::ofstream::trunc);
+	std::ofstream outFile(std::filesystem::path(fileName),
+			std::ofstream::trunc);
 	
 	// Force to use C locale
 	outFile.imbue(cLocale);
@@ -928,7 +927,7 @@ const vector<string> &Properties::GetAllNames() const {
 
 vector<string> Properties::GetAllNames(const string &prefix) const {
 	vector<string> namesSubset;
-	BOOST_FOREACH(const string &name, names) {
+	for(const string &name: names) {
 		if (name.find(prefix) == 0)
 			namesSubset.push_back(name);
 	}
@@ -937,11 +936,11 @@ vector<string> Properties::GetAllNames(const string &prefix) const {
 }
 
 vector<string> Properties::GetAllNamesRE(const string &regularExpression) const {
-	boost::regex re(regularExpression);
+	std::regex re(regularExpression);
 	
 	vector<string> namesSubset;
-	BOOST_FOREACH(const string &name, names) {
-		if (boost::regex_match(name, re))
+	for(const string &name: names) {
+		if (std::regex_match(name, re))
 			namesSubset.push_back(name);
 	}
 
@@ -953,7 +952,7 @@ vector<string> Properties::GetAllUniqueSubNames(const string &prefix, const bool
 
 	set<string> definedNames;
 	vector<string> namesSubset;
-	BOOST_FOREACH(const string &name, names) {
+	for(const string &name: names) {
 		if (name.find(prefix) == 0) {
 			// Check if it has been already defined
 
@@ -1010,7 +1009,7 @@ vector<string> Properties::GetAllUniqueSubNames(const string &prefix, const bool
 }
 
 bool Properties::HaveNames(const string &prefix) const {
-	BOOST_FOREACH(const string &name, names) {
+	for(const string &name: names) {
 		if (name.find(prefix) == 0)
 			return true;
 	}
@@ -1019,10 +1018,10 @@ bool Properties::HaveNames(const string &prefix) const {
 }
 
 bool Properties::HaveNamesRE(const string &regularExpression) const {
-	boost::regex re(regularExpression);
+	std::regex re(regularExpression);
 
-	BOOST_FOREACH(const string &name, names) {
-		if (boost::regex_match(name, re))
+	for(const string &name: names) {
+		if (std::regex_match(name, re))
 			return true;
 	}
 
@@ -1031,7 +1030,7 @@ bool Properties::HaveNamesRE(const string &regularExpression) const {
 
 Properties Properties::GetAllProperties(const string &prefix) const {
 	Properties subset;
-	BOOST_FOREACH(const string &name, names) {
+	for(const string &name: names) {
 		if (name.find(prefix) == 0)
 			subset.Set(Get(name));
 	}
@@ -1083,7 +1082,7 @@ void Properties::Delete(const string &propName) {
 }
 
 void Properties::DeleteAll(const vector<string> &propNames) {
-	BOOST_FOREACH(const string &n, propNames)
+	for(const string &n: propNames)
 		Delete(n);
 }
 
@@ -1103,7 +1102,7 @@ Properties &Properties::Set(const Property &prop) {
 		// It is a new name
 		names.push_back(propName);
 	} else {
-		// boost::unordered_set::insert() doesn't overwrite an existing entry
+		// std::unordered_set::insert() doesn't overwrite an existing entry
 		props.erase(propName);
 	}
 

@@ -16,6 +16,8 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <thread>
+#include <mutex>
 #include "luxrays/utils/thread.h"
 
 #include "slg/engines/bakecpu/bakecpu.h"
@@ -26,6 +28,7 @@
 using namespace std;
 using namespace luxrays;
 using namespace slg;
+using namespace std::literals::chrono_literals;
 
 //------------------------------------------------------------------------------
 // BakeCPU RenderThread
@@ -41,7 +44,7 @@ void BakeCPURenderThread::InitBakeWork(const BakeMapInfo &mapInfo) {
 	Scene *scene = engine->renderConfig->scene;
 
 	// Lock the main film
-	boost::unique_lock<boost::mutex> lock(*engine->filmMutex);
+	std::unique_lock<std::mutex> lock(*engine->filmMutex);
 
 	// Print some information
 	SLG_LOG("Baking map: " << mapInfo.fileName);
@@ -52,7 +55,7 @@ void BakeCPURenderThread::InitBakeWork(const BakeMapInfo &mapInfo) {
 	
 	if (engine->skipExistingMapFiles) {
 		// Check if the file exist
-		if (boost::filesystem::exists(mapInfo.fileName)) {
+		if (std::filesystem::exists(mapInfo.fileName)) {
 			SLG_LOG("Bake map file already exists: " << mapInfo.fileName);
 			// Skip this map
 			return;
@@ -300,7 +303,7 @@ void BakeCPURenderThread::RenderEyeSample(const BakeMapInfo &mapInfo, PathTracer
 			break;
 		}
 		default:
-			throw runtime_error("Unknown bake type in BakeCPURenderThread::RenderFunc(): " + ToString(mapInfo.type));
+			throw runtime_error("Unknown bake type in BakeCPURenderThread::RenderFunc(std::stop_token stop_token): " + ToString(mapInfo.type));
 	}
 
 	//--------------------------------------------------------------------------
@@ -355,8 +358,8 @@ void BakeCPURenderThread::RenderLightSample(const BakeMapInfo &mapInfo, PathTrac
 	BakeCPURenderEngine *engine = (BakeCPURenderEngine *)renderEngine;
 	const PathTracer &pathTracer = engine->pathTracer;
 	
-	const PathTracer::ConnectToEyeCallBackType connectToEyeCallBack = boost::bind(
-			&BakeCPURenderThread::RenderConnectToEyeCallBack, this, mapInfo, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3, boost::placeholders::_4, boost::placeholders::_5);
+	const PathTracer::ConnectToEyeCallBackType connectToEyeCallBack = std::bind(
+			&BakeCPURenderThread::RenderConnectToEyeCallBack, this, mapInfo, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
 
 	pathTracer.RenderLightSample(state.device, state.scene, state.film, state.lightSampler,
 			state.lightSampleResults, connectToEyeCallBack);
@@ -389,7 +392,7 @@ void BakeCPURenderThread::RenderSample(const BakeMapInfo &mapInfo, PathTracerThr
 	sampler->NextSample(*sampleResults);
 }
 
-void BakeCPURenderThread::RenderFunc() {
+void BakeCPURenderThread::RenderFunc(std::stop_token stop_token) {
 	//SLG_LOG("[BakeCPURenderEngine::" << threadIndex << "] Rendering thread started");
 
 	// This is really used only by Windows for 64+ threads support
@@ -420,7 +423,7 @@ void BakeCPURenderThread::RenderFunc() {
 		}
 		
 		// Synchronize
-		engine->threadsSyncBarrier->wait();
+		engine->threadsSyncBarrier->arrive_and_wait();
 
 		if (engine->currentSceneObjsToBake.size() == 0) {
 			// Nothing to do
@@ -475,14 +478,14 @@ void BakeCPURenderThread::RenderFunc() {
 		// Rendering
 		//----------------------------------------------------------------------
 
-		for (u_int steps = 0; !boost::this_thread::interruption_requested(); ++steps) {
+		for (u_int steps = 0; !stop_token.stop_requested(); ++steps) {
 			// Check if we are in pause mode
 			if (engine->pauseMode) {
 				// Check every 100ms if I have to continue the rendering
-				while (!boost::this_thread::interruption_requested() && engine->pauseMode)
-					boost::this_thread::sleep(boost::posix_time::millisec(100));
+				while (!stop_token.stop_requested() && engine->pauseMode)
+					std::this_thread::sleep_for(100ms);
 
-				if (boost::this_thread::interruption_requested())
+				if (stop_token.stop_requested())
 					break;
 			}
 
@@ -490,7 +493,7 @@ void BakeCPURenderThread::RenderFunc() {
 
 #ifdef WIN32
 			// Work around Windows bad scheduling
-			renderThread->yield();
+            std::this_thread::yield();
 #endif
 
 			if (threadIndex == 0) {
@@ -514,24 +517,22 @@ void BakeCPURenderThread::RenderFunc() {
 			// Check halt conditions
 			if (engine->mapFilm->GetConvergence() == 1.f)
 				break;
+                        if (stop_token.stop_requested())
+                                break;
 
 			if (engine->photonGICache) {
-				try {
-					const u_int spp = engine->mapFilm->GetTotalEyeSampleCount() / engine->mapFilm->GetPixelCount();
-					engine->photonGICache->Update(threadIndex, spp);
-				} catch (boost::thread_interrupted &ti) {
-					// I have been interrupted, I must stop
-					break;
-				}
-			}
+                                const u_int spp = engine->mapFilm->GetTotalEyeSampleCount() / engine->mapFilm->GetPixelCount();
+                                engine->photonGICache->Update(threadIndex, spp);
+                        }
+
 		}
 
 		delete eyeSampler;
 		delete rndGen;
 
-		engine->threadsSyncBarrier->wait();
+		engine->threadsSyncBarrier->arrive_and_wait();
 
-		if ((threadIndex == 0) && !boost::this_thread::interruption_requested()) {
+		if ((threadIndex == 0) && !stop_token.stop_requested()) {
 			// Execute the image pipeline
 			engine->mapFilm->ExecuteImagePipeline(mapInfo.imagePipelineIndex);
 
@@ -545,12 +546,12 @@ void BakeCPURenderThread::RenderFunc() {
 			props << Property("index")(mapInfo.imagePipelineIndex);
 			engine->mapFilm->Output(mapInfo.fileName,
 					engine->mapFilm->HasChannel(Film::ALPHA) ? FilmOutputs::RGBA_IMAGEPIPELINE : FilmOutputs::RGB_IMAGEPIPELINE,
-					&props, false);			
+					&props, false);
 		}
 
-		engine->threadsSyncBarrier->wait();
+		engine->threadsSyncBarrier->arrive_and_wait();
 
-		if (boost::this_thread::interruption_requested())
+		if (stop_token.stop_requested())
 			break;
 	}
 

@@ -24,13 +24,11 @@
 #include <vector>
 #include <memory>
 
-#include <boost/detail/container_fwd.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/format.hpp>
-#include <boost/unordered_set.hpp>
 
 #include "luxrays/core/randomgen.h"
 #include "luxrays/utils/properties.h"
@@ -107,7 +105,7 @@ Properties Scene::ToProperties(const bool useRealFileName) const {
 		for (auto const &texName : texNames) {
 			// I can skip all textures starting with Implicit-ConstFloatTexture(3)
 			// because they are expanded inline
-			if (boost::starts_with(texName, "Implicit-ConstFloatTexture"))
+			if (texName.starts_with("Implicit-ConstFloatTexture"))
 				continue;
 
 			const Texture *tex = texDefs.GetTexture(texName);
@@ -184,11 +182,11 @@ void Scene::DefineMesh(ExtMesh *mesh) {
 
 		// Replace old mesh direct references with new one and get the list
 		// of scene objects referencing the old mesh
-		boost::unordered_set<SceneObject *> modifiedObjsList;
+		std::unordered_set<SceneObject *> modifiedObjsList;
 		objDefs.UpdateMeshReferences(oldMesh, mesh, modifiedObjsList);
 
 		// For each scene object
-		BOOST_FOREACH(SceneObject *o, modifiedObjsList) {
+		for(SceneObject *o: modifiedObjsList) {
 			// Check if is a light source
 			if (o->GetMaterial()->IsLightSource()) {
 				const string objName = o->GetName();
@@ -359,7 +357,7 @@ void Scene::Parse(const Properties &props) {
 
 void Scene::RemoveUnusedImageMaps() {
 	// Build a list of all referenced image maps
-	boost::unordered_set<const ImageMap *> referencedImgMaps;
+	std::unordered_set<const ImageMap *> referencedImgMaps;
 	for (u_int i = 0; i < texDefs.GetSize(); ++i)
 		texDefs.GetTexture(i)->AddReferencedImageMaps(referencedImgMaps);
 	for (u_int i = 0; i < objDefs.GetSize(); ++i)
@@ -369,7 +367,7 @@ void Scene::RemoveUnusedImageMaps() {
 
 	// I can not use lightDefs.GetLightSources() here because the
 	// scene may have been not preprocessed
-	BOOST_FOREACH(const string &lightName, lightDefs.GetLightSourceNames()) {
+	for(const string &lightName: lightDefs.GetLightSourceNames()) {
 		const LightSource *l = lightDefs.GetLightSource(lightName);
 		l->AddReferencedImageMaps(referencedImgMaps);
 	}
@@ -385,7 +383,7 @@ void Scene::RemoveUnusedImageMaps() {
 	vector<const ImageMap *> ims;
 	imgMapCache.GetImageMaps(ims);
 	bool deleted = false;
-	BOOST_FOREACH(const ImageMap *im, ims) {
+	for(const ImageMap *im: ims) {
 		if (referencedImgMaps.count(im) == 0) {
 			SDL_LOG("Deleting unreferenced image map: " << im->GetName());
 			imgMapCache.DeleteImageMap(im);
@@ -406,7 +404,7 @@ void Scene::RemoveUnusedImageMaps() {
 
 void Scene::RemoveUnusedTextures() {
 	// Build a list of all referenced textures names
-	boost::unordered_set<const Texture *> referencedTexs;
+	std::unordered_set<const Texture *> referencedTexs;
 	for (u_int i = 0; i < matDefs.GetSize(); ++i)
 		matDefs.GetMaterial(i)->AddReferencedTextures(referencedTexs);
 
@@ -414,7 +412,7 @@ void Scene::RemoveUnusedTextures() {
 	vector<string> definedTexs;
 	texDefs.GetTextureNames(definedTexs);
 	bool deleted = false;
-	BOOST_FOREACH(const string  &texName, definedTexs) {
+	for(const string &texName: definedTexs) {
 		const Texture *t = texDefs.GetTexture(texName);
 
 		if (referencedTexs.count(t) == 0) {
@@ -432,7 +430,7 @@ void Scene::RemoveUnusedTextures() {
 
 void Scene::RemoveUnusedMaterials() {
 	// Build a list of all referenced material names
-	boost::unordered_set<const Material *> referencedMats;
+	std::unordered_set<const Material *> referencedMats;
 
 	// Add the camera volume
 	if (camera && camera->volume)
@@ -449,7 +447,7 @@ void Scene::RemoveUnusedMaterials() {
 	vector<string> definedMats;
 	matDefs.GetMaterialNames(definedMats);
 	bool deleted = false;
-	BOOST_FOREACH(const string  &matName, definedMats) {
+	for(const string  &matName: definedMats) {
 		const Material *m = matDefs.GetMaterial(matName);
 
 		if (referencedMats.count(m) == 0) {
@@ -467,7 +465,7 @@ void Scene::RemoveUnusedMaterials() {
 
 void Scene::RemoveUnusedMeshes() {
 	// Build a list of all referenced meshes
-	boost::unordered_set<const ExtMesh *> referencedMesh;
+	std::unordered_set<const ExtMesh *> referencedMesh;
 	for (u_int i = 0; i < objDefs.GetSize(); ++i)
 		objDefs.GetSceneObject(i)->AddReferencedMeshes(referencedMesh);
 
@@ -475,7 +473,7 @@ void Scene::RemoveUnusedMeshes() {
 	vector<string> definedExtMeshes;
 	extMeshCache.GetExtMeshNames(definedExtMeshes);
 	bool deleted = false;
-	BOOST_FOREACH(const string  &extMeshName, definedExtMeshes) {
+	for(const string &extMeshName: definedExtMeshes) {
 		ExtMesh *mesh = extMeshCache.GetExtMesh(extMeshName);
 
 		if (referencedMesh.count(mesh) == 0) {
@@ -513,7 +511,7 @@ void Scene::DeleteObject(const string &objName) {
 
 void Scene::DeleteObjects(vector<string> &objNames) {
 	// Delete the light sources
-	BOOST_FOREACH(const string &objName, objNames) {
+	for(const string &objName: objNames) {
 		if (objDefs.IsSceneObjectDefined(objName)) {
 			const SceneObject *oldObj = objDefs.GetSceneObject(objName);
 			const bool wasLightSource = oldObj->GetMaterial()->IsLightSource();
@@ -546,7 +544,7 @@ void Scene::DeleteLight(const string &lightName) {
 
 void Scene::DeleteLights(vector<string> &lightNames) {
 	// Separate the objects and send them to delete
-	BOOST_FOREACH(const string &lightName, lightNames) {
+	for(const string &lightName: lightNames) {
 		DeleteLight(lightName);
 	}
 }

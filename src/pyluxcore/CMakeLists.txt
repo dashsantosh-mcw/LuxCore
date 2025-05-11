@@ -39,16 +39,10 @@ target_link_libraries(pyluxcore PRIVATE
     onetbb::onetbb
     blender-types
     robin_hood::robin_hood
-    fmt::fmt
     openimageio::openimageio
     embree
 )
-
-if(APPLE)
-  target_link_libraries(pyluxcore PRIVATE OpenMP::OpenMP)
-else()
-  target_link_libraries(pyluxcore PRIVATE OpenMP::OpenMP_CXX)
-endif(APPLE)
+target_link_libraries(pyluxcore PRIVATE OpenMP::OpenMP_CXX)
 
 set_target_properties(pyluxcore PROPERTIES PREFIX "")
 if(MSVC)

@@ -30,9 +30,6 @@
 #include <memory>
 #include <vector>
 #include <algorithm>
-#include <boost/foreach.hpp>
-#include <boost/unordered_set.hpp>
-#include <boost/unordered_map.hpp>
 #include <boost/format.hpp>
 
 #include <OpenImageIO/imagebufalgo.h>
@@ -819,7 +816,7 @@ static bool Scene_DefineBlenderMesh(
   }
 
   u_int vertFreeIndex = 0;
-  boost::unordered_map<u_int, u_int> vertexMap;
+  std::unordered_map<u_int, u_int> vertexMap;
 
   const float normalScale = 1.f / 32767.f;
   const float rgbScale = 1.f / 255.f;

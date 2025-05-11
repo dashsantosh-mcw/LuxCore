@@ -17,12 +17,10 @@
  ***************************************************************************/
 
 #include <iostream>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/thread/thread.hpp> 
-#include <boost/function.hpp>
+#include <thread>
 
 #include <imgui.h>
 #include "imgui_impl_glfw.h"
@@ -707,7 +705,7 @@ void LuxCoreApp::RunApp(luxcore::RenderState *startState, luxcore::Film *startFi
           //LA_LOG("Sleep time: " << msSleepTime << "ms");
 
           if (msSleepTime > 0) {
-            boost::this_thread::sleep_for(boost::chrono::milliseconds(msSleepTime));
+            std::this_thread::sleep_for(std::chrono::milliseconds(msSleepTime));
           }
 
           // The average over last 200 frames
@@ -717,7 +715,7 @@ void LuxCoreApp::RunApp(luxcore::RenderState *startState, luxcore::Film *startFi
         } // if guiLoopTimeLongAvg
       }
     } else {
-      boost::this_thread::sleep_for(boost::chrono::milliseconds(20));
+      std::this_thread::sleep_for(20ms);
     }
 
     ++currentFrame;

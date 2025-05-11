@@ -20,10 +20,7 @@
 #define	_SLG_PHOTONGICACHE_H
 
 #include <vector>
-#include <boost/atomic.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/barrier.hpp>
-#include <boost/function.hpp>
+#include <barrier>
 
 #include "luxrays/core/color/spectrumgroup.h"
 #include "luxrays/utils/properties.h"
@@ -281,9 +278,9 @@ public:
 
 	void Preprocess(const u_int threadCount);
 	bool Update(const u_int threadIndex, const u_int filmSPP,
-		const boost::function<void()> &threadZeroCallback);
+		const std::function<void()> &threadZeroCallback);
 	bool Update(const u_int threadIndex, const u_int filmSPP) {
-		const boost::function<void()> noCallback;
+		const std::function<void()> noCallback;
 		return Update(threadIndex, filmSPP, noCallback);
 	}
 	void FinishUpdate(const u_int threadIndex);
@@ -322,10 +319,10 @@ private:
 	void TraceVisibilityParticles();
 	void TracePhotons(const u_int seedBase, const u_int photonTracedCount,
 		const bool indirectCacheDone, const bool causticCacheDone,
-		boost::atomic<u_int> &globalIndirectPhotonsTraced,
-		boost::atomic<u_int> &globalCausticPhotonsTraced,
-		boost::atomic<u_int> &globalIndirectSize,
-		boost::atomic<u_int> &globalCausticSize);
+		std::atomic<u_int> &globalIndirectPhotonsTraced,
+		std::atomic<u_int> &globalCausticPhotonsTraced,
+		std::atomic<u_int> &globalIndirectSize,
+		std::atomic<u_int> &globalCausticSize);
 	void TracePhotons(const bool indirectEnabled, const bool causticEnabled);
 	void FilterVisibilityParticlesRadiance(const std::vector<luxrays::SpectrumGroup> &radianceValues,
 			std::vector<luxrays::SpectrumGroup> &filteredRadianceValues) const;
@@ -340,7 +337,12 @@ private:
 	PhotonGICacheParams params;
 
 	u_int threadCount;
-	std::unique_ptr<boost::barrier> threadsSyncBarrier;
+
+    struct completion_t {
+        void operator()() noexcept { }
+    };
+    completion_t pgic_completion();
+	std::unique_ptr< std::barrier<completion_t> > threadsSyncBarrier;
 	u_int lastUpdateSpp, updateSeedBase;
 	bool finishUpdateFlag;
 

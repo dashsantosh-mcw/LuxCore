@@ -20,6 +20,7 @@
 #define	_LUXCOREAPP_FILMOUTPUTSWINDOW_H
 
 #include <string>
+#include <unordered_map>
 
 #include <imgui.h>
 
@@ -74,7 +75,7 @@ private:
 	int newFileType;
 	int newID;
 
-	typedef boost::unordered_map<std::string, FilmOutputWindow *> FilmOutputWindowMap;
+	typedef std::unordered_map<std::string, FilmOutputWindow *> FilmOutputWindowMap;
 	FilmOutputWindowMap filmOutputWindows;
 };
 

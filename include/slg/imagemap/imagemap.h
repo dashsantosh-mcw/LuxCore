@@ -24,9 +24,8 @@
 #include <string>
 #include <limits>
 #include <unordered_map>
-
-#include <boost/thread.hpp>
-#include <boost/thread/mutex.hpp>
+#include <thread>
+#include <mutex>
 
 #include "luxrays/luxrays.h"
 #include "luxrays/utils/ocl.h"
@@ -1017,9 +1016,9 @@ protected:
 			ar & enabled;
 		}
 
-		std::map<boost::thread::id, ThreadData *> threadInfo;
+		std::map<std::jthread::id, ThreadData *> threadInfo;
 
-		boost::mutex classLock;
+		std::mutex classLock;
 	};
 	
 	// Used by serialization

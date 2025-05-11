@@ -33,7 +33,6 @@
 #include <locale>
 #include <memory>
 
-#include <boost/foreach.hpp>
 #include "luxrays/luxrays.h"
 #include "luxcore/luxcore.h"
 #include "luxcore/luxcoreimpl.h"
@@ -50,7 +49,7 @@ namespace luxcore {
 // Module functions
 //------------------------------------------------------------------------------
 
-static boost::mutex luxCoreInitMutex;
+static std::mutex luxCoreInitMutex;
 static py::object luxCoreLogHandler;
 
 #if (PY_VERSION_HEX >= 0x03040000)
@@ -81,12 +80,12 @@ static void PythonDebugHandler(const char *msg) {
 #endif
 
 static void LuxCore_Init() {
-  boost::unique_lock<boost::mutex> lock(luxCoreInitMutex);
+  std::unique_lock<std::mutex> lock(luxCoreInitMutex);
   Init();
 }
 
 static void LuxCore_InitDefaultHandler(py::object &logHandler) {
-  boost::unique_lock<boost::mutex> lock(luxCoreInitMutex);
+  std::unique_lock<std::mutex> lock(luxCoreInitMutex);
   // I wonder if I should increase the reference count for Python
   luxCoreLogHandler = logHandler;
 
@@ -446,7 +445,7 @@ static luxrays::Property *Property_InitWithList(const py::str &name, const py::l
 static py::list Properties_GetAllNamesRE(luxrays::Properties *props, const string &pattern) {
   py::list l;
   const vector<string> &keys = props->GetAllNamesRE(pattern);
-  BOOST_FOREACH(const string &key, keys) {
+  for(const string &key: keys) {
     l.append(key);
   }
 
@@ -456,7 +455,7 @@ static py::list Properties_GetAllNamesRE(luxrays::Properties *props, const strin
 static py::list Properties_GetAllNames1(luxrays::Properties *props) {
   py::list l;
   const vector<string> &keys = props->GetAllNames();
-  BOOST_FOREACH(const string &key, keys) {
+  for(const string &key: keys) {
     l.append(key);
   }
 
@@ -466,7 +465,7 @@ static py::list Properties_GetAllNames1(luxrays::Properties *props) {
 static py::list Properties_GetAllNames2(luxrays::Properties *props, const string &prefix) {
   py::list l;
   const vector<string> keys = props->GetAllNames(prefix);
-  BOOST_FOREACH(const string &key, keys) {
+  for(const string &key: keys) {
     l.append(key);
   }
 
@@ -476,7 +475,7 @@ static py::list Properties_GetAllNames2(luxrays::Properties *props, const string
 static py::list Properties_GetAllUniqueSubNames(luxrays::Properties *props, const string &prefix) {
   py::list l;
   const vector<string> keys = props->GetAllUniqueSubNames(prefix);
-  BOOST_FOREACH(const string &key, keys) {
+  for(const string &key: keys) {
     l.append(key);
   }
 

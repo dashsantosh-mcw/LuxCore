@@ -22,8 +22,6 @@
 #include <string>
 #include <vector>
 
-#include <boost/unordered_map.hpp>
-
 #include "luxrays/devices/ocldevice.h"
 #include "slg/imagemap/imagemap.h"
 #include "slg/imagemap/resizepolicies/resizepolicies.h"
@@ -77,7 +75,7 @@ private:
 	template<class Archive>	void load(Archive &ar, const unsigned int version);
 	BOOST_SERIALIZATION_SPLIT_MEMBER()
 
-	boost::unordered_map<std::string, ImageMap *> mapByKey;
+	std::unordered_map<std::string, ImageMap *> mapByKey;
 	// Used to preserve insertion order and to retrieve insertion index
 	std::vector<std::string> mapNames;
 	std::vector<ImageMap *> maps;

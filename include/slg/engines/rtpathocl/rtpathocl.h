@@ -19,8 +19,6 @@
 #ifndef _SLG_RTPATHOCL_H
 #define	_SLG_RTPATHOCL_H
 
-#include <boost/thread.hpp>
-
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
 #include "slg/engines/tilepathocl/tilepathocl.h"
@@ -47,7 +45,7 @@ public:
 	friend class RTPathOCLRenderEngine;
 
 protected:
-	virtual void RenderThreadImpl();
+	virtual void RenderThreadImpl(std::stop_token stop_token);
 
 	void UpdateOCLBuffers(const EditActionList &updateActions);
 	void UpdateAllThreadsOCLBuffers();
@@ -83,7 +81,7 @@ public:
 	virtual void EndSceneEdit(const EditActionList &editActions);
 
 	virtual void BeginFilmEdit();
-	virtual void EndFilmEdit(Film *film, boost::mutex *flmMutex);
+	virtual void EndFilmEdit(Film *film, std::mutex *flmMutex);
 
 	virtual void WaitNewFrame();
 
@@ -102,6 +100,10 @@ public:
 	// Must be a power of 2
 	u_int previewResolutionReduction, previewResolutionReductionStep;
 	u_int resolutionReduction;
+
+    struct completion_t {
+        void operator()() noexcept { }
+    };
 
 protected:
 	static const luxrays::Properties &GetDefaultProps();
@@ -123,11 +125,11 @@ protected:
 	bool useFastCameraEditPath, cameraIsUsingCustomBokeh;
 
 	// Used by RTPathOCLRenderEngine code to sync. with render thread 0
-	boost::barrier *syncBarrier;
+	std::barrier<completion_t> *syncBarrier;
 	RTPathOCLSyncType syncType;
 
 	// Used by all render threads to sync.
-	boost::barrier *frameBarrier;
+	std::barrier<completion_t> *frameBarrier;
 
 	double frameTime;
 };
