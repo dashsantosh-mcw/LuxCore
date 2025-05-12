@@ -123,6 +123,10 @@ install(
     FRAMEWORK
       DESTINATION luxcore
     OPTIONAL
+    PERMISSIONS
+      OWNER_WRITE OWNER_READ OWNER_EXECUTE
+      GROUP_READ GROUP_EXECUTE
+      WORLD_READ WORLD_EXECUTE
 )
 
 # Install oidn_denoise_cpu
@@ -138,6 +142,10 @@ if(LINUX)
         PROGRAMS "${LUX_OIDN_DENOISE_CPU}"
         TYPE LIB
         COMPONENT luxcore
+        PERMISSIONS
+          OWNER_WRITE OWNER_READ OWNER_EXECUTE
+          GROUP_READ GROUP_EXECUTE
+          WORLD_READ WORLD_EXECUTE
     )
 endif()
 # For MacOS, DENOISE_CPU is declared as dep and directly installed by
@@ -151,6 +159,10 @@ if(WIN32)
       PROGRAMS ${LUX_NVRTC_LIST}
       TYPE BIN
       COMPONENT luxcore
+      PERMISSIONS
+        OWNER_WRITE OWNER_READ OWNER_EXECUTE
+        GROUP_READ GROUP_EXECUTE
+        WORLD_READ WORLD_EXECUTE
   )
 endif()
 if(LINUX)
@@ -159,6 +171,10 @@ if(LINUX)
       PROGRAMS ${LUX_NVRTC_LIST}
       TYPE LIB
       COMPONENT luxcore
+      PERMISSIONS
+        OWNER_WRITE OWNER_READ OWNER_EXECUTE
+        GROUP_READ GROUP_EXECUTE
+        WORLD_READ WORLD_EXECUTE
   )
 endif()
 # No nvrtc for MacOS (no Nvidia card?)

@@ -50,7 +50,15 @@ if(MSVC)
 endif(MSVC)
 
 # Install
-INSTALL(TARGETS pyluxcore DESTINATION pyluxcore COMPONENT pyluxcore)
+INSTALL(
+  TARGETS pyluxcore
+  DESTINATION pyluxcore
+  COMPONENT pyluxcore
+  PERMISSIONS
+    OWNER_WRITE OWNER_READ OWNER_EXECUTE
+    GROUP_READ GROUP_EXECUTE
+    WORLD_READ WORLD_EXECUTE
+)
 
 # Install pdb file (if msvc and debug)
 if(MSVC)
