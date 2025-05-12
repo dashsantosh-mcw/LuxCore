@@ -66,7 +66,7 @@ class LuxCore(ConanFile):
             )
         else:
             raise RuntimeError(f"OIDN: Unhandled os ({self_settings_os})")
-        toolchain.variables["LUX_OIDN_DENOISE_CPU"] = denoise_cpu.as_posix()
+        toolchain.variables["LUX_OIDN_DEVICE_CPU"] = denoise_cpu.as_posix()
 
     def _generate_nvrtc(self, toolchain):
         """Generate toolchain part related to nvrtc."""

@@ -106,7 +106,7 @@ if(LINUX)
     PROPERTY INSTALL_RPATH "\\\${ORIGIN}/../pyluxcore.libs"
   )
   install(
-    PROGRAMS "${LUX_OIDN_DENOISE_CPU}"
+    PROGRAMS "${LUX_OIDN_DEVICE_CPU}"
     DESTINATION "pyluxcore.libs"
     COMPONENT pyluxcore
   )

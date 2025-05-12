@@ -132,14 +132,14 @@ install(
 # Install oidn_denoise_cpu
 if(WIN32)
     install(
-        PROGRAMS "${LUX_OIDN_DENOISE_CPU}"
+        PROGRAMS "${LUX_OIDN_DEVICE_CPU}"
         TYPE BIN
         COMPONENT luxcore
     )
 endif()
 if(LINUX)
     install(
-        PROGRAMS "${LUX_OIDN_DENOISE_CPU}"
+        PROGRAMS "${LUX_OIDN_DEVICE_CPU}"
         TYPE LIB
         COMPONENT luxcore
         PERMISSIONS
