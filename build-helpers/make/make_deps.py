@@ -468,7 +468,7 @@ def main(
             "--settings=build_type=Release",
             f"--conf:all=tools.cmake.cmaketoolchain:generator={generator}",
         ]
-        if not os.getenv("CI"):
+        if not os.getenv("DEPS_WITHOUT_SUDO"):
             main_block += [
                 "--conf:all=tools.system.package_manager:sudo=true",
             ]
