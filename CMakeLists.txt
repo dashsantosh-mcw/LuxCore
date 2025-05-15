@@ -47,7 +47,7 @@ MESSAGE(STATUS "C compiler version is ${CMAKE_C_COMPILER_VERSION}")
 #
 # Versioning should comply to semver standard: https://semver.org
 #
-FILE(READ "${CMAKE_CURRENT_LIST_DIR}/build-helpers/build-settings.json" settings_json)
+FILE(READ "${CMAKE_CURRENT_LIST_DIR}/build-system/build-settings.json" settings_json)
 STRING(JSON _DEFAULT_VERSION_MAJOR GET "${settings_json}" DefaultVersion major)
 STRING(JSON _DEFAULT_VERSION_MINOR GET "${settings_json}" DefaultVersion minor)
 STRING(JSON _DEFAULT_VERSION_PATCH GET "${settings_json}" DefaultVersion patch)
@@ -150,7 +150,7 @@ endif()
 include(GNUInstallDirs)
 
 # Set path to modules (keep it after project declaration)
-set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/build-helpers/cmake")
+set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/build-system/cmake")
 
 ################################################################################
 #

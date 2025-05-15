@@ -135,7 +135,7 @@ jobs:
                 'cache-variant': String.raw`ccache`,
                 'CMAKE_CXX_COMPILER_LAUNCHER': String.raw`ccache`,
                 'CMAKE_C_COMPILER_LAUNCHER': String.raw`ccache`,
-                'CCACHE_CONFIGPATH': String.raw`${workspace}/build-helpers/ccache.conf`,
+                'CCACHE_CONFIGPATH': String.raw`${workspace}/build-system/ccache.conf`,
                 'CCACHE_DIR': String.raw`${workspace}/.ccache`,
                 'CCACHE_DEBUGDIR': String.raw`${workspace}/ccache-debug`,
                 'CCACHE_LOGFILE': String.raw`${workspace}/ccache.log`
@@ -250,7 +250,7 @@ jobs:
           if (input_version := "${{ inputs.release-version }}"):
             result = input_version
           else:
-            build_settings_file = Path("build-helpers", "build-settings.json")
+            build_settings_file = Path("build-system", "build-settings.json")
             with open(build_settings_file) as in_file:
               default_version = json.load(in_file)["DefaultVersion"]
             result = ".".join(default_version[i] for i in ("major", "minor", "patch"))
@@ -355,7 +355,7 @@ jobs:
               {wheel}
 
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: |
-            bash.exe ${{ env.WORKSPACE }}/build-helpers/wheels/repair_wheel_windows.sh '{wheel}' '{dest_dir}' '%VCToolsRedistDir%%Platform%' '${{ env.WORKSPACE }}'
+            bash.exe ${{ env.WORKSPACE }}/build-system/wheels/repair_wheel_windows.sh '{wheel}' '{dest_dir}' '%VCToolsRedistDir%%Platform%' '${{ env.WORKSPACE }}'
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
             cp {wheel} ${{ env.WORKSPACE }}
             paths=$(find ${{ env.WORKSPACE }} -type d -wholename "*/lib" -print0 | xargs -0 realpath | tr "\n" ":")

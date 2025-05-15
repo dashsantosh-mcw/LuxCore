@@ -10,7 +10,7 @@ ifndef PYTHON
 	PYTHON:=python3
 endif
 
-LUX-CMAKE = $(PYTHON) build-helpers/make/cmake.py
+LUX-CMAKE = $(PYTHON) build-system/make/cmake.py
 
 build-targets = pyluxcore luxcoreui luxcoreconsole luxcore doc
 

@@ -96,7 +96,7 @@ jobs:
             version = input_version
           else:
             # Fall back to default
-            build_settings_file = Path("build-helpers", "build-settings.json")
+            build_settings_file = Path("build-system", "build-settings.json")
             with open(build_settings_file) as in_file:
               default_version = json.load(in_file)["DefaultVersion"]
             version = ".".join(default_version[i] for i in ("major", "minor", "patch"))

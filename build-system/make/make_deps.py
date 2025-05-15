@@ -315,7 +315,7 @@ def main(
     # Get settings
     logger.info("Reading settings")
     with open(
-        "build-helpers/build-settings.json",
+        "build-system/build-settings.json",
         encoding="utf-8",
     ) as f:
         settings = json.load(f)
@@ -491,7 +491,7 @@ def main(
             end_block = [
                 f"--settings=&:build_type={build_type}",
                 Path(
-                    "build-helpers",
+                    "build-system",
                     "conan",
                     "conanfile.py",
                 ),

@@ -36,7 +36,7 @@ compile_commands.json
 dist
 samples/pyluxcoretool/__pycache__
 release_OSX/
-build-helpers/make/__pycache__
+build-system/make/__pycache__
 *.pyc
 
 ###########################
