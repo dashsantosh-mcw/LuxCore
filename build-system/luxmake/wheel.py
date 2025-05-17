@@ -11,9 +11,10 @@ import re
 import tempfile
 import shutil
 import platform
+import os
 from pathlib import Path
 
-from .constants import SOURCE_DIR, INSTALL_DIR
+from .constants import SOURCE_DIR, INSTALL_DIR, BINARY_DIR
 from .utils import logger
 from .build import build_and_install
 
@@ -44,6 +45,14 @@ def _compute_platform_tag():
     else:
         logger.error("Unknown platform/system: '%s' / '%s'", platform, machine)
         sys.exit(1)
+
+
+def _get_lib_paths():
+    """Get library paths for dependencies."""
+    base = BINARY_DIR / "dependencies" / "full_deploy" / "host"
+    paths = (str(p.absolute()) for p in base.rglob("**/bin"))
+    result = os.pathsep.join(paths)
+    return result
 
 
 def make_wheel(args):
@@ -121,6 +130,8 @@ def make_wheel(args):
             INSTALL_DIR / "wheel",
             "-l",
             WHEEL_LIB_DIR,
+            "-l",
+            _get_lib_paths(),
             raw_wheel_path,
         ]
         try:
