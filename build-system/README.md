@@ -5,8 +5,8 @@ Root contents:
 - `ccache.conf`: configuration for ccache. Used by Github Workflows
 
 Folder contents:
-- `./cmake`: additional modules for CMake. Used by CMakeLists.txt.
-- `./conan`: project's conan recipe. Used by `make` helpers (see below)
-- `./debug`: (handcrafted) scripts for build debugging. Run on command line
-- `./make`: underlying Python scripts of `make` wrapper - enabling `make deps`, `make <target>`, `make clean` etc. Called by `GNUMakefile` and `make.bat`
-- `./wheels`: helpers for wheel building. Called by Github Workflows.
+- `cmake`: additional modules for CMake. Used by CMakeLists.txt.
+- `conan`: project's conan recipe. Used by `make` helpers (see below)
+- `debug`: (handcrafted) scripts for build debugging. Run on command line
+- `luxmake`: underlying Python scripts of `make` wrapper - enabling `make deps`, `make <target>`, `make clean` etc. Called by `GNUMakefile` and `make.bat`
+- `wheels`: helpers for wheel building. Called by Github Workflows.
