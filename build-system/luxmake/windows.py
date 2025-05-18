@@ -13,10 +13,15 @@ from pathlib import Path
 import argparse
 import tempfile
 import shutil
-
-from wheel.wheelfile import WheelFile
+import re
 
 from .utils import pack, unpack, logger, fail
+
+WHEEL_INFO_RE = re.compile(
+    r"""^(?P<namever>(?P<name>[^\s-]+?)-(?P<ver>[^\s-]+?))(-(?P<build>\d[^\s-]*))?
+     -(?P<pyver>[^\s-]+?)-(?P<abi>[^\s-]+?)-(?P<plat>\S+)\.whl$""",
+    re.VERBOSE,
+)
 
 
 def _rename(basepath, org, dest):
@@ -40,9 +45,11 @@ def win_recompose(args):
     with tempfile.TemporaryDirectory() as tmpdir:  # Working space
         # Unpack wheel
         unpack(path=wheel_path, dest=tmpdir)
-        with WheelFile(wheel_path) as wheel_file:
-            namever = wheel_file.parsed_filename.group("namever")
-            unpacked_wheel_path = Path(tmpdir) / namever
+
+        # Get path where to output
+        parsed_filename = WHEEL_INFO_RE.match(wheel_path.name)
+        namever = parsed_filename.group("namever")
+        unpacked_wheel_path = Path(tmpdir) / namever
 
         # Rename and move oidnDenoise
         logger.info("Renaming oidnDenoise.pyd into oidnDenoise.exe")
