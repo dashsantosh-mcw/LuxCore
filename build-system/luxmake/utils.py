@@ -49,3 +49,43 @@ def run_cmake(
         print(res.stderr)
         sys.exit(1)
     return res
+
+
+def unpack(path, dest):
+    """Unpack a wheel."""
+    args = [
+        sys.executable,
+        "-m",
+        "wheel",
+        "unpack",
+        f"--dest={dest}",
+        str(path),
+    ]
+    try:
+        output = subprocess.check_output(
+            args, text=True, stderr=subprocess.STDOUT
+        )
+    except subprocess.CalledProcessError as err:
+        logger.error(err.output)
+        sys.exit(1)
+    logger.info(output)
+
+
+def pack(directory, dest_dir):
+    """(Re)pack a wheel."""
+    args = [
+        sys.executable,
+        "-m",
+        "wheel",
+        "pack",
+        f"--dest-dir={dest_dir}",
+        str(directory),
+    ]
+    try:
+        output = subprocess.check_output(
+            args, text=True, stderr=subprocess.STDOUT
+        )
+    except subprocess.CalledProcessError as err:
+        logger.error(err.output)
+        sys.exit(1)
+    logger.info(output)

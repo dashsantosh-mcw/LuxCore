@@ -7,16 +7,16 @@
 import sys
 import json
 import subprocess
-import re
 import tempfile
 import shutil
 import platform
 import os
 from pathlib import Path
 
-from .constants import SOURCE_DIR, INSTALL_DIR, BINARY_DIR
-from .utils import logger
+from .constants import SOURCE_DIR, INSTALL_DIR, BINARY_DIR, WHEELHOUSE_DIR
+from .utils import logger, pack
 from .build import build_and_install
+from .windows import recompose
 
 _WHEEL_SNIPPET = """\
 Wheel-Version: 1.0
@@ -29,22 +29,22 @@ Tag: {}
 def _compute_platform_tag():
     """Compute tag.
 
-    This tag may not be correct. Do not use in production.
+    This tag may not be totally correct. Do not use in production.
     https://packaging.python.org/en/latest/specifications/platform-compatibility-tags
     """
-    system = platform.system()
-    machine = platform.machine()
+    system, machine = platform.system(), platform.machine()
     if system == "Linux":
         return "linux_x86_64"
-    elif system == "Windows":
+    if system == "Windows":
         return "win_amd64"
-    elif system == "Darwin" and machine == "x86_64":
+    if system == "Darwin" and machine == "x86_64":
         return "macosx_13_0"
-    elif system == "Darwin" and machine == "arm64":
+    if system == "Darwin" and machine == "arm64":
         return "macosx_14_2"
-    else:
-        logger.error("Unknown platform/system: '%s' / '%s'", platform, machine)
-        sys.exit(1)
+
+    # Failed:
+    logger.error("Unknown platform/system: '%s' / '%s'", platform, machine)
+    sys.exit(1)
 
 
 def _get_lib_paths():
@@ -81,15 +81,21 @@ def make_wheel(args):
     tag = f"{python_tag}-{abi_tag}-{platform_tag}"
 
     logger.info("Making wheel for version '%s' and tag '%s'", version, tag)
-    with tempfile.TemporaryDirectory() as wheeltree, tempfile.TemporaryDirectory() as raw_wheel:
-        # We create an install tree, with all the wheel components, then we pack it
-        # into a raw wheel and eventually we repair it
+    with (
+        tempfile.TemporaryDirectory() as wheeltree,
+        tempfile.TemporaryDirectory() as raw_wheel,
+    ):
+        # We create an install tree, with all the wheel components, then we
+        # pack it into a raw wheel and eventually we repair it.
+        #
+        # Additionnally, on Windows, we recompose the wheel (restablishing
+        # oidnDenoise.exe and OpenImageDenoise_device_cpu.dll)
 
-        # Destination folders
+        # Set destination folders
         wheeltree = Path(wheeltree)
         raw_wheel_dir = Path(raw_wheel)
 
-        # Create dist-info
+        # Create dist-info folder
         dist_info = wheeltree / f"pyluxcore-{version}.dist-info"
         dist_info.mkdir(exist_ok=True)
 
@@ -116,23 +122,24 @@ def make_wheel(args):
 
         # Pack wheel
         logger.info("Packing wheel")
-        pack_cmd = ["wheel", "pack", wheeltree, "--dest-dir", str(raw_wheel)]
-        subprocess.run(pack_cmd, text=True, check=True)
+        pack(wheeltree, raw_wheel)
+        wheelname = f"pyluxcore-{version}-{tag}.whl"
 
         # Then repair
-        WHEEL_LIB_DIR = INSTALL_DIR / "lib"  # TODO Windows, MacOS etc.
+        wheel_lib_dir = INSTALL_DIR / "lib"
         logger.info("Repairing wheel")
-        system = platform.system()
-        raw_wheel_path = raw_wheel_dir / f"pyluxcore-{version}-{tag}.whl"
+        input_path = raw_wheel_dir / wheelname
         cmd = [
+            sys.executable,
+            "-m",
             "repairwheel",
-            "-o",
-            INSTALL_DIR / "wheel",
             "-l",
-            WHEEL_LIB_DIR,
+            wheel_lib_dir,
             "-l",
             _get_lib_paths(),
-            raw_wheel_path,
+            "-o",
+            WHEELHOUSE_DIR,
+            input_path,
         ]
         try:
             result = subprocess.check_output(cmd, text=True)
@@ -140,3 +147,7 @@ def make_wheel(args):
             logger.error(err)
             sys.exit(1)
         logger.info(result)
+
+        # And, for Windows, recompose
+        if platform.system() == "Windows":
+            recompose(WHEELHOUSE_DIR / wheelname)

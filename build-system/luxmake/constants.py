@@ -28,3 +28,4 @@ BUILD_TYPE = os.getenv(
 # Computed variables
 BUILD_DIR = BINARY_DIR / "build"
 INSTALL_DIR = BINARY_DIR / "install" / BUILD_TYPE
+WHEELHOUSE_DIR = INSTALL_DIR / "wheel"  # Where the wheel will be created
