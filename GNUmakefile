@@ -39,6 +39,9 @@ package:
 wheel-test:
 	$(LUX-CMAKE) wheel-test
 
+win-recompose:
+	$(LUX-CMAKE) win-recompose $(filter-out $@,$(MAKECMDGOALS))
+
 clean:
 	$(LUX-CMAKE) clean
 

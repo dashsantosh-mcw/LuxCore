@@ -89,7 +89,6 @@ IF "%~1" == "" (
 goto :EOF
 
 :WinRecompose
-REM Exists only in windows make
 call %LUXMAKE% win-recompose %1
 goto :EOF
 
