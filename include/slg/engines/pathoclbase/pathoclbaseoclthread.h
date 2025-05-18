@@ -21,8 +21,6 @@
 
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
-#include <boost/thread/thread.hpp>
-
 #include "luxrays/core/intersectiondevice.h"
 #include "luxrays/utils/ocl.h"
 
@@ -139,7 +137,7 @@ protected:
 	};
 
 	// Implementation specific methods
-	virtual void RenderThreadImpl() = 0;
+	virtual void RenderThreadImpl(std::stop_token stop_token) = 0;
 	virtual void GetThreadFilmSize(u_int *filmWidth, u_int *filmHeight, u_int *filmSubRegion) = 0;
 
 	virtual void StartRenderThread();
@@ -260,7 +258,7 @@ protected:
 	u_int initKernelArgsCount;
 	std::string kernelsParameters;
 
-	boost::thread *renderThread;
+	std::jthread *renderThread;
 
 	std::vector<ThreadFilm *> threadFilms;
 

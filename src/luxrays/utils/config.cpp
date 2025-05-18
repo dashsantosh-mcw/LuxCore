@@ -40,57 +40,58 @@ string SanitizeFileName(const string &name) {
 	return sanitizedName;
 }
 
-boost::filesystem::path GetEnvPath(const string &name) {
+std::filesystem::path GetEnvPath(const string &name) {
 	char *path = getenv(name.c_str());
 
 	if (path && path[0]) {
-		return boost::filesystem::path(path);
+		return std::filesystem::path(path);
 	}
 
 	return "";
 }
 
-boost::filesystem::path GetCacheDir() {
+std::filesystem::path GetCacheDir() {
+
 #if defined(__linux__)
-	// boost::filesystem::temp_directory_path() is usually mapped to /tmp and
+	// std::filesystem::temp_directory_path() is usually mapped to /tmp and
 	// the content of the directory is often deleted at each reboot
 
 	// XDG standard says XDG_CACHE_HOME is unset by default.
-	boost::filesystem::path xdgCacheHome = GetEnvPath("XDG_CACHE_HOME");
+	std::filesystem::path xdgCacheHome = GetEnvPath("XDG_CACHE_HOME");
 
 	if (!xdgCacheHome.size()) {
 		// HOME should never be unset, but we better not want to
 		// crash if that happens.
-		boost::filesystem::path home = GetEnvPath("HOME");
+		std::filesystem::path home = GetEnvPath("HOME");
 
 		if (home.size()) {
 			xdgCacheHome = home / ".config";
 		}
 		else {
-			xdgCacheHome = boost::filesystem::temp_directory_path();
+			xdgCacheHome = std::filesystem::temp_directory_path();
 		}
 	}
 
-	boost::filesystem::path kernelConfigDir = xdgCacheHome / "luxcorerender.org";
+	std::filesystem::path kernelConfigDir = xdgCacheHome / "luxcorerender.org";
 #elif defined(__APPLE__)
-	// boost::filesystem::temp_directory_path() is usually mapped to /tmp and
+	// std::filesystem::temp_directory_path() is usually mapped to /tmp and
 	// the content of the directory is deleted at each reboot on MacOS
 	
 	// This may not work on MacOS for application started from the GUI
-	//boost::filesystem::path kernelConfigDir(getenv("HOME"));
+	//std::filesystem::path kernelConfigDir(getenv("HOME"));
 
-	boost::filesystem::path kernelConfigDir;
+	std::filesystem::path kernelConfigDir;
 
 	const uid_t uid = getuid();
 	const struct passwd *pwd = getpwuid(uid);
 	if (!pwd)
-		kernelConfigDir = boost::filesystem::temp_directory_path();
+		kernelConfigDir = std::filesystem::temp_directory_path();
 	else
 		kernelConfigDir = string(pwd->pw_dir);
 	
 	kernelConfigDir = kernelConfigDir / "luxcorerender.org";
 #else
-	boost::filesystem::path kernelConfigDir= boost::filesystem::temp_directory_path() / "luxcorerender.org";
+	std::filesystem::path kernelConfigDir= std::filesystem::temp_directory_path() / "luxcorerender.org";
 #endif
 
 	return kernelConfigDir;

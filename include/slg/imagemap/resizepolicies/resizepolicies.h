@@ -21,8 +21,7 @@
 
 #include <string>
 #include <vector>
-
-#include <boost/unordered_map.hpp>
+#include <barrier>
 
 #include "luxrays/devices/ocldevice.h"
 #include "slg/imagemap/imagemap.h"
@@ -63,15 +62,20 @@ public:
 			const Scene *scene, const std::vector<u_int> &imgMapsIndices);
 	
 	friend class boost::serialization::access;
+    struct completion_t {
+        void operator()() noexcept { }
+    };
 
 private:
 	template<class Archive> void serialize(Archive &ar, const u_int version) {
 	}
 
-	static void RenderFunc(const u_int threadIndex,
+
+
+	static void RenderFunc(std::stop_token stop_token, const u_int threadIndex,
 		ImageMapCache *imc, const std::vector<u_int> *imgMapsIndices, u_int *workCounter,
 		const Scene *scene, SobolSamplerSharedData *sobolSharedData,
-		boost::barrier *threadsSyncBarrier);
+		std::barrier<completion_t> *threadsSyncBarrier);
 };
 
 //------------------------------------------------------------------------------

@@ -19,8 +19,6 @@
 #ifndef _LUXRAYS_EMBREEACCEL_H
 #define	_LUXRAYS_EMBREEACCEL_H
 
-#include <boost/thread.hpp>
-
 #include <embree3/rtcore.h>
 
 #include "luxrays/luxrays.h"
@@ -61,7 +59,7 @@ private:
 	void ExportMotionTriangleMesh(const RTCScene embreeScene, const MotionTriangleMesh *mtm) const;
 
 	// Used for Embree initialization
-	static boost::mutex initMutex;
+	static std::mutex initMutex;
 	// Used to count the number of existing EmbreeAccel instances
 	static u_int initCount;
 

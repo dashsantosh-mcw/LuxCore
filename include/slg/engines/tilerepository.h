@@ -19,8 +19,6 @@
 #ifndef _SLG_TILEREPOSITORY_H
 #define	_SLG_TILEREPOSITORY_H
 
-#include <boost/thread/mutex.hpp>
-
 #include "luxrays/utils/utils.h"
 #include "luxrays/utils/serializationutils.h"
 #include "slg/slg.h"
@@ -139,7 +137,7 @@ public:
 	void GetConvergedTiles(std::deque<const Tile *> &tiles);
 
 	void InitTiles(const Film &film);
-	bool NextTile(Film *film, boost::mutex *filmMutex,
+	bool NextTile(Film *film, std::mutex *filmMutex,
 		TileWork &tileWork, Film *tileFilm);
 
 	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
@@ -188,7 +186,7 @@ private:
 	void SetDone(Film *film);
 	bool GetNewTileWork(TileWork &tileWork);
 
-	mutable boost::mutex tileMutex;
+	mutable std::mutex tileMutex;
 	double startTime;
 
 	u_int filmRegionWidth, filmRegionHeight;

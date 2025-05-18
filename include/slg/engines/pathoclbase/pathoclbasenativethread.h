@@ -21,8 +21,6 @@
 
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
-#include <boost/thread/thread.hpp>
-
 #include "luxrays/devices/nativeintersectiondevice.h"
 #include "slg/slg.h"
 
@@ -57,13 +55,13 @@ protected:
 	virtual void StopRenderThread();
 
 	// Implementation specific methods
-	virtual void RenderThreadImpl() = 0;
+	virtual void RenderThreadImpl(std::stop_token stop_token) = 0;
 
 	u_int threadIndex;
 	PathOCLBaseRenderEngine *renderEngine;
 	luxrays::NativeIntersectionDevice *intersectionDevice;
 
-	boost::thread *renderThread;
+	std::jthread *renderThread;
 
 	bool started, editMode, threadDone;
 };

@@ -16,13 +16,10 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
-#include <boost/detail/container_fwd.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/format.hpp>
-#include <boost/unordered_map.hpp>
-#include <boost/unordered_set.hpp>
 
 #include "slg/scene/scene.h"
 #include "slg/textures/constfloat.h"
@@ -69,9 +66,9 @@ void Scene::ParseMaterials(const Properties &props) {
 
 	// Cache isLightSource values before we go deleting materials (required for
 	// updating mix material)
-	boost::unordered_map<const Material *, bool> cachedIsLightSource;
+	std::unordered_map<const Material *, bool> cachedIsLightSource;
 
-	BOOST_FOREACH(const string &key, matKeys) {
+	for(const string &key: matKeys) {
 		const string matName = Property::ExtractField(key, 2);
 		if (matName == "")
 			throw runtime_error("Syntax error in material definition: " + matName);
@@ -83,7 +80,7 @@ void Scene::ParseMaterials(const Properties &props) {
 	}
 
 	// Now I can update the materials
-	BOOST_FOREACH(const string &key, matKeys) {
+	for(const string &key: matKeys) {
 		// Extract the material name
 		const string matName = Property::ExtractField(key, 2);
 		if (matName == "")

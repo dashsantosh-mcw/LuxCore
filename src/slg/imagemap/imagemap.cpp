@@ -21,8 +21,7 @@
 #include <numeric>
 #include <memory>
 #include <boost/format.hpp>
-#include <boost/foreach.hpp>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 #include <OpenColorIO/OpenColorIO.h>
 namespace OCIO = OCIO_NAMESPACE;
@@ -811,7 +810,7 @@ void ImageMap::Init(const string &fileName, const ImageMapConfig &cfg,
 	const string resolvedFileName = SLG_FileNameResolver.ResolveFile(fileName);
 	SDL_LOG("Reading texture map: " << resolvedFileName);
 
-	if (!boost::filesystem::exists(resolvedFileName))
+	if (!std::filesystem::exists(resolvedFileName))
 		throw runtime_error("ImageMap file doesn't exist: " + resolvedFileName);
 	else {
 		ImageSpec config;
@@ -1428,7 +1427,7 @@ ImageMap *ImageMap::Resample(const ImageMap *map, const u_int channels,
 pair<u_int, u_int> ImageMap::GetSize(const std::string &fileName) {
 	const string resolvedFileName = SLG_FileNameResolver.ResolveFile(fileName);
 
-	if (!boost::filesystem::exists(resolvedFileName))
+	if (!std::filesystem::exists(resolvedFileName))
 		throw runtime_error("ImageMap file doesn't exist: " + resolvedFileName);
 	else {
 		ImageSpec config;

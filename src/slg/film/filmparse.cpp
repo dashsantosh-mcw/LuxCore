@@ -17,7 +17,6 @@
  ***************************************************************************/
 
 #include <boost/algorithm/string/case_conv.hpp>
-#include <boost/unordered_set.hpp>
 #include <boost/lexical_cast.hpp>
 
 #include <OpenColorIO/OpenColorIO.h>
@@ -73,7 +72,7 @@ void Film::ParseOutputs(const Properties &props) {
 	const bool safeSave = props.Get(Property("film.outputs.safesave")(true)).Get<bool>();
 	filmOutputs.SetSafeSave(safeSave);
 	
-	boost::unordered_set<string> outputNames;
+	std::unordered_set<string> outputNames;
 	vector<string> outputKeys = props.GetAllNames("film.outputs.");
 	for (vector<string>::const_iterator outputKey = outputKeys.begin(); outputKey != outputKeys.end(); ++outputKey) {
 		const string &key = *outputKey;
@@ -520,7 +519,7 @@ void Film::ParseRadianceGroupsScale(const Properties &props, const u_int imagePi
 
 	const u_int keyFieldCount = Property::CountFields(radianceGroupsScalePrefix);
 
-	boost::unordered_set<string> radianceScaleIndices;
+	std::unordered_set<string> radianceScaleIndices;
 	vector<string> radianceScaleKeys = props.GetAllNames(radianceGroupsScalePrefix);
 	for (vector<string>::const_iterator radianceScaleKey = radianceScaleKeys.begin(); radianceScaleKey != radianceScaleKeys.end(); ++radianceScaleKey) {
 		const string &key = *radianceScaleKey;

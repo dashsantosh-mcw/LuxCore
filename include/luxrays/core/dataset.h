@@ -21,9 +21,7 @@
 
 #include <deque>
 #include <vector>
-
-#include <boost/thread/mutex.hpp>
-#include <boost/unordered_map.hpp>
+#include <mutex>
 
 #include "luxrays/luxrays.h"
 #include "luxrays/core/accelerator.h"
@@ -81,8 +79,8 @@ private:
 	BBox bbox;
 	BSphere bsphere;
 
-	boost::mutex accelsMutex;
-	boost::unordered_map<AcceleratorType, Accelerator *> accels;
+	std::mutex accelsMutex;
+	std::unordered_map<AcceleratorType, Accelerator *> accels;
 
 	AcceleratorType accelType;
 	bool preprocessed;

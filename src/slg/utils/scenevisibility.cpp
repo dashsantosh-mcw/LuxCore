@@ -16,10 +16,9 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 #include <memory>
+#include <mutex>
 
 #include <boost/format.hpp>
-#include <boost/thread.hpp>
-#include <boost/thread/mutex.hpp>
 
 #include "luxrays/utils/thread.h"
 
@@ -47,8 +46,8 @@ using namespace slg;
 template <class T>
 SceneVisibility<T>::TraceVisibilityThread::TraceVisibilityThread(SceneVisibility<T> &svis, const u_int index,
 		SobolSamplerSharedData &sobolSharedData,
-		IndexOctree<T> *octree, boost::mutex &octreeMutex,
-		boost::atomic<u_int> &gParticlesCount,
+		IndexOctree<T> *octree, std::mutex &octreeMutex,
+		std::atomic<u_int> &gParticlesCount,
 		u_int &cacheLookUp, u_int &cacheHits,
 		bool &warmUp) :
 		sv(svis), threadIndex(index),
@@ -67,7 +66,7 @@ SceneVisibility<T>::TraceVisibilityThread::~TraceVisibilityThread() {
 
 template <class T>
 void SceneVisibility<T>::TraceVisibilityThread::Start() {
-	renderThread = new boost::thread(&TraceVisibilityThread::RenderFunc, this);
+	renderThread = new std::jthread(std::bind_front(&TraceVisibilityThread::RenderFunc, this));
 }
 
 template <class T>
@@ -97,7 +96,7 @@ void SceneVisibility<T>::TraceVisibilityThread::GenerateEyeRay(const Camera *cam
 }
 
 template <class T>
-void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
+void SceneVisibility<T>::TraceVisibilityThread::RenderFunc(std::stop_token stop_token) {
 	const u_int workSize = 4096;
 	
 	// Hard coded RR parameters
@@ -152,7 +151,7 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
 	const double startTime = WallClockTime();
 	double lastPrintTime = startTime;	
 	double cacheHitRate = 0.0;
-	while(!boost::this_thread::interruption_requested()) {
+	while(!stop_token.stop_requested()) {
 		// Get some work to do
 		u_int workCounter;
 		do {
@@ -172,7 +171,7 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
 
 		visibilityParticles.clear();
 		u_int workToDoIndex = workToDo;
-		while (workToDoIndex-- && !boost::this_thread::interruption_requested()) {
+		while (workToDoIndex-- && !stop_token.stop_requested()) {
 			sampleResult.radiance[0] = Spectrum();
 
 			Ray eyeRay;
@@ -260,7 +259,7 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
 
 #ifdef WIN32
 			// Work around Windows bad scheduling
-			boost::this_thread::yield();
+			std::this_thread::yield();
 #endif
 		}
 
@@ -269,7 +268,7 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc() {
 		//----------------------------------------------------------------------
 		
 		if (visibilityParticles.size() > 0) {
-			boost::unique_lock<boost::mutex> lock(particlesOctreeMutex);
+			std::unique_lock<std::mutex> lock(particlesOctreeMutex);
 
 			u_int cacheLookUp = 0;
 			u_int cacheHits = 0;
@@ -354,11 +353,11 @@ void SceneVisibility<T>::Build() {
 	//
 	// Note: I use an Octree because it can be built at runtime.
 	unique_ptr<IndexOctree<T> > particlesOctree(AllocOctree());
-	boost::mutex particlesOctreeMutex;
+	std::mutex particlesOctreeMutex;
 
 	SobolSamplerSharedData visibilitySobolSharedData(131, nullptr);
 
-	boost::atomic<u_int> globalVisibilityParticlesCount(0);
+	std::atomic<u_int> globalVisibilityParticlesCount(0);
 	u_int visibilityCacheLookUp = 0;
 	u_int visibilityCacheHits = 0;
 	bool visibilityWarmUp = true;

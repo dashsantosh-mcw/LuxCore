@@ -17,11 +17,9 @@
  ***************************************************************************/
 
 #include <iostream>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/thread/thread.hpp> 
 
 #include <imgui.h>
 #include "imgui_impl_glfw.h"
@@ -106,7 +104,7 @@ void LuxCoreApp::ToolCameraEditKeys(GLFWwindow *window, int key, int scanCode, i
 }
 
 void LuxCoreApp::GLFW_KeyCallBack(GLFWwindow *window, int key, int scanCode, int action, int mods) {
-	ImGui_ImplGlFw_KeyCallback(window, key, scanCode, action, mods);
+	ImGui_ImplGlfw_KeyCallback(window, key, scanCode, action, mods);
 
 	if (ImGui::GetIO().WantCaptureKeyboard)
 		return;

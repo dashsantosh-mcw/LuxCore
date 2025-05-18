@@ -25,8 +25,6 @@
 #endif
 
 #include <boost/format.hpp>
-#include <boost/thread.hpp>
-#include <boost/chrono.hpp>
 
 #include "luxrays/core/bvh/bvhbuild.h"
 #include "luxrays/utils/atomic.h"
@@ -662,7 +660,7 @@ void EnvLightVisibilityCache::Build() {
 
 	if (params.persistent.fileName != "") {
 		// Check if the file already exist
-		if (boost::filesystem::exists(params.persistent.fileName)) {
+		if (std::filesystem::exists(params.persistent.fileName)) {
 			// Load the cache from the file
 			LoadPersistentCache(params.persistent.fileName);
 

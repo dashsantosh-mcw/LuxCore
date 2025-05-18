@@ -18,9 +18,8 @@
 
 #include <iostream>
 #include <memory>
+#include <unordered_set>
 #include <boost/format.hpp>
-#include <boost/foreach.hpp>
-#include <boost/unordered_set.hpp>
 
 #include "luxcoreapp.h"
 
@@ -286,7 +285,7 @@ void FilmOutputsWindow::Close() {
 }
 
 void FilmOutputsWindow::DeleteAllWindow() {
-	BOOST_FOREACH(FilmOutputWindowMap::value_type e, filmOutputWindows)
+	for(FilmOutputWindowMap::value_type e: filmOutputWindows)
 		DeleteWindow(e.first);
 }
 
@@ -330,7 +329,7 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 	// To add a new output
 	//--------------------------------------------------------------------------
 
-	if (ImGui::CollapsingHeader("New Film output", NULL, true, true)) {
+	if (ImGui::CollapsingHeader("New Film output", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
 		// Film output name
 		ImGui::InputText("Output name", newOutputNameBuff, 4 * 1024);
 		const string prefix = "film.outputs." + string(newOutputNameBuff);
@@ -437,9 +436,9 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 	// The list of current outputs
 	//--------------------------------------------------------------------------
 
-	if (ImGui::CollapsingHeader("Current Film output(s)", NULL, true, true)) {
-		boost::unordered_set<string> outputNames;
-		boost::unordered_map<string, unsigned int> typeCount;
+	if (ImGui::CollapsingHeader("Current Film output(s)", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
+		std::unordered_set<string> outputNames;
+		std::unordered_map<string, unsigned int> typeCount;
 		vector<string> outputKeys = props.GetAllNames("film.outputs.");
 		for (vector<string>::const_iterator outputKey = outputKeys.begin(); outputKey != outputKeys.end(); ++outputKey) {
 			const string &key = *outputKey;
@@ -468,7 +467,7 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 				typeCount[type] += 1;
 			const unsigned int index = typeCount[type];
 
-			ImGui::SetNextTreeNodeOpened(true, ImGuiSetCond_Appearing);
+			ImGui::SetNextItemOpen(true, ImGuiCond_Appearing);
 			if (ImGui::TreeNode(type.c_str())) {
 				const string fileName = props.Get("film.outputs." + outputName + ".filename").Get<string>();
 				char fileNameBuff[4 * 1024];
@@ -512,7 +511,7 @@ bool FilmOutputsWindow::DrawObjectGUI(Properties &props, bool &modifiedProps) {
 	// The list of current film channels
 	//--------------------------------------------------------------------------
 
-	if (ImGui::CollapsingHeader("Current Film channel(s)", NULL, true, true)) {
+	if (ImGui::CollapsingHeader("Current Film channel(s)", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
 		const Film &film = app->session->GetFilm();
 		unsigned int count;
 
@@ -649,7 +648,7 @@ void FilmOutputsWindow::Draw() {
 
 	if (opened) {
 		// Draw all channel windows
-		BOOST_FOREACH(FilmOutputWindowMap::value_type e, filmOutputWindows)
+		for(FilmOutputWindowMap::value_type e: filmOutputWindows)
 			e.second->Draw();
 	} else
 		DeleteAllWindow();

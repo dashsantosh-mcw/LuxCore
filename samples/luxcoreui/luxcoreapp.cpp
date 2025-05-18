@@ -19,7 +19,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <boost/algorithm/string/predicate.hpp>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 #include "luxrays/utils/oclerror.h"
 
@@ -243,18 +243,18 @@ void LuxCoreApp::SetFilmResolution(const unsigned int width, const unsigned int 
 	StartRendering();
 }
 
-void LuxCoreApp::LoadRenderConfig(const std::string &fileName) {
+void LuxCoreApp::LoadRenderConfig(const std::string &fileName, const std::string &filePath) {
 	DeleteRendering();
 
 	// Set the current directory to place where the configuration file is
-	boost::filesystem::current_path(boost::filesystem::path(fileName).parent_path());
+	std::filesystem::current_path(std::filesystem::path(filePath));
 
 	// Clear the file name resolver list
 	luxcore::ClearFileNameResolverPaths();
 	// Add the current directory to the list of place where to look for files
 	luxcore::AddFileNameResolverPath(".");
 	// Add the .cfg directory to the list of place where to look for files
-	boost::filesystem::path path(fileName);
+	std::filesystem::path path(fileName);
 	luxcore::AddFileNameResolverPath(path.parent_path().generic_string());
 
 	try {
@@ -314,7 +314,7 @@ void LuxCoreApp::StartRendering(RenderState *startState, Film *startFilm) {
 	session = NULL;
 	
 	const string engineType = config->ToProperties().Get("renderengine.type").Get<string>();
-	if (boost::starts_with(engineType, "RT")) {
+	if (engineType.starts_with("RT")) {
 		if (config->ToProperties().Get("screen.refresh.interval").Get<unsigned int>() > 25)
 			config->Parse(Properties().Set(Property("screen.refresh.interval")(25)));
 		optRealTimeMode = true;

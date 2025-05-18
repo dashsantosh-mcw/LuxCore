@@ -16,7 +16,8 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
-#include <boost/thread/barrier.hpp>
+#include <barrier>
+#include <mutex>
 
 #include "slg/engines/bakecpu/bakecpu.h"
 #include "slg/engines/bakecpu/bakecpurenderstate.h"
@@ -197,7 +198,7 @@ void BakeCPURenderEngine::StartLockLess() {
 
 	//--------------------------------------------------------------------------
 	
-	threadsSyncBarrier = new boost::barrier(renderThreads.size());
+	threadsSyncBarrier = new std::barrier(renderThreads.size(), completion_t());
 
 	//--------------------------------------------------------------------------
 	// Auto map size support
@@ -298,7 +299,7 @@ void BakeCPURenderEngine::StopLockLess() {
 }
 
 void BakeCPURenderEngine::UpdateFilmLockLess() {
-	boost::unique_lock<boost::mutex> lock(*filmMutex);
+	std::unique_lock<std::mutex> lock(*filmMutex);
 
 	// Film may have been not initialized because of an error during Start()
 	if (film->IsInitiliazed()) {

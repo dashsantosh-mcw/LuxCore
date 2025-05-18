@@ -17,9 +17,6 @@
  ***************************************************************************/
 
 #include <boost/format.hpp>
-#include <boost/foreach.hpp>
-#include <boost/thread/once.hpp>
-#include <boost/thread/mutex.hpp>
 
 #include "luxcore/luxcorelogger.h"
 #include "luxrays/core/intersectiondevice.h"
@@ -273,7 +270,7 @@ void FilmImpl::GetOutputFloat(const FilmOutputType type, float *buffer,
 	API_BEGIN("{}, {}, {}, {}", ToArgString(type), (void *)buffer, index, executeImagePipeline);
 
 	if (renderSession) {
-		boost::unique_lock<boost::mutex> lock(renderSession->renderSession->filmMutex);
+		std::unique_lock<std::mutex> lock(renderSession->renderSession->filmMutex);
 
 		renderSession->renderSession->film->GetOutput<float>((slg::FilmOutputs::FilmOutputType)type,
 				buffer, index, executeImagePipeline);
@@ -289,7 +286,7 @@ void FilmImpl::GetOutputUInt(const FilmOutputType type, unsigned int *buffer,
 	API_BEGIN("{}, {}, {}, {}", ToArgString(type), (void *)buffer, index, executeImagePipeline);
 
 	if (renderSession) {
-		boost::unique_lock<boost::mutex> lock(renderSession->renderSession->filmMutex);
+		std::unique_lock<std::mutex> lock(renderSession->renderSession->filmMutex);
 
 		renderSession->renderSession->film->GetOutput<u_int>((slg::FilmOutputs::FilmOutputType)type,
 				buffer, index, executeImagePipeline);
@@ -308,7 +305,7 @@ void FilmImpl::UpdateOutputFloat(const FilmOutputType type, const float *buffer,
 		throw runtime_error("Currently, only USER_IMPORTANCE channel can be updated with Film::UpdateOutput<float>()");
 
 	if (renderSession) {
-		boost::unique_lock<boost::mutex> lock(renderSession->renderSession->filmMutex);
+		std::unique_lock<std::mutex> lock(renderSession->renderSession->filmMutex);
 
 		slg::Film *film = renderSession->renderSession->film;
 		const unsigned int pixelsCount = film->GetWidth() * film->GetHeight();
@@ -364,7 +361,7 @@ const float *FilmImpl::GetChannelFloat(const FilmChannelType type,
 
 	const float *result;
 	if (renderSession) {
-		boost::unique_lock<boost::mutex> lock(renderSession->renderSession->filmMutex);
+		std::unique_lock<std::mutex> lock(renderSession->renderSession->filmMutex);
 
 		result = renderSession->renderSession->film->GetChannel<float>((slg::Film::FilmChannelType)type,
 				index, executeImagePipeline);
@@ -383,7 +380,7 @@ const unsigned int *FilmImpl::GetChannelUInt(const FilmChannelType type,
 
 	const unsigned int *result;
 	if (renderSession) {
-		boost::unique_lock<boost::mutex> lock(renderSession->renderSession->filmMutex);
+		std::unique_lock<std::mutex> lock(renderSession->renderSession->filmMutex);
 
 		result = renderSession->renderSession->film->GetChannel<unsigned int>((slg::Film::FilmChannelType)type,
 				index, executeImagePipeline);
@@ -405,7 +402,7 @@ float *FilmImpl::UpdateChannelFloat(const FilmChannelType type,
 
 	float *result;
 	if (renderSession) {
-		boost::unique_lock<boost::mutex> lock(renderSession->renderSession->filmMutex);
+		std::unique_lock<std::mutex> lock(renderSession->renderSession->filmMutex);
 
 		result = renderSession->renderSession->film->GetChannel<float>((slg::Film::FilmChannelType)type,
 				index, executeImagePipeline);
@@ -442,7 +439,7 @@ void FilmImpl::DeleteAllImagePipelines()  {
 	API_BEGIN_NOARGS();
 
 	if (renderSession) {
-		boost::unique_lock<boost::mutex> lock(renderSession->renderSession->filmMutex);
+		std::unique_lock<std::mutex> lock(renderSession->renderSession->filmMutex);
 
 		renderSession->renderSession->film->SetImagePipelines(NULL);
 		renderSession->renderSession->renderConfig->DeleteAllFilmImagePipelinesProperties();
@@ -454,7 +451,7 @@ void FilmImpl::DeleteAllImagePipelines()  {
 
 void FilmImpl::ExecuteImagePipeline(const u_int index) {
 	if (renderSession) {
-		boost::unique_lock<boost::mutex> lock(renderSession->renderSession->filmMutex);
+		std::unique_lock<std::mutex> lock(renderSession->renderSession->filmMutex);
 
 		renderSession->renderSession->film->ExecuteImagePipeline(index);
 	} else
@@ -465,7 +462,7 @@ void FilmImpl::AsyncExecuteImagePipeline(const u_int index) {
 	API_BEGIN("{}", index);
 
 	if (renderSession) {
-		boost::unique_lock<boost::mutex> lock(renderSession->renderSession->filmMutex);
+		std::unique_lock<std::mutex> lock(renderSession->renderSession->filmMutex);
 
 		renderSession->renderSession->film->AsyncExecuteImagePipeline(index);
 	} else
@@ -478,7 +475,7 @@ void FilmImpl::WaitAsyncExecuteImagePipeline() {
 	API_BEGIN_NOARGS();
 
 	if (renderSession) {
-		boost::unique_lock<boost::mutex> lock(renderSession->renderSession->filmMutex);
+		std::unique_lock<std::mutex> lock(renderSession->renderSession->filmMutex);
 
 		renderSession->renderSession->film->WaitAsyncExecuteImagePipeline();
 	} else
@@ -492,7 +489,7 @@ bool FilmImpl::HasDoneAsyncExecuteImagePipeline() {
 
 	bool result;
 	if (renderSession) {
-		boost::unique_lock<boost::mutex> lock(renderSession->renderSession->filmMutex);
+		std::unique_lock<std::mutex> lock(renderSession->renderSession->filmMutex);
 
 		result = renderSession->renderSession->film->HasDoneAsyncExecuteImagePipeline();
 	} else
@@ -1151,8 +1148,16 @@ void SceneImpl::DefineImageMapHalf(const std::string &imgMapName,
 		unsigned short *pixels, const float gamma, const unsigned int channels,
 		const unsigned int width, const unsigned int height,
 		ChannelSelectionType selectionType, WrapType wrapType) {
-	API_BEGIN("{}, {}, {}, {}, {}, {}, {}, {}, {}", ToArgString(imgMapName), (void *)pixels, gamma, channels,
-			width, height, ToArgString(selectionType), ToArgString(wrapType));
+	API_BEGIN("{}, {}, {}, {}, {}, {}, {}, {}",
+            ToArgString(imgMapName),
+            (void *)pixels,
+            gamma,
+            channels,
+	    width,
+            height,
+            ToArgString(selectionType),
+            ToArgString(wrapType)
+        );
 
 	scene->DefineImageMap(imgMapName, (half *)pixels, channels, width, height,
 			slg::ImageMapConfig(
@@ -1168,8 +1173,16 @@ void SceneImpl::DefineImageMapFloat(const std::string &imgMapName,
 		float *pixels, const float gamma, const unsigned int channels,
 		const unsigned int width, const unsigned int height,
 		ChannelSelectionType selectionType, WrapType wrapType) {
-	API_BEGIN("{}, {}, {}, {}, {}, {}, {}, {}, {}", ToArgString(imgMapName), (void *)pixels, gamma, channels,
-			width, height, ToArgString(selectionType), ToArgString(wrapType));
+	API_BEGIN("{}, {}, {}, {}, {}, {}, {}, {}",
+            ToArgString(imgMapName),
+            (void *)pixels,
+            gamma,
+            channels,
+	    width,
+            height,
+            ToArgString(selectionType),
+            ToArgString(wrapType)
+        );
 
 	scene->DefineImageMap(imgMapName, pixels, channels, width, height,
 			slg::ImageMapConfig(
@@ -1621,7 +1634,7 @@ static void SetTileProperties(Properties &props, const string &prefix,
 	Property tilePendingPassesProp(prefix + ".pendingpasses");
 	Property tileErrorProp(prefix + ".error");
 
-	BOOST_FOREACH(const slg::Tile *tile, tiles) {
+	for(const slg::Tile *tile: tiles) {
 		tileCoordProp.Add(tile->coord.x).Add(tile->coord.y);
 		tilePassProp.Add(tile->pass);
 		tilePendingPassesProp.Add(tile->pendingPasses);
@@ -1667,10 +1680,10 @@ void RenderSessionImpl::UpdateStats() {
 	// Intersection devices statistics
 	const vector<IntersectionDevice *> &idevices = renderSession->renderEngine->GetIntersectionDevices();
 
-	boost::unordered_map<string, unsigned int> devCounters;
+	std::unordered_map<string, unsigned int> devCounters;
 	Property devicesNames("stats.renderengine.devices");
 	double totalPerf = 0.0;
-	BOOST_FOREACH(IntersectionDevice *dev, idevices) {
+	for(IntersectionDevice *dev: idevices) {
 		const string &devName = dev->GetName();
 		
 		// Append a device index for the case where the same device is used multiple times
@@ -1804,4 +1817,20 @@ void RenderSessionImpl::SaveResumeFile(const std::string &fileName) {
 	renderSession->SaveResumeFile(fileName);
 
 	API_END();
+}
+
+
+auto std::formatter<luxcore::Camera::CameraType>::format(
+    luxcore::Camera::CameraType cam,
+    std::format_context& ctx
+) const -> format_context::iterator {
+
+  string_view name = "UNKNOWN";
+  switch (cam) {
+    case luxcore::Camera::CameraType::PERSPECTIVE: name = "PERSPECTIVE"; break;
+    case luxcore::Camera::CameraType::ORTHOGRAPHIC: name = "ORTHOGRAPHIC"; break;
+    case luxcore::Camera::CameraType::STEREO: name = "STEREO"; break;
+    case luxcore::Camera::CameraType::ENVIRONMENT: name = "ENVIRONMENT"; break;
+  }
+    return formatter<string_view>::format(name, ctx);
 }

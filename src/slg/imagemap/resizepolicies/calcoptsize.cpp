@@ -52,10 +52,10 @@ static void GenerateEyeRay(const Camera *camera, const UV &sampleOffestUV, Ray &
 		sampler->GetSample(2), sampler->GetSample(3));
 }
 
-void ImageMapResizePolicy::RenderFunc(const u_int threadIndex,
+void ImageMapResizePolicy::RenderFunc(std::stop_token stop_token, const u_int threadIndex,
 		ImageMapCache *imc, const vector<u_int> *imgMapsIndices, u_int *workCounter,
 		const Scene *scene, SobolSamplerSharedData *sobolSharedData,
-		boost::barrier *threadsSyncBarrier) {
+		std::barrier<completion_t> *threadsSyncBarrier) {
 	// Hard coded parameters
 	const u_int passesCount = 1;
 	const u_int workSize = 4096;
@@ -73,7 +73,7 @@ void ImageMapResizePolicy::RenderFunc(const u_int threadIndex,
 	for (auto i : *imgMapsIndices)
 		imc->maps[i]->instrumentationInfo->ThreadSetUp();
 	
-	threadsSyncBarrier->wait();
+	threadsSyncBarrier->arrive_and_wait();
 
 	const Camera *camera = scene->camera;
 
@@ -115,7 +115,7 @@ void ImageMapResizePolicy::RenderFunc(const u_int threadIndex,
 	//cout << "totalWorkUnit: " << totalWorkUnit << endl;
 
 	//GenericFrameBuffer<4, 1, float> frameBuffer(camera->filmWidth, camera->filmHeight);
-	while (!boost::this_thread::interruption_requested() && (*workCounter < totalWorkUnit)) {
+	while (!stop_token.stop_requested() && (*workCounter < totalWorkUnit)) {
 		AtomicInc(workCounter);
 		
 		for (u_int workUnitIndex = 0; workUnitIndex < workSize; ++workUnitIndex) {
@@ -223,7 +223,7 @@ void ImageMapResizePolicy::RenderFunc(const u_int threadIndex,
 
 #ifdef WIN32
 				// Work around Windows bad scheduling
-				boost::this_thread::yield();
+				std::this_thread::yield();
 #endif
 			}
 
@@ -237,7 +237,7 @@ void ImageMapResizePolicy::RenderFunc(const u_int threadIndex,
 
 	//frameBuffer.SaveHDR("thread" + ToString(threadIndex) + ".exr");
 	
-	threadsSyncBarrier->wait();
+	threadsSyncBarrier->arrive_and_wait();
 
 	// Delete thread image maps instrumentation
 	for (auto i : *imgMapsIndices)
@@ -248,21 +248,22 @@ void ImageMapResizePolicy::RenderFunc(const u_int threadIndex,
 // ImageMapResizeMinMemPolicy::CalcOptimalImageMapSizes()
 //------------------------------------------------------------------------------
 
+
 void ImageMapResizePolicy::CalcOptimalImageMapSizes(ImageMapCache &imc, const Scene *scene,
 		const vector<u_int> &imgMapsIndices) {
-	// Do a test render to establish the optimal image maps sizes	
+	// Do a test render to establish the optimal image maps sizes
 	const size_t renderThreadCount = GetHardwareThreadCount();
-	vector<boost::thread *> renderThreads(renderThreadCount, nullptr);
+	vector<std::jthread *> renderThreads(renderThreadCount, nullptr);
 	SLG_LOG("Optimal image map size preprocess thread count: " << renderThreadCount);
 
-	boost::barrier threadsSyncBarrier(renderThreadCount);
-	
+	std::barrier threadsSyncBarrier(renderThreadCount, completion_t());
+
 	SobolSamplerSharedData sobolSharedData(131, nullptr);
-	
+
 	// Start the preprocessing threads
 	u_int workCounter = 0;
 	for (size_t i = 0; i < renderThreadCount; ++i)
-		renderThreads[i] = new boost::thread(&RenderFunc, i, &imc, &imgMapsIndices,
+		renderThreads[i] = new std::jthread(&RenderFunc, i, &imc, &imgMapsIndices,
 				&workCounter, scene, &sobolSharedData, &threadsSyncBarrier);
 
 	// Wait for the end of threads

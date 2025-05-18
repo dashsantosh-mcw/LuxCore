@@ -22,8 +22,7 @@
 #include <string>
 #include <vector>
 
-#include <boost/atomic.hpp>
-#include <boost/thread/barrier.hpp>
+#include <barrier>
 
 #include "luxrays/core/randomgen.h"
 #include "slg/slg.h"
@@ -55,7 +54,7 @@ public:
 			luxrays::RandomGenerator *rndGen, Film *film);
 
 	Film *engineFilm;
-	boost::atomic<u_int> step;
+	std::atomic<u_int> step;
 	u_int filmSubRegion[4], filmSubRegionWidth, filmSubRegionHeight;
 	std::vector<PixelCoord> pixelRenderSequence;
 };

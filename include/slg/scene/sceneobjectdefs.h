@@ -72,7 +72,7 @@ public:
 	// Update any reference to oldMesh with newMesh. It returns also the
 	// list of modified objects
 	void UpdateMeshReferences(const luxrays::ExtMesh *oldMesh, luxrays::ExtMesh *newMesh,
-		boost::unordered_set<SceneObject *> &modifiedObjsList);
+		std::unordered_set<SceneObject *> &modifiedObjsList);
 
 	void DeleteSceneObject(const std::string &name) {
 		objs.DeleteObj(name);
@@ -86,7 +86,7 @@ private:
 	luxrays::NamedObjectVector objs;
 
 	// mapping mesh.name -> scene object list using it
-	boost::unordered_multimap<std::string, std::string> meshToSceneObjects;
+	std::unordered_multimap<std::string, std::string> meshToSceneObjects;
 };
 
 }

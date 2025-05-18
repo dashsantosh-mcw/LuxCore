@@ -167,7 +167,7 @@ void PathOCLBaseOCLRenderThread::Start() {
 
 void PathOCLBaseOCLRenderThread::Interrupt() {
 	if (renderThread)
-		renderThread->interrupt();
+		renderThread->request_stop();
 }
 
 void PathOCLBaseOCLRenderThread::Stop() {
@@ -248,12 +248,12 @@ void PathOCLBaseOCLRenderThread::StartRenderThread() {
 	threadDone = false;
 
 	// Create the thread for the rendering
-	renderThread = new boost::thread(&PathOCLBaseOCLRenderThread::RenderThreadImpl, this);
+	renderThread = new std::jthread(std::bind_front(&PathOCLBaseOCLRenderThread::RenderThreadImpl, this));
 }
 
 void PathOCLBaseOCLRenderThread::StopRenderThread() {
 	if (renderThread) {
-		renderThread->interrupt();
+		renderThread->request_stop();
 		renderThread->join();
 		delete renderThread;
 		renderThread = nullptr;
@@ -362,23 +362,23 @@ void PathOCLBaseOCLRenderThread::IncThreadFilms() {
 
 void PathOCLBaseOCLRenderThread::ClearThreadFilms() {
 	// Clear all thread films
-	BOOST_FOREACH(ThreadFilm *threadFilm, threadFilms)
+	for(ThreadFilm *threadFilm: threadFilms)
 		threadFilm->ClearFilm(intersectionDevice, filmClearKernel, filmClearWorkGroupSize);
 }
 
 void PathOCLBaseOCLRenderThread::TransferThreadFilms(HardwareIntersectionDevice *intersectionDevice) {
 	// Clear all thread films
-	BOOST_FOREACH(ThreadFilm *threadFilm, threadFilms)
+	for(ThreadFilm *threadFilm: threadFilms)
 		threadFilm->RecvFilm(intersectionDevice);
 }
 
 void PathOCLBaseOCLRenderThread::FreeThreadFilmsOCLBuffers() {
-	BOOST_FOREACH(ThreadFilm *threadFilm, threadFilms)
+	for(ThreadFilm *threadFilm: threadFilms)
 		threadFilm->FreeAllOCLBuffers();
 }
 
 void PathOCLBaseOCLRenderThread::FreeThreadFilms() {
-	BOOST_FOREACH(ThreadFilm *threadFilm, threadFilms)
+	for(ThreadFilm *threadFilm: threadFilms)
 		delete threadFilm;
 	threadFilms.clear();
 }

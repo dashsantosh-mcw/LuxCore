@@ -18,7 +18,6 @@
 
 #include <iostream>
 #include <boost/format.hpp>
-#include <boost/foreach.hpp>
 
 #include "luxcoreapp.h"
 
@@ -34,7 +33,7 @@ void StatsWindow::Draw() {
 	if (!opened)
 		return;
 
-	ImGui::SetNextWindowSize(ImVec2(512.f, 200.f), ImGuiSetCond_Appearing);
+	ImGui::SetNextWindowSize(ImVec2(512.f, 200.f), ImGuiCond_Appearing);
 
 	if (ImGui::Begin(windowTitle.c_str(), &opened)) {
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.f);
@@ -45,7 +44,7 @@ void StatsWindow::Draw() {
 		const Properties &stats = session->GetStats();
 
 		// GUI information
-		if (ImGui::CollapsingHeader("GUI information", NULL, true, true)) {
+		if (ImGui::CollapsingHeader("GUI information", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
 			LuxCoreApp::ColoredLabelText("GUI loop time:", "%fms (%fms)",
 					1000.0 * app->guiLoopTimeShortAvg, 1000.0 * app->guiLoopTimeLongAvg);
 			LuxCoreApp::ColoredLabelText("GUI sleep time:", "%fms", 1000.0 * app->guiSleepTime);
@@ -55,7 +54,7 @@ void StatsWindow::Draw() {
 		}
 
 		// Rendering information
-		if (ImGui::CollapsingHeader("Rendering information", NULL, true, true)) {
+		if (ImGui::CollapsingHeader("Rendering information", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
 			const string engineType = config->ToProperties().Get("renderengine.type").Get<string>();
 			LuxCoreApp::ColoredLabelText("Render engine:", "%s", engineType.c_str());
 
@@ -103,7 +102,7 @@ void StatsWindow::Draw() {
 			LuxCoreApp::ColoredLabelText("Convergence:", "%f%%", 100.f * convergence);
 		}
 
-		if (ImGui::CollapsingHeader("Intersection devices used", NULL, true, true)) {
+		if (ImGui::CollapsingHeader("Intersection devices used", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
 			// Intersection devices
 			const Property &deviceNames = stats.Get("stats.renderengine.devices");
 
@@ -132,13 +131,13 @@ void StatsWindow::Draw() {
 			}
 		}
 
-		if (ImGui::CollapsingHeader("Intersection devices available", NULL, true, true)) {
+		if (ImGui::CollapsingHeader("Intersection devices available", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
 			const Properties props = GetOpenCLDeviceDescs();
 			const vector<string>  prefixs = props.GetAllUniqueSubNames("opencl.device");
 
 			// Print device info
 			unsigned int i = 0;
-			BOOST_FOREACH(const string &prefix, prefixs) {
+			for(const string &prefix: prefixs) {
 				if (ImGui::TreeNode(("#" + ToString(i) + " => " + props.Get(prefix + ".name").Get<string>()).c_str())) {
 					LuxCoreApp::ColoredLabelText("Name:", "%s", props.Get(prefix + ".name").Get<string>().c_str());
 					LuxCoreApp::ColoredLabelText("Type:", "%s", props.Get(prefix + ".type").Get<string>().c_str());

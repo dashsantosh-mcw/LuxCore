@@ -53,8 +53,8 @@ public:
 	bool isGPURenderingAvailable() const { return isOpenCLAvailable || isCUDAAvailable; }
 
 	static void LogHandler(const char *msg);
-	static void ColoredLabelText(const ImVec4 &col, const char *label, const char *fmt, ...) IM_PRINTFARGS(3);
-	static void ColoredLabelText(const char *label, const char *fmt, ...) IM_PRINTFARGS(2);
+	static void ColoredLabelText(const ImVec4 &col, const char *label, const char *fmt, ...);
+	static void ColoredLabelText(const char *label, const char *fmt, ...);
 	static void HelpMarker(const char *desc);
 	
 	static ImVec4 colLabel;
@@ -106,7 +106,7 @@ private:
 	void DecScreenRefreshInterval();
 	void CloseAllRenderConfigEditors();
 
-	void LoadRenderConfig(const std::string &configFileName);
+	void LoadRenderConfig(const std::string &configFileName, const std::string &configFilePath);
 	void StartRendering(luxcore::RenderState *startState = NULL, luxcore::Film *startFilm = NULL);
 	void DeleteRendering();
 

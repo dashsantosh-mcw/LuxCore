@@ -16,7 +16,6 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
-#include <boost/function.hpp>
 
 #include "slg/engines/pathtracer.h"
 #include "slg/engines/caches/photongi/photongicache.h"
@@ -312,7 +311,7 @@ void PathTracer::DirectHitInfiniteLight(const Scene *scene,
 	if (bsdf && bsdf->hitPoint.throughShadowTransparency)
 		return;
 
-	BOOST_FOREACH(EnvLightSource *envLight, scene->lightDefs.GetEnvLightSources()) {
+	for(EnvLightSource *envLight: scene->lightDefs.GetEnvLightSources()) {
 		// Check if the light source is visible according the settings
 		if (!CheckDirectHitVisibilityFlags(envLight, pathInfo.depth, pathInfo.lastBSDFEvent))
 			continue;

@@ -21,7 +21,6 @@
 
 #include <deque>
 #include <boost/heap/priority_queue.hpp>
-#include <boost/thread/condition_variable.hpp>
 
 #include "luxrays/utils/utils.h"
 
@@ -60,7 +59,7 @@ public:
 	virtual ~RenderEngine();
 
 	bool IsStarted() const { return started; }
-	virtual void Start(Film *film, boost::mutex *flmMutex);
+	virtual void Start(Film *film, std::mutex *flmMutex);
 	virtual void Stop();
 
 	bool IsInSceneEdit() const { return editMode; }
@@ -68,7 +67,7 @@ public:
 	virtual void EndSceneEdit(const EditActionList &editActions);
 
 	virtual void BeginFilmEdit();
-	virtual void EndFilmEdit(Film *film, boost::mutex *flmMutex);
+	virtual void EndFilmEdit(Film *film, std::mutex *flmMutex);
 
 	bool IsInPause() const { return pauseMode; }
 	virtual void Pause();
@@ -171,7 +170,7 @@ protected:
 	virtual void UpdateFilmLockLess() = 0;
 	virtual void UpdateCounters() = 0;
 
-	boost::mutex engineMutex;
+	std::mutex engineMutex;
 	luxrays::Context *ctx;
 	std::vector<luxrays::DeviceDescription *> selectedDeviceDescs;
 	std::vector<luxrays::IntersectionDevice *> intersectionDevices;
@@ -179,7 +178,7 @@ protected:
 	const RenderConfig *renderConfig;
 	Filter *pixelFilter;
 	Film *film;
-	boost::mutex *filmMutex;
+	std::mutex *filmMutex;
 
 	// bootStrapSeed is the "father" of all other seeds. Using the same seed should leads
 	// to the same rendering (in a single thread case). seedBase is generated from
