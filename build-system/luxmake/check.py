@@ -28,6 +28,7 @@ REQUIREMENTS = (
     Require("git", None, True),
     Require("act", None, False),
     Require("gh", None, False),
+    Require("repairwheel", None, False),
 )
 
 
@@ -81,19 +82,19 @@ def check(name, min_version=None, mandatory=True):
                 min_version_str,
             )
     if version_str:
-        logger.info("'%s' - Found '%s', version '%s'", name, app, version_str)
+        logger.info("Looking for '%s' - Found '%s', version '%s'", name, app, version_str)
     else:
-        logger.info("'%s' - Found '%s'", name, app)
+        logger.info("Looking for '%s' - Found '%s'", name, app)
 
     return True
 
 
 def check_requirements():
     """Check all requirements."""
-    logger.info("Checking requirements")
+    logger.info("Checking requirements:")
     checks = (
         check(req.name, req.min_version, req.mandatory) for req in REQUIREMENTS
     )
     if not all(checks):
         fail("Some mandatory requirements are missing. Please check...")
-    logger.info("Requirements - pass")
+    logger.info("Requirements - OK")
