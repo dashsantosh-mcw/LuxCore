@@ -58,6 +58,9 @@ public:
 
 	static std::filesystem::path GetCacheDir(const std::string &applicationName);
 
+	std::string getApplicationName() {
+		return appName;
+	}
 private:
 	std::string appName;
 };
@@ -68,3 +71,4 @@ private:
 
 #endif	/* _LUXRAYS_CUDACACHE_H */
 
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4
