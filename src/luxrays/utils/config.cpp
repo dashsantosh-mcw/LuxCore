@@ -64,7 +64,7 @@ std::filesystem::path GetCacheDir() {
 		// crash if that happens.
 		std::filesystem::path home = GetEnvPath("HOME");
 
-		if (home.empty()) {
+		if (!home.empty()) {
 			xdgCacheHome = home / ".config";
 		}
 		else {

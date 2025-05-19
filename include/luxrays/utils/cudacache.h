@@ -58,7 +58,7 @@ public:
 
 	static std::filesystem::path GetCacheDir(const std::string &applicationName);
 
-	std::string getApplicationName() {
+	std::string GetApplicationName() {
 		return appName;
 	}
 private:

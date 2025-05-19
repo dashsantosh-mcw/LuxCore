@@ -25,6 +25,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/trim.hpp>
 
+#include "luxrays/core/context.h"
 #include "luxrays/luxrays.h"
 #include "luxrays/utils/utils.h"
 #include "luxrays/utils/config.h"
@@ -165,7 +166,7 @@ bool cudaKernelPersistentCache::CompilePTX(const vector<string> &kernelsParamete
 	const std::filesystem::path dirPath = GetCacheDir(appName);
 	const std::filesystem::path filePath = dirPath / kernelName;
 	const string fileName = filePath.generic_string();
-	
+
 	*cached = false;
 	if (!std::filesystem::exists(filePath)) {
 		// It isn't available, compile the source
@@ -254,10 +255,11 @@ CUmodule cudaKernelPersistentCache::Compile(const vector<string> &kernelsParamet
 		CHECK_CUDA_ERROR(cuModuleLoadDataEx(&module, ptx, 0, 0, 0));
 
 		delete[] ptx;
-		
+
 		return module;
 	} else
 		return nullptr;
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

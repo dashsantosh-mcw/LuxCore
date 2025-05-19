@@ -246,6 +246,7 @@ void CUDADevice::CompileProgram(HardwareDeviceProgram **program,
 
 	LR_LOG(deviceContext, "[" << programName << "] Compiler options: " << oclKernelPersistentCache::ToOptsString(cudaProgramParameters));
 	LR_LOG(deviceContext, "[" << programName << "] Compiling kernels");
+	LR_LOG(deviceContext, "[" << programName << "] Cache directory: " << kernelCache->GetCacheDir(kernelCache->GetApplicationName()));
 
 	const string cudaProgramSource = GetKernelSource(programSource);
 
@@ -453,7 +454,7 @@ void CUDADevice::AllocBuffer(HardwareDeviceBuffer **hdBuff, const BufferType typ
 	assert (cudaDeviceBuff);
 
 	CUdeviceptr *buff = &cudaDeviceBuff->cudaBuff;
-	
+
 	// Handle the case of an empty buffer
 	if (!size) {
 		if (*buff) {
@@ -539,3 +540,4 @@ void CUDADevice::FreeBuffer(HardwareDeviceBuffer **buff) {
 }
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4
