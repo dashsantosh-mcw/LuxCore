@@ -8,8 +8,9 @@ import shutil
 import subprocess
 import re
 from dataclasses import dataclass
+from enum import Enum
 
-from .utils import logger, fail
+from .utils import logger, fail, Colors
 
 
 @dataclass
@@ -19,6 +20,14 @@ class Require:
     name: str
     min_version: tuple
     mandatory: bool
+
+
+class Status(Enum):
+    """Requirement status."""
+
+    OK = 0
+    WARN = 1
+    ERROR = 2
 
 
 REQUIREMENTS = (
@@ -47,14 +56,28 @@ def _version_tuple(version_str):
 def check(name, min_version=None, mandatory=True):
     """Check whether an app exists and whether its version is correct."""
 
+    # Prepare display
+    display_name = name if mandatory else f"{name} (optional)"
+    prefix = f"Looking for '{display_name}' - "
+
     def error(*args):
-        log = logger.error if mandatory else logger.warning
-        log(*args)
-        return not mandatory
+        if mandatory:
+            log = logger.error
+            color = Colors.FAIL
+            status = Status.ERROR
+        else:
+            log = logger.warning
+            color = Colors.WARNING
+            status = Status.WARN
+
+        msg, *others = args
+        msg = f"{color}{prefix}{msg}{Colors.ENDC}"
+        log(msg, *others)
+        return status
 
     # Existence
     if not (app := shutil.which(name)):
-        return error("'%s' is missing!", name)
+        return error("'%s' is missing!", display_name)
 
     # Get version
     result = subprocess.run(
@@ -73,18 +96,22 @@ def check(name, min_version=None, mandatory=True):
 
         # Translate version
         if not (version := _version_tuple(version_str)):
-            return error("Cannot read '%s' version", name)
+            return error("Cannot read '%s' version", display_name)
         if version < min_version:
             return error(
                 "'%s': installed version ('%s') is lower than required ('%s')",
-                app,
+                display_name,
                 version_str,
                 min_version_str,
             )
     if version_str:
-        logger.info("Looking for '%s' - Found '%s', version '%s'", name, app, version_str)
+        logger.info(
+            prefix + "Found '%s', version '%s'",
+            app,
+            version_str,
+        )
     else:
-        logger.info("Looking for '%s' - Found '%s'", name, app)
+        logger.info(prefix + "Found '%s'", app)
 
     return True
 
@@ -92,9 +119,13 @@ def check(name, min_version=None, mandatory=True):
 def check_requirements():
     """Check all requirements."""
     logger.info("Checking requirements:")
-    checks = (
+    checks = [
         check(req.name, req.min_version, req.mandatory) for req in REQUIREMENTS
-    )
-    if not all(checks):
+    ]
+    if all(c == Status.OK for c in checks):
+        logger.info("Requirements - OK")
+
+    if any(c == Status.ERROR for c in checks):
         fail("Some mandatory requirements are missing. Please check...")
-    logger.info("Requirements - OK")
+
+    logger.info("Requirements - OK (some warnings)")
