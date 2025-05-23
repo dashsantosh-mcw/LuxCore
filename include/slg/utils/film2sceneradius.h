@@ -42,3 +42,4 @@ extern float Film2SceneRadius(const Scene *scene,
 }
 
 #endif	/* _SLG_FILM2SCENERADIUS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

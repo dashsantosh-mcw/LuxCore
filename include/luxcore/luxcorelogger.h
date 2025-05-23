@@ -135,3 +135,4 @@ inline std::string ToArgString(const T *p, const size_t size) {
 }
 
 #endif	/* _LUXCORE_LOGGER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

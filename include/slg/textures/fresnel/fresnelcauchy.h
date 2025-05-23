@@ -35,3 +35,4 @@ extern FresnelTexture *AllocFresnelAbbeTex(const luxrays::Properties &props, con
 }
 
 #endif	/* _SLG_FRESNELCAUCHYTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

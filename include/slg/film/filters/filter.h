@@ -103,3 +103,4 @@ BOOST_SERIALIZATION_ASSUME_ABSTRACT(slg::Filter)
 BOOST_CLASS_VERSION(slg::Filter, 3)
 
 #endif	/* _SLG_FILTER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

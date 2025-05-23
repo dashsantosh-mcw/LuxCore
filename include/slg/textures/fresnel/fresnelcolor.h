@@ -62,3 +62,4 @@ private:
 }
 
 #endif	/* _SLG_FRESNELCOLORTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

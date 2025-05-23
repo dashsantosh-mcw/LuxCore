@@ -80,3 +80,4 @@ private:
 }
 
 #endif	/* _SLG_BRIGHTCONTRASTTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

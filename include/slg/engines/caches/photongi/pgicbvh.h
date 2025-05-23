@@ -100,3 +100,4 @@ BOOST_CLASS_EXPORT_KEY(slg::PGICPhotonBvh)
 BOOST_CLASS_EXPORT_KEY(slg::PGICRadiancePhotonBvh)
 
 #endif	/* _SLG_PGICBVH_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

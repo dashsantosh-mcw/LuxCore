@@ -34,3 +34,4 @@ extern Texture *AllocLampSpectrumTex(const luxrays::Properties &props, const std
 }
 
 #endif	/* _SLG_LAMPSPECTRUMTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

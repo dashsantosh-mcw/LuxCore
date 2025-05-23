@@ -41,3 +41,4 @@ inline std::string GetFileNamePath(const std::string &fileName) {
 }
 
 #endif	/* _LUXRAYS_FILEEXT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

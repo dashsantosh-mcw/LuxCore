@@ -88,3 +88,4 @@ BOOST_CLASS_VERSION(slg::CatmullRomFilter, 1)
 BOOST_CLASS_EXPORT_KEY(slg::CatmullRomFilter)
 
 #endif	/* _SLG_CATMULLROM_FILTER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

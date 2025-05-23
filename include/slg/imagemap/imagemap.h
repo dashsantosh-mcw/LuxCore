@@ -1102,3 +1102,4 @@ BOOST_CLASS_EXPORT_KEY(slg::ImageMapStorageImplFloat4)
 BOOST_CLASS_EXPORT_KEY(slg::ImageMap)
 
 #endif	/* _SLG_IMAGEMAP_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

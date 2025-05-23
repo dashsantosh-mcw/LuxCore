@@ -213,3 +213,4 @@ BOOST_CLASS_EXPORT_KEY(slg::Tile)
 BOOST_CLASS_EXPORT_KEY(slg::TileRepository)		
 
 #endif	/* _SLG_TILEREPOSITORY_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -188,3 +188,4 @@ template <> void HardwareDevice::SetKernelArg<HardwareDeviceBufferPtr>(HardwareD
 }
 
 #endif	/* _LUXRAYS_INTERSECTIONDEVICE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

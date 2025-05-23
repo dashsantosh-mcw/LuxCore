@@ -98,3 +98,4 @@ private:
 BOOST_CLASS_VERSION(slg::FilmOutputs, 2)
 
 #endif	/* _SLG_FILMOUTPUTS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

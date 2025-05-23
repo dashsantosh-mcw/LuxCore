@@ -35,3 +35,4 @@ extern std::filesystem::path GetCacheDir();
 }
 
 #endif	/* _LUXRAYS_CONFIG_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

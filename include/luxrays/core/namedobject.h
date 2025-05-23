@@ -61,3 +61,4 @@ BOOST_SERIALIZATION_ASSUME_ABSTRACT(luxrays::NamedObject)
 BOOST_CLASS_VERSION(luxrays::NamedObject, 3)
 
 #endif	/* _LUXRAYS_NAMEDOBJECT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

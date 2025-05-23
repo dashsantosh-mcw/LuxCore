@@ -302,3 +302,4 @@ template<u_int CHILDREN_COUNT> inline luxrays::ocl::IndexBVHArrayNode *BuildEmbr
 }
 
 #endif	/* _LUXRAYS_BVHACCEL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

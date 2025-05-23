@@ -112,3 +112,4 @@ private:
 }
 
 #endif	/* _SLG_CHECKERBOARDTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

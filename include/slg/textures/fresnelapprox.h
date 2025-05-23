@@ -98,3 +98,4 @@ private:
 }
 
 #endif	/* _SLG_FRESNELAPPROXTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

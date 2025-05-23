@@ -284,3 +284,4 @@ extern float SchlickBSDF_CoatingPdf(const float roughness, const float anisotrop
 }
 
 #endif	/* _SLG_MATERIAL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -75,3 +75,4 @@ protected:
 }
 
 #endif	/* _SLG_FILTERREGISTRY_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -147,3 +147,4 @@ static void GetMatrix4x4(const pybind11::object &obj, float mat[16]) {
 } // namespace luxcore
 
 #endif
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

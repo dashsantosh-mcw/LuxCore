@@ -273,3 +273,4 @@ BOOST_CLASS_EXPORT_KEY(slg::ELVCBvh)
 BOOST_CLASS_EXPORT_KEY(slg::ELVCParams)
 
 #endif	/* _SLG_LIGHTVISIBILITYCACHE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

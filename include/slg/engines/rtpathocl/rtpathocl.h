@@ -139,3 +139,4 @@ protected:
 #endif
 
 #endif	/* _SLG_RTPATHOCL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

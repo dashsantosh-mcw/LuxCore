@@ -403,3 +403,4 @@ private:
 }
 
 #endif	/* _SLG_BLENDER_TEXTURE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -554,3 +554,4 @@ BOOST_CLASS_EXPORT_KEY(slg::Film)
 BOOST_CLASS_EXPORT_KEY(slg::FilmSamplesCounts)
 
 #endif	/* _SLG_FILM_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

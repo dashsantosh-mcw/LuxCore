@@ -752,3 +752,4 @@ inline std::ostream &operator<<(std::ostream &os, const Properties &p) {
 }
 
 #endif	/* _LUXRAYS_PROPERTIES_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

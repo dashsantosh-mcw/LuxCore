@@ -82,3 +82,4 @@ private:
 }
 
 #endif	/* _LUXRAYS_MBVHACCEL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

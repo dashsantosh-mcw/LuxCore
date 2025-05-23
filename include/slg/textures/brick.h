@@ -123,3 +123,4 @@ private:
 }
 
 #endif	/* _SLG_BRICKTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

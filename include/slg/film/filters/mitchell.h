@@ -97,3 +97,4 @@ BOOST_CLASS_VERSION(slg::MitchellFilter, 2)
 BOOST_CLASS_EXPORT_KEY(slg::MitchellFilter)
 
 #endif	/* _SLG_MITCHELL_FILTER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

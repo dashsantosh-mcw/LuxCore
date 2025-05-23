@@ -123,3 +123,4 @@ static inline bool SolveLinearSystem3x3(const T A[3][3], const T B[3], T x[3]) {
 }
 
 #endif //_LUXRAYS_MATRIX3X3_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

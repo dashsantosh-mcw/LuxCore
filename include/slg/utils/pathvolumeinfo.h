@@ -81,3 +81,4 @@ extern std::ostream &operator<<(std::ostream &os, const PathVolumeInfo &pvi);
 }
 
 #endif	/* _SLG_VOLUMEINFO_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -92,3 +92,4 @@ private:
 }
 
 #endif	/* _SLG_ARCHGLASSMAT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

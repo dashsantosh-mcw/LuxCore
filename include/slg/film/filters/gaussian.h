@@ -92,3 +92,4 @@ BOOST_CLASS_VERSION(slg::GaussianFilter, 1)
 BOOST_CLASS_EXPORT_KEY(slg::GaussianFilter)
 
 #endif	/* _SLG_GAUSSIAN_FILTER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

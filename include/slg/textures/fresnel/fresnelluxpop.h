@@ -34,3 +34,4 @@ extern FresnelTexture *AllocFresnelLuxPopTex(const luxrays::Properties &props, c
 }
 
 #endif	/* _SLG_FRESNELLUXPOPTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

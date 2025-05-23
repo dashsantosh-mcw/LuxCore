@@ -81,3 +81,4 @@ BOOST_CLASS_VERSION(slg::BackgroundImgPlugin, 1)
 BOOST_CLASS_EXPORT_KEY(slg::BackgroundImgPlugin)
 
 #endif	/*  _SLG_BACKGROUND_IMG_PLUGIN_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

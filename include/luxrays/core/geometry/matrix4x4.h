@@ -134,3 +134,4 @@ BOOST_CLASS_IMPLEMENTATION(luxrays::Matrix4x4, boost::serialization::object_seri
 BOOST_CLASS_EXPORT_KEY(luxrays::Matrix4x4)
 
 #endif	/* _LUXRAYS_MATRIX4X4_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

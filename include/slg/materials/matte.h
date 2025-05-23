@@ -64,3 +64,4 @@ private:
 }
 
 #endif	/* _SLG_MATTEMAT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

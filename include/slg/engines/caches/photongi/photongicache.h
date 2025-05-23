@@ -378,3 +378,4 @@ BOOST_CLASS_EXPORT_KEY(slg::PhotonGICacheParams)
 BOOST_CLASS_EXPORT_KEY(slg::PhotonGICache)
 
 #endif	/* _SLG_PHOTONGICACHE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

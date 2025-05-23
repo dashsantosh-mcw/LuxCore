@@ -142,3 +142,4 @@ protected:
 }
 
 #endif	/* _SLG_PROJECTIVE_CAMERA_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

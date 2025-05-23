@@ -91,3 +91,4 @@ BOOST_CLASS_VERSION(slg::ImageMapCache, 2)
 BOOST_CLASS_EXPORT_KEY(slg::ImageMapCache)
 
 #endif	/* _SLG_IMAGEMAPCACHE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

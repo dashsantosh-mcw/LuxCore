@@ -372,3 +372,4 @@ BOOST_CLASS_EXPORT_KEY(slg::GenericFrameBuffer10UInt)
 
 #endif	/* _SLG_FRAMEBUFFER_H */
 
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

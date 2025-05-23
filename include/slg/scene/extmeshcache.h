@@ -83,3 +83,4 @@ BOOST_CLASS_VERSION(slg::ExtMeshCache, 4)
 BOOST_CLASS_EXPORT_KEY(slg::ExtMeshCache)
 
 #endif	/* _SLG_EXTMESHCACHE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

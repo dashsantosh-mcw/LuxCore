@@ -119,3 +119,4 @@ inline float Noise(const luxrays::Point &P) {
 }
 
 #endif	/* _SLG_TEXTURE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -405,3 +405,4 @@ BOOST_CLASS_EXPORT_KEY(luxrays::InstanceTriangleMesh)
 BOOST_CLASS_EXPORT_KEY(luxrays::MotionTriangleMesh)
 
 #endif	/* _LUXRAYS_TRIANGLEMESH_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

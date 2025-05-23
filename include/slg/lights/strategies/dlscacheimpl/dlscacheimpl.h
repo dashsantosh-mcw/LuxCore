@@ -208,3 +208,4 @@ BOOST_CLASS_EXPORT_KEY(slg::DLSCBvh)
 BOOST_CLASS_EXPORT_KEY(slg::DLSCParams)
 		
 #endif	/* _SLG_LIGHTSTRATEGY_DLSCACHEIMPL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -93,3 +93,4 @@ private:
 }
 
 #endif	/* _SLG_PERSPECTIVE_CAMERA_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

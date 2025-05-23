@@ -69,3 +69,4 @@ public:
 }
 
 #endif	/* _LUXRAYS_NATIVETHREADDEVICE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

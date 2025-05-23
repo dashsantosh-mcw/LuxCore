@@ -53,3 +53,4 @@ protected:
 }
 
 #endif	/* _SLG_LIGHTSTRATEGY_POWER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -100,3 +100,4 @@ private:
 }
 
 #endif	/* _SLG_SKY2LIGHT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

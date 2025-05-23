@@ -55,3 +55,4 @@ private:
 BOOST_SERIALIZATION_ASSUME_ABSTRACT(slg::RenderState)
 
 #endif	/* _SLG_RENDERSTATE_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

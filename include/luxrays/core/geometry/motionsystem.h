@@ -237,3 +237,4 @@ BOOST_CLASS_EXPORT_KEY(luxrays::InterpolatedTransform::DecomposedTransform)
 BOOST_CLASS_EXPORT_KEY(luxrays::MotionSystem)
 
 #endif // _LUXRAYS_MOTIONSYSTEM_H
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

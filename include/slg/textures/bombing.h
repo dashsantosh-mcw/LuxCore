@@ -75,3 +75,4 @@ private:
 }
 
 #endif	/* _SLG_BOMBINGTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

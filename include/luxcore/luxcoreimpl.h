@@ -374,3 +374,4 @@ template <> struct std::formatter<luxcore::Camera::CameraType>: formatter<string
 };
 
 #endif	/* _LUXCOREIMPL_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

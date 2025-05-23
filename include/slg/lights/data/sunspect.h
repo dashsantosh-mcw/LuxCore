@@ -262,3 +262,4 @@ static const float sun_solAmplitudes[38] = {
 };*/
 
 }
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -136,3 +136,4 @@ typedef struct HitPoint_t {
 }
 
 #endif	/* _SLG_HITPOINT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

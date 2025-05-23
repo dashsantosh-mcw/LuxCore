@@ -191,4 +191,4 @@ private:
 
 }
 
-#endif	/* _SLG_DISNEYMAT_H */
+#endif	/* _SLG_DISNEYMAT_H */// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

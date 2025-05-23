@@ -61,3 +61,4 @@ public:
 }
 
 #endif	/* _LUXRAYS_ACCELERATOR_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -134,3 +134,4 @@ BOOST_CLASS_VERSION(slg::FilmDenoiser, 5)
 BOOST_CLASS_EXPORT_KEY(slg::FilmDenoiser)
 
 #endif	/* _SLG_FILMDENOISER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

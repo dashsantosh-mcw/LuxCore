@@ -67,3 +67,4 @@ extern std::locale cLocale;
 }
 
 #endif	/* _LUXRAYS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -73,3 +73,4 @@ BOOST_CLASS_VERSION(slg::BoxFilter, 2)
 BOOST_CLASS_EXPORT_KEY(slg::BoxFilter)
 
 #endif	/* _SLG_BOX_FILTER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

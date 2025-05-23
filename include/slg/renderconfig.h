@@ -95,3 +95,4 @@ BOOST_CLASS_VERSION(slg::RenderConfig, 2)
 BOOST_CLASS_EXPORT_KEY(slg::RenderConfig)
 
 #endif	/* _SLG_RENDERCONFIG_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

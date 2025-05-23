@@ -176,3 +176,4 @@ private:
 }
 
 #endif	/* _SLG_BIDIRCPU_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

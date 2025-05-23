@@ -362,3 +362,4 @@ inline std::string utf16_to_utf8(const std::wstring &wstr) {
 }
 
 #endif	/* _LUXRAYS_UTILS_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

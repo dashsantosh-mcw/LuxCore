@@ -77,3 +77,4 @@ BOOST_CLASS_VERSION(slg::FilmNoiseEstimation, 2)
 BOOST_CLASS_EXPORT_KEY(slg::FilmNoiseEstimation)
 
 #endif	/* _SLG_FILM_NOISE_ESTIMATION_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

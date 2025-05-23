@@ -73,3 +73,4 @@ private:
 }
 
 #endif	/* _SLG_SUNLIGHT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

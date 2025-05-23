@@ -92,3 +92,4 @@ private:
 }
 
 #endif	/* _SLG_SCENEOBJECT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

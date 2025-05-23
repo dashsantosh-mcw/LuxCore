@@ -49,3 +49,4 @@ inline void CheckOpenCLError(const cl_int err, const char *file, const int line)
 #endif
 
 #endif	/* _LUXRAYS_OPENCLERROR_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

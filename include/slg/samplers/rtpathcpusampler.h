@@ -109,3 +109,4 @@ private:
 }
 
 #endif	/* _SLG_RTPATHCPU_SAMPLER_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

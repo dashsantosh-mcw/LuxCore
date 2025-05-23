@@ -74,3 +74,4 @@ private:
 }
 
 #endif  /* _SLG_ROUNDTEX_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

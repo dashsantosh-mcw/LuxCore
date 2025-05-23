@@ -74,3 +74,4 @@ BOOST_CLASS_VERSION(slg::FilmConvTest, 2)
 BOOST_CLASS_EXPORT_KEY(slg::FilmConvTest)
 
 #endif	/* _SLG_FILMCONVTEST_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

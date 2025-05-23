@@ -62,3 +62,4 @@ protected:
 
 #endif	/* _LUXRAYS_CUDAINTERSECTIONDEVICE_H */
 
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

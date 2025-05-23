@@ -67,3 +67,4 @@ private:
 }
 
 #endif	/* _SLG_MAPPOINTLIGHT_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4

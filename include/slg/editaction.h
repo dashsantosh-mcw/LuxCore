@@ -116,3 +116,4 @@ inline std::ostream &operator<<(std::ostream &os, const EditActionList &eal) {
 }
 
 #endif	/* _SLG_SLG_EDITACTION_H */
+// vim: autoindent noexpandtab tabstop=4 shiftwidth=4
