@@ -67,22 +67,30 @@ public:
 	}
 };
 
-template <u_int DIMENSIONS> static Osd::CpuVertexBuffer *BuildBuffer(
-		const Far::StencilTable *stencilTable, const float *data,
-		const u_int count, const u_int totalCount) {
-    Osd::CpuVertexBuffer *buffer = Osd::CpuVertexBuffer::Create(DIMENSIONS, totalCount);
+template <int DIMENSIONS> static Osd::CpuVertexBuffer *BuildBuffer(
+		const Far::StencilTable *stencilTable,  // Stencil table
+		const float *data,  // Primvar data
+		const int nCoarse,  // Coarse vertex count
+		const int nRefined  // Refined vertex count
+	)
+{
+    auto *buffer = Osd::CpuVertexBuffer::Create(DIMENSIONS, nCoarse + nRefined);
+
+	// Pack the primvar data at the start of the vertex buffer
+	// and update every time primvar data changes
+	buffer->UpdateData(data, 0, nCoarse);
 
     Osd::BufferDescriptor desc(0, DIMENSIONS, DIMENSIONS);
-    Osd::BufferDescriptor newDesc(count * DIMENSIONS, DIMENSIONS, DIMENSIONS);
-
-	// Pack the control vertex data at the start of the vertex buffer
-	// and update every time control data changes
-	buffer->UpdateData(data, 0, count);
+    Osd::BufferDescriptor newDesc(nCoarse * DIMENSIONS, DIMENSIONS, DIMENSIONS);
 
 	// Refine points (coarsePoints -> refinedPoints)
-	OSD_EVALUATOR::EvalStencils(buffer, desc,
-		buffer, newDesc,
-		stencilTable);
+	OSD_EVALUATOR::EvalStencils(
+		buffer,
+		desc,
+		buffer,
+		newDesc,
+		stencilTable
+	);
 
 	return buffer;
 }
@@ -104,7 +112,7 @@ float SubdivShape::MaxEdgeScreenSize(const Camera *camera, ExtTriangleMesh *srcM
 			;
 
 	const Transform worldToScreen = Inverse(camera->GetScreenToWorld());
-	
+
 	vector<float> maxEdgeSizes(threadCount, 0.f);
 	for(
 			// Visual C++ 2013 supports only OpenMP 2.5
@@ -119,138 +127,88 @@ float SubdivShape::MaxEdgeScreenSize(const Camera *camera, ExtTriangleMesh *srcM
 			0
 #endif
 			;
-		
+
 		const Triangle &tri = tris[i];
 		const Point p0 = worldToScreen * verts[tri.v[0]];
 		const Point p1 = worldToScreen * verts[tri.v[1]];
 		const Point p2 = worldToScreen * verts[tri.v[2]];
-		
+
 		float maxEdgeSize = (p1 - p0).Length();
 		maxEdgeSize = Max(maxEdgeSize, (p2 - p1).Length());
 		maxEdgeSize = Max(maxEdgeSize, (p0 - p2).Length());
-		
+
 		maxEdgeSizes[tid] = Max(maxEdgeSizes[tid], maxEdgeSize);
 	}
-	
+
 	float maxEdgeSize = 0.f;
 	for (u_int i = 0; i < threadCount; ++i)
 		maxEdgeSize = Max(maxEdgeSize, maxEdgeSizes[i]);
-	
+
 	return maxEdgeSize;
 }
+
+static Far::TopologyRefiner * createFarTopologyRefiner(const ExtTriangleMesh*);
 
 ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int maxLevel) {
 	//--------------------------------------------------------------------------
 	// Define the mesh
 	//--------------------------------------------------------------------------
 
-	Sdc::SchemeType type = Sdc::SCHEME_LOOP;
 
-	Sdc::Options options;
-	options.SetVtxBoundaryInterpolation(Sdc::Options::VTX_BOUNDARY_EDGE_AND_CORNER);
+	// OSD topology is indexed by int whereas Lux' one is indexed by uint...
+	assert(srcMesh->GetTotalVertexCount() <= std::numeric_limits<int>::max());
+	assert(srcMesh->GetTotalTriangleCount() <= std::numeric_limits<int>::max());
 
-	Far::TopologyDescriptor desc;
-	desc.numVertices = srcMesh->GetTotalVertexCount();
-	desc.numFaces = srcMesh->GetTotalTriangleCount();
-	vector<int> vertPerFace(desc.numFaces, 3);
-	desc.numVertsPerFace = &vertPerFace[0];
-	desc.vertIndicesPerFace = (const int *)srcMesh->GetTriangles();
-
-	// Look for mesh boundary edges
-	unordered_map<Edge, u_int, EdgeHashFunction> edgesMap;
-	const u_int triCount = srcMesh->GetTotalTriangleCount();
-	const Triangle *tris = srcMesh->GetTriangles();
-
-	// Count how many times an edge is shared
-	for (u_int i = 0; i < triCount; ++i) {
-		const Triangle &tri = tris[i];
-		
-		 const Edge edge0(tri.v[0], tri.v[1]);
-		 if (edgesMap.find(edge0) != edgesMap.end())
-			edgesMap[edge0] += 1;
-		 else
-			edgesMap[edge0] = 1;
-		
-		 const Edge edge1(tri.v[1], tri.v[2]);
-		 if (edgesMap.find(edge1) != edgesMap.end())
-			edgesMap[edge1] += 1;
-		 else
-			edgesMap[edge1] = 1;
-		
-		 const Edge edge2(tri.v[2], tri.v[0]);
-		 if (edgesMap.find(edge2) != edgesMap.end())
-			edgesMap[edge2] += 1;
-		 else
-			edgesMap[edge2] = 1;
-	}
-
-	vector<bool> isBoundaryVertex(srcMesh->GetTotalVertexCount(), false);
-	vector<Far::Index> cornerVertexIndices;
-	vector<float> cornerWeights;
-	for (auto em : edgesMap) {
-		if (em.second == 1) {
-			// It is a boundary edge
-			
-			const Edge &e = em.first;
-			
-			if (!isBoundaryVertex[e.vIndex[0]]) {
-				cornerVertexIndices.push_back(e.vIndex[0]);
-				cornerWeights.push_back(10.f);
-				isBoundaryVertex[e.vIndex[0]] = true;
-			}
-			
-			if (!isBoundaryVertex[e.vIndex[1]]) {
-				cornerVertexIndices.push_back(e.vIndex[1]);
-				cornerWeights.push_back(10.f);
-				isBoundaryVertex[e.vIndex[1]] = true;
-			}
-		}
-	}
-	
-	// Initialize TopologyDescriptor corners if I have some
-	if (cornerVertexIndices.size() > 0) {
-		desc.numCorners = cornerVertexIndices.size();
-		desc.cornerVertexIndices = &cornerVertexIndices[0];
-		desc.cornerWeights = &cornerWeights[0];
-	}
-
-	// Instantiate a Far::TopologyRefiner from the descriptor
-	Far::TopologyRefiner *refiner = Far::TopologyRefinerFactory<Far::TopologyDescriptor>::Create(desc,
-			Far::TopologyRefinerFactory<Far::TopologyDescriptor>::Options(type, options));
-
-    // Uniformly refine the topology up to 'maxlevel'
-    refiner->RefineUniform(Far::TopologyRefiner::UniformOptions(maxLevel));
 
 	//--------------------------------------------------------------------------
 	// Setup a factory and create StencilTable
 	//--------------------------------------------------------------------------
+	// https://graphics.pixar.com/opensubdiv/docs/osd_tutorial_0.html
 
-	Far::StencilTableFactory::Options stencilOptions;
-    stencilOptions.generateOffsets = true;
-    stencilOptions.generateIntermediateLevels = false;
-	
-	const Far::StencilTable *stencilTable =
-		Far::StencilTableFactory::Create(*refiner, stencilOptions);
-	
-	//--------------------------------------------------------------------------
-    // Setup a factory to create PatchTable
-	//--------------------------------------------------------------------------
+	// Set-up
+	auto* refiner = createFarTopologyRefiner(srcMesh);
 
-    Far::PatchTableFactory::Options patchOptions;
-	patchOptions.SetEndCapType(
-			Far::PatchTableFactory::Options::ENDCAP_BSPLINE_BASIS);
+	// Uniformly refine the topology up to 'maxlevel'
+	auto refiner_options = Far::TopologyRefiner::UniformOptions(maxLevel);
+	refiner_options.fullTopologyInLastLevel = true;
+	refiner->RefineUniform(refiner_options);
+	if (refiner->GetMaxLevel() < maxLevel) {
+		SDL_LOG("WARNING - SUBDIVISION FAILURE");
+		SDL_LOG("'maxlevel' may be too high, please check. Continuing with input mesh...");
+		return srcMesh;
+	}
 
-	const Far::PatchTable *patchTable =
-			Far::PatchTableFactory::Create(*refiner, patchOptions);
+	// Create stencil and patch tables
+	Far::StencilTable const * stencilTable = nullptr;
+	Far::PatchTable const * patchTable = nullptr;
 
-	// Append local point stencils
-	if (const Far::StencilTable *localPointStencilTable =
-			patchTable->GetLocalPointStencilTable()) {
-		if (const Far::StencilTable *combinedTable =
-				Far::StencilTableFactory::AppendLocalPointStencilTable(
-				*refiner, stencilTable, localPointStencilTable)) {
-			delete stencilTable;
-			stencilTable = combinedTable;
+	{
+
+		Far::StencilTableFactory::Options stencilOptions;
+		stencilOptions.generateOffsets = true;
+		stencilOptions.generateIntermediateLevels = false;
+
+		stencilTable = Far::StencilTableFactory::Create(*refiner, stencilOptions);
+
+		//--------------------------------------------------------------------------
+		// Setup a factory to create PatchTable
+		//--------------------------------------------------------------------------
+
+		Far::PatchTableFactory::Options patchOptions;
+		patchOptions.SetEndCapType(
+				Far::PatchTableFactory::Options::ENDCAP_BSPLINE_BASIS);
+
+		patchTable = Far::PatchTableFactory::Create(*refiner, patchOptions);
+
+		// Append local point stencils
+		if (const Far::StencilTable *localPointStencilTable =
+				patchTable->GetLocalPointStencilTable()) {
+			if (const Far::StencilTable *combinedTable =
+					Far::StencilTableFactory::AppendLocalPointStencilTable(
+					*refiner, stencilTable, localPointStencilTable)) {
+				delete stencilTable;
+				stencilTable = combinedTable;
+			}
 		}
 	}
 
@@ -258,21 +216,35 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 	// Set buffers and evaluate the stencil
 	//--------------------------------------------------------------------------
 
-	// Setup a buffer for vertex primvar data
-	const u_int vertsCount = refiner->GetLevel(0).GetNumVertices();
-	const u_int totalVertsCount = vertsCount + refiner->GetNumVerticesTotal();
+	// Setup buffers for vertex primvar data
+	Far::TopologyLevel const& refFirstLevel = refiner->GetLevel(0);
+	Far::TopologyLevel const& refLastLevel = refiner->GetLevel(maxLevel);
+
+	const int nCoarseVerts = refFirstLevel.GetNumVertices(); // Coarse vertex count
+	const int nCoarseFaces = refFirstLevel.GetNumFaces(); // Coarse face count
+	const int nRefinedVerts = refLastLevel.GetNumVertices(); // Refined vertex count
+	const int nRefinedFaces = refLastLevel.GetNumFaces(); // Coarse face count
+	const int totalVertsCount = nCoarseVerts + nRefinedVerts;  // Total vertex count
+	SDL_LOG("Subdiv - Refined vertices: " << nRefinedVerts);
+	SDL_LOG("Subdiv - Refined triangles: " << nRefinedFaces);
 
 	// Vertices
 	Osd::CpuVertexBuffer *vertsBuffer = BuildBuffer<3>(
-		stencilTable, (const float *)srcMesh->GetVertices(),
-		vertsCount, totalVertsCount);
-	
+		stencilTable,
+		(const float *)srcMesh->GetVertices(),
+		nCoarseVerts,
+		nRefinedVerts
+	);
+
 	// Normals
     Osd::CpuVertexBuffer *normsBuffer = nullptr;
 	if (srcMesh->HasNormals()) {
         normsBuffer = BuildBuffer<3>(
-				stencilTable, (const float *)srcMesh->GetNormals(),
-				vertsCount, totalVertsCount);
+			stencilTable,
+			(const float *)srcMesh->GetNormals(),
+			nCoarseVerts,
+			nRefinedVerts
+		);
 	}
 
 	// UVs
@@ -280,18 +252,24 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; i++) {
 		if (srcMesh->HasUVs(i)) {
 			uvsBuffers[i] = BuildBuffer<2>(
-					stencilTable, (const float *)srcMesh->GetUVs(i),
-					vertsCount, totalVertsCount);
+				stencilTable,
+				(const float *)srcMesh->GetUVs(i),
+				nCoarseVerts,
+				nRefinedVerts
+			);
 		}
 	}
 
-	// Cols
+	// Colors
 	vector<Osd::CpuVertexBuffer *> colsBuffers(EXTMESH_MAX_DATA_COUNT, nullptr);
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; i++) {
 		if (srcMesh->HasColors(i)) {
 			colsBuffers[i] = BuildBuffer<3>(
-					stencilTable, (const float *)srcMesh->GetColors(i),
-					vertsCount, totalVertsCount);
+				stencilTable,
+				(const float *)srcMesh->GetColors(i),
+				nCoarseVerts,
+				nRefinedVerts
+			);
 		}
 	}
 
@@ -300,19 +278,25 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 	if (srcMesh->HasAlphas(0)) {
 		for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; i++) {
 			alphasBuffers[i] = BuildBuffer<1>(
-					stencilTable, (const float *)srcMesh->GetAlphas(i),
-					vertsCount, totalVertsCount);
+				stencilTable,
+				(const float *)srcMesh->GetAlphas(i),
+				nCoarseVerts,
+				nRefinedVerts
+			);
 		}
 	}
-	
+
 	// VertAOVs
 	vector<Osd::CpuVertexBuffer *> vertAOVSsBuffers(EXTMESH_MAX_DATA_COUNT, nullptr);
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; i++) {
 		if (srcMesh->HasVertexAOV(i)) {
 			for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; i++) {
 				vertAOVSsBuffers[i] = BuildBuffer<1>(
-						stencilTable, (const float *)srcMesh->GetVertexAOVs(i),
-						vertsCount, totalVertsCount);
+					stencilTable,
+					(const float *)srcMesh->GetVertexAOVs(i),
+					nCoarseVerts,
+					totalVertsCount
+				);
 			}
 		}
 	}
@@ -322,56 +306,37 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 	//--------------------------------------------------------------------------
 
 	// New triangles
-	u_int newTrisCount = 0;
-	for (int array = 0; array < patchTable->GetNumPatchArrays(); ++array)
-		for (int patch = 0; patch < patchTable->GetNumPatches(array); ++patch)
-			++newTrisCount;
-
-	Triangle *newTris = TriangleMesh::AllocTrianglesBuffer(newTrisCount);
-	u_int triIndex = 0;
-	u_int maxVertIndex = 0;
-	for (int array = 0; array < patchTable->GetNumPatchArrays(); ++array) {
-		for (int patch = 0; patch < patchTable->GetNumPatches(array); ++patch) {
-			const Far::ConstIndexArray faceVerts =
-				patchTable->GetPatchVertices(array, patch);
-			
-			assert (faceVerts.size() == 3);
-			newTris[triIndex].v[0] = faceVerts[0] - vertsCount;
-			newTris[triIndex].v[1] = faceVerts[1] - vertsCount;
-			newTris[triIndex].v[2] = faceVerts[2] - vertsCount;
-
-			maxVertIndex = Max(maxVertIndex, Max(newTris[triIndex].v[0], Max(newTris[triIndex].v[1], newTris[triIndex].v[2])));
-			
-			++triIndex;
+	Triangle *newTris = TriangleMesh::AllocTrianglesBuffer(nRefinedFaces);
+	for (int face = 0; face < nRefinedFaces; ++face) {
+		auto faceVerts = refLastLevel.GetFaceVertices(face);
+		for (u_int vertex = 0; vertex < 3; ++vertex) {
+			newTris[face].v[vertex] = faceVerts[vertex];
 		}
 	}
 
-	// I don't sincerely know how to get this obvious value out of OpenSubdiv
-	const u_int newVertsCount = maxVertIndex + 1;
-
 	// New vertices
-	Point *newVerts = TriangleMesh::AllocVerticesBuffer(newVertsCount);
+	Point *newVerts = TriangleMesh::AllocVerticesBuffer(nRefinedVerts);
+	const float *refinedVerts = vertsBuffer->BindCpuBuffer() + 3 * nCoarseVerts;
+	copy(refinedVerts, refinedVerts + 3 * nRefinedVerts, &newVerts->x);
 
-	const float *refinedVerts = vertsBuffer->BindCpuBuffer() + 3 * vertsCount;
-	copy(refinedVerts, refinedVerts + 3 * newVertsCount, &newVerts->x);
 
 	// New normals
 	Normal *newNorms = nullptr;
 	if (srcMesh->HasNormals()) {
-		newNorms = new Normal[newVertsCount];
+		newNorms = new Normal[nRefinedVerts];
 
-		const float *refinedNorms = normsBuffer->BindCpuBuffer() + 3 * vertsCount;
-		copy(refinedNorms, refinedNorms + 3 * newVertsCount, &newNorms->x);
+		const float *refinedNorms = normsBuffer->BindCpuBuffer() + 3 * nCoarseVerts;
+		copy(refinedNorms, refinedNorms + 3 * nRefinedVerts, &newNorms->x);
 	}
 
 	// New UVs
 	array<UV *, EXTMESH_MAX_DATA_COUNT> newUVs;
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; i++) {
 		if (srcMesh->HasUVs(i)) {
-			newUVs[i] = new UV[newVertsCount];
+			newUVs[i] = new UV[nRefinedVerts];
 
-			const float *refinedUVs = uvsBuffers[i]->BindCpuBuffer() + 2 * vertsCount;
-			copy(refinedUVs, refinedUVs + 2 * newVertsCount, &newUVs[i]->u);
+			const float *refinedUVs = uvsBuffers[i]->BindCpuBuffer() + 2 * nCoarseVerts;
+			copy(refinedUVs, refinedUVs + 2 * nRefinedVerts, &newUVs[i]->u);
 		} else
 			newUVs[i] = nullptr;
 	}
@@ -380,10 +345,10 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 	array<Spectrum *, EXTMESH_MAX_DATA_COUNT> newCols;
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; i++) {
 		if (srcMesh->HasColors(i)) {
-			newCols[i] = new Spectrum[newVertsCount];
+			newCols[i] = new Spectrum[nRefinedVerts];
 
-			const float *refinedCols = colsBuffers[i]->BindCpuBuffer() + 3 * vertsCount;
-			copy(refinedCols, refinedCols + 3 * newVertsCount, &newCols[i]->c[0]);
+			const float *refinedCols = colsBuffers[i]->BindCpuBuffer() + 3 * nCoarseVerts;
+			copy(refinedCols, refinedCols + 3 * nRefinedVerts, &newCols[i]->c[0]);
 		} else
 			newCols[i] = nullptr;
 	}
@@ -392,10 +357,10 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 	array<float *, EXTMESH_MAX_DATA_COUNT> newAlphas;
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; i++) {
 		if (srcMesh->HasAlphas(i)) {
-			newAlphas[i] = new float[newVertsCount];
+			newAlphas[i] = new float[nRefinedVerts];
 
-			const float *refinedAlphas = alphasBuffers[i]->BindCpuBuffer() + 1 * vertsCount;
-			copy(refinedAlphas, refinedAlphas + 1 * newVertsCount, newAlphas[i]);
+			const float *refinedAlphas = alphasBuffers[i]->BindCpuBuffer() + 1 * nCoarseVerts;
+			copy(refinedAlphas, refinedAlphas + 1 * nRefinedVerts, newAlphas[i]);
 		} else
 			newAlphas[i] = nullptr;
 	}
@@ -404,10 +369,10 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 	array<float *, EXTMESH_MAX_DATA_COUNT> newVertAOVs;
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; i++) {
 		if (srcMesh->HasVertexAOV(i)) {
-			newVertAOVs[i] = new float[newVertsCount];
+			newVertAOVs[i] = new float[nRefinedVerts];
 
-			const float *refinedVertAOVs = alphasBuffers[i]->BindCpuBuffer() + 1 * vertsCount;
-			copy(refinedVertAOVs, refinedVertAOVs + 1 * newVertsCount, newVertAOVs[i]);
+			const float *refinedVertAOVs = alphasBuffers[i]->BindCpuBuffer() + 1 * nCoarseVerts;
+			copy(refinedVertAOVs, refinedVertAOVs + 1 * nRefinedVerts, newVertAOVs[i]);
 		} else
 			newVertAOVs[i] = nullptr;
 	}
@@ -428,8 +393,10 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 		delete alphasBuffers[i];
 
 	// Allocate the new mesh
-	ExtTriangleMesh *newMesh =  new ExtTriangleMesh(newVertsCount, newTrisCount, newVerts, newTris,
-			newNorms, &newUVs, &newCols, &newAlphas);
+	ExtTriangleMesh *newMesh =  new ExtTriangleMesh(
+		nRefinedVerts, nRefinedFaces,
+		newVerts, newTris, newNorms, &newUVs, &newCols, &newAlphas
+	);
 
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; i++)
 		newMesh->SetVertexAOV(i, newVertAOVs[i]);
@@ -449,7 +416,7 @@ SubdivShape::SubdivShape(const Camera *camera, ExtTriangleMesh *srcMesh,
 			SDL_LOG("Subdividing shape " << srcMesh->GetName() << " max. at level: " << maxLevel);
 
 			mesh = srcMesh->Copy();
-			
+
 			for (u_int i = 0; i < maxLevel; ++i) {
 				// Check the size of the longest mesh edge on film image plane
 				const float edgeScreenSize = MaxEdgeScreenSize(camera, mesh);
@@ -493,4 +460,90 @@ SubdivShape::~SubdivShape() {
 ExtTriangleMesh *SubdivShape::RefineImpl(const Scene *scene) {
 	return mesh;
 }
+
+static Far::TopologyRefiner* createFarTopologyRefiner(const ExtTriangleMesh* srcMesh)
+{
+	// Set topology descriptor
+	Far::TopologyDescriptor desc;
+	desc.numVertices = srcMesh->GetTotalVertexCount();
+	desc.numFaces = srcMesh->GetTotalTriangleCount();
+	vector<int> vertPerFace(desc.numFaces, 3);
+	desc.numVertsPerFace = &vertPerFace[0];
+	desc.vertIndicesPerFace = reinterpret_cast<const int *>(srcMesh->GetTriangles());
+
+	// Look for mesh boundary edges
+	unordered_map<Edge, u_int, EdgeHashFunction> edgesMap;
+	const u_int triCount = srcMesh->GetTotalTriangleCount();
+	const Triangle *tris = srcMesh->GetTriangles();
+
+	// Count how many times an edge is shared
+	for (u_int i = 0; i < triCount; ++i) {
+		const Triangle &tri = tris[i];
+
+		 const Edge edge0(tri.v[0], tri.v[1]);
+		 if (edgesMap.find(edge0) != edgesMap.end())
+			edgesMap[edge0] += 1;
+		 else
+			edgesMap[edge0] = 1;
+
+		 const Edge edge1(tri.v[1], tri.v[2]);
+		 if (edgesMap.find(edge1) != edgesMap.end())
+			edgesMap[edge1] += 1;
+		 else
+			edgesMap[edge1] = 1;
+
+		 const Edge edge2(tri.v[2], tri.v[0]);
+		 if (edgesMap.find(edge2) != edgesMap.end())
+			edgesMap[edge2] += 1;
+		 else
+			edgesMap[edge2] = 1;
+	}
+
+	vector<bool> isBoundaryVertex(srcMesh->GetTotalVertexCount(), false);
+	vector<Far::Index> cornerVertexIndices;
+	vector<float> cornerWeights;
+	for (auto em : edgesMap) {
+		if (em.second == 1) {
+			// It is a boundary edge
+
+			const Edge &e = em.first;
+
+			if (!isBoundaryVertex[e.vIndex[0]]) {
+				cornerVertexIndices.push_back(e.vIndex[0]);
+				cornerWeights.push_back(10.f);
+				isBoundaryVertex[e.vIndex[0]] = true;
+			}
+
+			if (!isBoundaryVertex[e.vIndex[1]]) {
+				cornerVertexIndices.push_back(e.vIndex[1]);
+				cornerWeights.push_back(10.f);
+				isBoundaryVertex[e.vIndex[1]] = true;
+			}
+		}
+	}
+
+	// Initialize TopologyDescriptor corners if I have some
+	if (cornerVertexIndices.size() > 0) {
+		assert(cornerVertexIndices.size() <= std::numeric_limits<int>::max());
+		desc.numCorners = cornerVertexIndices.size();
+		desc.cornerVertexIndices = &cornerVertexIndices[0];
+		desc.cornerWeights = &cornerWeights[0];
+	}
+
+	// Set topology refiner factory's type & options
+	Sdc::SchemeType type = Sdc::SCHEME_LOOP;
+	Sdc::Options options;
+	options.SetVtxBoundaryInterpolation(Sdc::Options::VTX_BOUNDARY_EDGE_AND_CORNER);
+
+	// Instantiate a Far::TopologyRefiner from the descriptor
+	using RefinerFactory = Far::TopologyRefinerFactory<Far::TopologyDescriptor>;
+	auto *refiner = RefinerFactory::Create(
+		desc,
+		RefinerFactory::Options(type, options)
+	);
+
+	return refiner;
+}
+
+
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4
