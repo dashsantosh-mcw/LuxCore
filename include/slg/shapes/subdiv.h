@@ -29,15 +29,20 @@ class Camera;
 
 class SubdivShape : public Shape {
 public:
-	SubdivShape(const Camera *camera, luxrays::ExtTriangleMesh *srcMesh,
-			const u_int maxLevel, const float maxEdgeScreenSize);
+	SubdivShape(
+		const Camera *camera,
+		luxrays::ExtTriangleMesh *srcMesh,
+		const u_int maxLevel,
+		const float maxEdgeScreenSize,
+		const bool adaptive
+	);
 	virtual ~SubdivShape();
 
 	virtual ShapeType GetType() const { return SUBDIV; }
 
 	static float MaxEdgeScreenSize(const Camera *camera, luxrays::ExtTriangleMesh *srcMesh);
 	static luxrays::ExtTriangleMesh *ApplySubdiv(luxrays::ExtTriangleMesh *srcMesh,
-			const u_int maxLevel);
+			const u_int maxLevel, const bool adaptive);
 
 protected:
 	virtual luxrays::ExtTriangleMesh *RefineImpl(const Scene *scene);

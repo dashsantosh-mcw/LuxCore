@@ -156,7 +156,9 @@ float SubdivShape::MaxEdgeScreenSize(const Camera *camera, ExtTriangleMesh *srcM
 
 static Far::TopologyRefiner * createFarTopologyRefiner(const ExtTriangleMesh*);
 
-ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int maxLevel) {
+ExtTriangleMesh *SubdivShape::ApplySubdiv(
+	ExtTriangleMesh *srcMesh, const u_int maxLevel, const bool adaptive
+) {
 	//--------------------------------------------------------------------------
 	// Check data
 	//--------------------------------------------------------------------------
@@ -174,10 +176,17 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 	// Set-up refiner
 	std::unique_ptr<Far::TopologyRefiner> refiner(createFarTopologyRefiner(srcMesh));
 
-	// Uniformly refine the topology up to 'maxlevel'
-	Far::TopologyRefiner::UniformOptions refiner_options(maxLevel);
-	refiner_options.fullTopologyInLastLevel = true;
-	refiner->RefineUniform(refiner_options);
+	// Refine the topology up to 'maxlevel'
+	if (adaptive) {
+		SDL_LOG("Subdiv - Refining (adaptive)");
+		Far::TopologyRefiner::AdaptiveOptions refiner_options(maxLevel);
+		refiner->RefineAdaptive(refiner_options);
+	} else {
+		SDL_LOG("Subdiv - Refining (uniform)");
+		Far::TopologyRefiner::UniformOptions refiner_options(maxLevel);
+		refiner_options.fullTopologyInLastLevel = true;
+		refiner->RefineUniform(refiner_options);
+	}
 
 	Far::TopologyLevel const& refFirstLevel = refiner->GetLevel(0);
 	Far::TopologyLevel const& refLastLevel = refiner->GetLevel(maxLevel);
@@ -412,7 +421,7 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 }
 
 SubdivShape::SubdivShape(const Camera *camera, ExtTriangleMesh *srcMesh,
-		const u_int maxLevel, const float maxEdgeScreenSize) {
+		const u_int maxLevel, const float maxEdgeScreenSize, const bool adaptive) {
 	const double startTime = WallClockTime();
 
 	if ((maxEdgeScreenSize > 0.f) && !camera)
@@ -433,7 +442,7 @@ SubdivShape::SubdivShape(const Camera *camera, ExtTriangleMesh *srcMesh,
 					break;
 
 				// Subdivide by one level and re-try
-				ExtTriangleMesh *newMesh = ApplySubdiv(mesh, 1);
+				ExtTriangleMesh *newMesh = ApplySubdiv(mesh, 1, adaptive);
 				SDL_LOG("Subdivided shape step #" << i << " from " << mesh->GetTotalTriangleCount() << " to " << newMesh->GetTotalTriangleCount() << " faces");
 
 				// Replace old mesh with new one
@@ -443,7 +452,7 @@ SubdivShape::SubdivShape(const Camera *camera, ExtTriangleMesh *srcMesh,
 		} else {
 			SDL_LOG("Subdividing shape " << srcMesh->GetName() << " at level: " << maxLevel);
 
-			mesh = ApplySubdiv(srcMesh, maxLevel);
+			mesh = ApplySubdiv(srcMesh, maxLevel, adaptive);
 		}
 	} else {
 		// Nothing to do, just make a copy
