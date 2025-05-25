@@ -17,7 +17,7 @@
  ***************************************************************************/
 
 #include <unordered_map>
-#include <boost/format.hpp>
+#include <format>
 
 #include <opensubdiv/far/topologyDescriptor.h>
 #include <opensubdiv/far/patchMap.h>
@@ -178,11 +178,27 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 	Far::TopologyRefiner::UniformOptions refiner_options(maxLevel);
 	refiner_options.fullTopologyInLastLevel = true;
 	refiner->RefineUniform(refiner_options);
+
+	Far::TopologyLevel const& refFirstLevel = refiner->GetLevel(0);
+	Far::TopologyLevel const& refLastLevel = refiner->GetLevel(maxLevel);
+
+	// Check validity
 	if (refiner->GetMaxLevel() < maxLevel) {
 		SDL_LOG("WARNING - SUBDIVISION FAILURE");
 		SDL_LOG("'maxlevel' may be too high, please check. Continuing with input mesh...");
 		return srcMesh;
 	}
+
+	// Get topology constants
+	const int nCoarseVerts = refFirstLevel.GetNumVertices(); // Coarse vertex count
+	const int nCoarseFaces = refFirstLevel.GetNumFaces(); // Coarse face count
+	const int nRefinedVerts = refLastLevel.GetNumVertices(); // Refined vertex count
+	const int nRefinedFaces = refLastLevel.GetNumFaces(); // Coarse face count
+	const int totalVertsCount = nCoarseVerts + nRefinedVerts;  // Total vertex count
+
+	SDL_LOG("Subdiv - Refined vertices: " << nRefinedVerts);
+	SDL_LOG("Subdiv - Refined triangles: " << nRefinedFaces);
+
 
 	//--------------------------------------------------------------------------
 	// Create stencil and patch tables
@@ -195,7 +211,7 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 		// Create stencil table
 		Far::StencilTableFactory::Options stencilOptions;
 		stencilOptions.generateOffsets = true;
-		stencilOptions.generateIntermediateLevels = false;  // TODO
+		stencilOptions.generateIntermediateLevels = false;
 
 		stencilTable = StencilTablePtr(
 			Far::StencilTableFactory::Create(*refiner, stencilOptions)
@@ -222,21 +238,12 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 		}
 	}
 
+	SDL_LOG("Subdiv - Stencil and patch tables created");
+
 	//--------------------------------------------------------------------------
 	// Set buffers and evaluate primvar from stencils
 	//--------------------------------------------------------------------------
 
-	// Setup buffers for vertex primvar data
-	Far::TopologyLevel const& refFirstLevel = refiner->GetLevel(0);
-	Far::TopologyLevel const& refLastLevel = refiner->GetLevel(maxLevel);
-
-	const int nCoarseVerts = refFirstLevel.GetNumVertices(); // Coarse vertex count
-	const int nCoarseFaces = refFirstLevel.GetNumFaces(); // Coarse face count
-	const int nRefinedVerts = refLastLevel.GetNumVertices(); // Refined vertex count
-	const int nRefinedFaces = refLastLevel.GetNumFaces(); // Coarse face count
-	const int totalVertsCount = nCoarseVerts + nRefinedVerts;  // Total vertex count
-	SDL_LOG("Subdiv - Refined vertices: " << nRefinedVerts);
-	SDL_LOG("Subdiv - Refined triangles: " << nRefinedFaces);
 
 	// Vertices
 	auto vertsBuffer = BuildBuffer<3>(
@@ -311,6 +318,8 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 		}
 	}
 
+	SDL_LOG("Subdiv - Buffers built");
+
 	//--------------------------------------------------------------------------
 	// Build the new mesh
 	//--------------------------------------------------------------------------
@@ -318,7 +327,8 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(ExtTriangleMesh *srcMesh, const u_int 
 	// New triangles
 	Triangle *newTris = TriangleMesh::AllocTrianglesBuffer(nRefinedFaces);
 	for (int face = 0; face < nRefinedFaces; ++face) {
-		auto faceVerts = refLastLevel.GetFaceVertices(face);
+		Vtr::ConstIndexArray faceVerts;
+		faceVerts = refLastLevel.GetFaceVertices(face);
 		for (u_int vertex = 0; vertex < 3; ++vertex) {
 			newTris[face].v[vertex] = faceVerts[vertex];
 		}
@@ -446,7 +456,7 @@ SubdivShape::SubdivShape(const Camera *camera, ExtTriangleMesh *srcMesh,
 	//mesh->Save("debug.ply");
 
 	const double endTime = WallClockTime();
-	SDL_LOG("Subdividing time: " << (boost::format("%.3f") % (endTime - startTime)) << "secs");
+	SDL_LOG(std::format("Subdividing time: {:.3f} secs", endTime - startTime));
 }
 
 SubdivShape::~SubdivShape() {
