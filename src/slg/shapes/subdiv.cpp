@@ -172,13 +172,7 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 
 	if (adaptive) {
 		SDL_LOG("Subdiv - Refining (adaptive)");
-		ExtTriangleMesh* dstMesh = nullptr;
-		for (level = 0; level < maxLevel; ++level) {
-			auto tmpMesh = ApplySubdivAdaptive(srcMesh, 2);
-			delete outMesh
-			outMesh = tmpMesh;
-		}
-		return outMesh;
+		return ApplySubdivAdaptive(srcMesh, 2);
 	}
 
 	//--------------------------------------------------------------------------
