@@ -865,7 +865,7 @@ static TopologyRefinerPtr createTopologyRefinerFromMesh(
 
 
 	// Set topology refiner factory's type & options
-	Sdc::SchemeType scheme_type = Sdc::SCHEME_LOOP;
+	Sdc::SchemeType scheme_type = Sdc::SCHEME_CATMARK;
 
 	Sdc::Options sdc_options;
 	sdc_options.SetVtxBoundaryInterpolation(Sdc::Options::VTX_BOUNDARY_EDGE_AND_CORNER);
@@ -906,6 +906,7 @@ static TopologyRefinerPtr createTopologyRefinerFromMesh(
 			edgesMap[edge2] = 1;
 	}
 
+#if 0
 	vector<bool> isBoundaryVertex(srcMesh->GetTotalVertexCount(), false);
 	vector<Far::Index> cornerVertexIndices;
 	vector<float> cornerWeights;
@@ -935,6 +936,7 @@ static TopologyRefinerPtr createTopologyRefinerFromMesh(
 		desc.cornerVertexIndices = &cornerVertexIndices[0];
 		desc.cornerWeights = &cornerWeights[0];
 	}
+#endif
 
 	// Create refiner
 	using RefinerFactory = Far::TopologyRefinerFactory<Far::TopologyDescriptor>;
@@ -947,7 +949,7 @@ static TopologyRefinerPtr createTopologyRefinerFromMesh(
 	assert(refiner);
 
 	// Copy mesh vertices into posVector
-	int numVertices = refiner->GetNumVerticesTotal();
+	int numVertices = srcMesh->GetTotalVertexCount();
 	posVector.resize(numVertices);
 	auto meshVertices = srcMesh->GetVertices();
 	for (int i = 0; i < numVertices; ++i) {
@@ -955,6 +957,9 @@ static TopologyRefinerPtr createTopologyRefinerFromMesh(
 		posVector[i][1] = meshVertices[i].y;
 		posVector[i][2] = meshVertices[i].z;
 	}
+
+	// TODO
+	refiner->GetLevel(0).PrintTopology();
 
 	return refiner;
 
@@ -1050,13 +1055,13 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 
 			// Append faces
 			int nFaces = (int) tessFaces.size();
-			int nVerts = (int) tessPoints.size();
+			int nPoints = (int) tessPoints.size();
 			size_t vBase = objVertCount;
 			for (int k = 0; k < nFaces; ++k) {
 				auto v = tessFaces[k];
 				tessAllFaces.push_back(Tri(vBase + v[0], vBase + v[1], vBase + v[2]));
 			}
-			objVertCount += nVerts;
+			objVertCount += nPoints;
 		}
 
     }
