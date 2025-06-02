@@ -672,11 +672,9 @@ typedef std::vector<Tri> TriVector;
 
 void tessellate(
 	const TopologyRefinerPtr& refiner,
-	const Far::PtexIndices& ptexIndices,
+	const PatchTablePtr& patchTable,
 	const PosVector& basePositions,
 	const PosVector& localPositions,
-	const PatchTablePtr& patchTable,
-	const PatchMapPtr& patchMap,
 	PosVector & tessPos,
 	TriVector & tessTris,
 	PosVector & tessNormals) {
@@ -741,7 +739,11 @@ void tessellate(
 	tessPos.resize(offset + topology.GetNumEdges());
 	tessNormals.resize(offset + topology.GetNumEdges());
 
-	const auto& ptex = ptexIndices; // TODO
+	// Set mappers
+	Far::PtexIndices ptexIndices(*refiner);
+	PatchMapPtr patchMap(new Far::PatchMap(*patchTable));
+
+
     int numBaseVerts = (int) basePositions.size();
 
 	// Tessellate faces
@@ -892,7 +894,6 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 
     // Construct the associated PatchTable to evaluate the limit surface:
 	PatchTablePtr patchTable(Far::PatchTableFactory::Create(*refiner, patchOptions));
-	PatchMapPtr patchMap(new Far::PatchMap(*patchTable));
 
 	// Record base positions
 	PosVector basePositions;
@@ -912,7 +913,8 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 
 	SDL_LOG("Subdiv - Adaptive - Starting");
 
-    PosVector           localPositions;
+	// Set localPositions
+    PosVector localPositions;
     int nBaseVertices    = refiner->GetLevel(0).GetNumVertices();
     int nRefinedVertices = refiner->GetNumVerticesTotal() - nBaseVertices;
     int nLocalPoints     = patchTable->GetNumLocalPoints();
@@ -930,20 +932,17 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
             dst += refiner->GetLevel(level).GetNumVertices();
         }
     }
-    if (nLocalPoints) {
+	if (nLocalPoints) {
         patchTable->GetLocalPointStencilTable()->UpdateValues(
                 &basePositions[0], nBaseVertices, &localPositions[0],
                 &localPositions[nRefinedVertices]);
     }
 
 
-	Far::PtexIndices ptexIndices(*refiner);
-
-	tessellate(refiner, ptexIndices, basePositions, localPositions, patchTable, patchMap, tessAllPoints, tessAllFaces, tessAllNormals);
+	// Tessellate!
+	tessellate(refiner, patchTable, basePositions, localPositions, tessAllPoints, tessAllFaces, tessAllNormals);
 
 	SDL_LOG("Subdiv - Adaptive - Building new mesh");
-	std::ofstream objfile; // TODO
-	objfile.open("test.obj");
 
 	// New vertices
 	size_t pointCount = tessAllPoints.size();
@@ -954,7 +953,6 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 		vert->x = tessAllPoints[i][0];
 		vert->y = tessAllPoints[i][1];
 		vert->z = tessAllPoints[i][2];
-		objfile << "v " << vert->x << " " << vert->y << " " << vert->z << "\n";
 	}
 
 	// New normals
@@ -967,7 +965,6 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 		norm->y = tessAllNormals[i][1];
 		norm->z = tessAllNormals[i][2];
 		*norm = Normalize(*norm);
-		objfile << "vn " << norm->x << " " << norm->y << " " << norm->z << "\n";
 	}
 
 	// New triangles
@@ -981,9 +978,6 @@ static ExtTriangleMesh *ApplySubdivAdaptive(
 			assert(tri[vertex] <= pointCount);
 			assert(tri[vertex] >= 0);
 		}
-		// Debug
-		int t1 = tri[0] + 1, t2 = tri[1] + 1, t3 = tri[2] + 1;
-		objfile << "f " << t1 << "//" << t1 << " " << t2 << "//" << t2 << " " << t3 << "//" << t3 << "\n";
 	}
 
 	// Allocate the new mesh
