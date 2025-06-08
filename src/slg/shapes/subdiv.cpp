@@ -482,7 +482,9 @@ SubdivShape::SubdivShape(const Camera *camera, ExtTriangleMesh *srcMesh,
 		srcMesh = srcMesh->Copy();
 	}
 
-	SDL_LOG("Subdivided shape from " << srcMesh->GetTotalTriangleCount() << " to " << mesh->GetTotalTriangleCount() << " faces");
+	if (maxLevel > 0) {
+		SDL_LOG("Subdivided shape from " << srcMesh->GetTotalTriangleCount() << " to " << mesh->GetTotalTriangleCount() << " faces");
+	}
 
 	// For some debugging
 	//mesh->Save("debug.ply");
@@ -680,7 +682,7 @@ void Tessellate (
 	const PatchTablePtr& patchTable,
 	const PosVector& basePositions,
 	const PosVector& localPositions,
-	const int N,
+	const size_t N,
 	PosVector & tessPos,
 	TriVector & tessTris,
 	PosVector & tessNormals
@@ -716,9 +718,15 @@ void Tessellate (
 
 	// Some constants
 	const auto& topology = refiner->GetLevel(0);
-	const int FACE_COUNT = topology.GetNumFaces();
+	const size_t FACE_COUNT = topology.GetNumFaces();
 	const int FACE_SIZE = 3;  // Of course (triangles)...
 
+
+	// Check
+	SDL_LOG("Subdiv - Apdative - Tessellating " << FACE_COUNT << " faces with factor N=" << N);
+	if (FACE_COUNT * N * N >= std::numeric_limits<int>::max()) {
+		throw std::runtime_error("FACE_COUNT * N * N > numeric limit (" + ToString(std::numeric_limits<int>::max()) + ")");
+	}
 
 	// Offset
 	int offset = topology.GetNumVertices();
@@ -726,6 +734,7 @@ void Tessellate (
 
 	// Resize tessPos and tessTris
 	tessTris.clear();
+	tessTris.resize(FACE_COUNT * N * N);
 	tessPos.clear();
 	tessNormals.clear();
 	tessPos.resize(tessPosCount);
@@ -733,10 +742,6 @@ void Tessellate (
 
 	// To avoid redundancy...
 	std::vector<bool> done(tessPosCount, false);
-
-	// Create mutexes
-	std::mutex tessPosMtx;
-	std::mutex tessTrianglesMtx;
 
 	// Set mappers
 	Far::PtexIndices ptexIndices(*refiner);
@@ -794,7 +799,6 @@ void Tessellate (
 
 
 	vector<LocalCoords> localCoords;  // We temporarily store new positions as (face, i, j)
-	vector<EdgeCoords> edgeCoords;  // We record some more information for edges.
 
 
 	// Step #1 - Initialize with initial (coarse) vertices
@@ -822,17 +826,14 @@ void Tessellate (
 			// TODO Refactor constructor
 			auto coords = LocalCoords::interpolate(c0, c1, i, N);
 			localCoords.push_back(coords);
-
-			edgeCoords.emplace_back(edge, v0, v1, i);
 		}
 	}
 
-
 	// Step #3 - Add interior points
+	#pragma omp parallel for
 	for (int f = 0; f < FACE_COUNT; ++f) {  // for each face
-		auto faceVertices = topology.GetFaceVertices(f);
-		int v0 = faceVertices[0], v1 = faceVertices[1], v2 = faceVertices[2];
-		auto faceEdges = topology.GetFaceEdges(f);
+		const auto faceVertices = topology.GetFaceVertices(f);
+		const auto faceEdges = topology.GetFaceEdges(f);
 		assert(faceVertices.size() == 3);
 
 		// If (i,j) are local coordinates, and edge length is N,
@@ -850,11 +851,11 @@ void Tessellate (
 		for (int j = 0; j <= N ; ++j) {
 			for (int i = 0; i <= N - j; ++i) {
 				int k = N - i - j;
+				int vertex;  // Output
 				// Find point type: vertex, edge point, interior point
 				if (i == N || j == N || k == N) {  // Vertex
 					// Vertex point in initial triangle
-					int vert = faceVertices[(i + 2 * j) / N];
-					pointMap.push_back(vert);
+					vertex = faceVertices[(i + 2 * j) / N];
 				} else if (i == 0 || j == 0 || k == 0) {  // Edge
 					// Find edge vertices
 					int v0, v1, pos;
@@ -878,20 +879,17 @@ void Tessellate (
 						pos = N - pos;
 						std::swap(v0, v1);
 					}
-					// Check TODO
-					auto ecoords = edgeCoords[edge * (N - 1) + (pos - 1)];
-					assert(v0 == ecoords.v0);
-					assert(v1 == ecoords.v1);
-					assert(pos == ecoords.x);
-
-					int vert = edge_offset + edge * (N - 1) + (pos - 1);
-					pointMap.push_back(vert);
-				} else {  // Interior point
+					vertex = edge_offset + edge * (N - 1) + (pos - 1);
+				} else
+				#pragma omp critical (LocalCoords)
+				{  // Interior point
 					// Create position
 					localCoords.emplace_back(f, i, j);
 					// Record point in map
-					pointMap.push_back(localCoords.size() - 1);
+					vertex = localCoords.size() - 1;
 				}
+
+				pointMap.push_back(vertex);
 			}  // ~for j
 		}  // ~for i
 
@@ -904,27 +902,32 @@ void Tessellate (
 		};
 
 		// Up triangles
+		int idxTri = f * N * N;
 		for (int j = 0; j < N; ++j) {
-			for (int i = 0; i < N - j; ++i) {
-				tessTris.emplace_back(pnt(i, j), pnt(i + 1, j), pnt(i, j + 1));
+			for (int i = 0; i < N - j; ++i, ++idxTri) {
+				tessTris[idxTri] = Tri(pnt(i, j), pnt(i + 1, j), pnt(i, j + 1));
 			}
 		}
 		// Down triangles
 		for (int j = 0; j < N; ++j) {
-			for (int i = 0; i < N - j - 1; ++i) {
-				tessTris.emplace_back(pnt(i, j + 1), pnt(i + 1, j + 1), pnt(i + 1, j));
+			for (int i = 0; i < N - j - 1; ++i, ++idxTri) {
+				tessTris[idxTri] = Tri(pnt(i, j + 1), pnt(i + 1, j + 1), pnt(i + 1, j));
 			}
 		}
 
 	}  // ~for face
+
+	SDL_LOG("Subdiv - Adaptive - Compute varying data");
 
 	tessPos.resize(localCoords.size());
 	tessNormals.resize(localCoords.size());
 
 	// Evaluate positions and derivatives
 	#pragma omp parallel for
-	int vertex=0;
-	for (auto coords: localCoords) {
+	for (int vertex = 0; vertex < localCoords.size(); ++vertex) {
+		// Init
+		auto coords = localCoords[vertex];
+
 		// Translate local coords in global ones
 		std::array<float, 2> st;
 		st[0] = float(coords.i) / float(N);
@@ -964,14 +967,9 @@ void Tessellate (
 		}
 
 		// Update output (position and normal)
-		{
-			std::scoped_lock lock(tessPosMtx);
-			tessPos[vertex] = pos;
-			tessNormals[vertex] = du * dv;
-			vertex++;
-		}
-	}
-
+		tessPos[vertex] = pos;
+		tessNormals[vertex] = du * dv;
+	}  // ~for coords
 }
 
 
