@@ -721,7 +721,7 @@ struct Surface {
 void Tessellate (
 	const Surface& surface,
 	const size_t N,
-	std::vector<LocalCoords>& localCoords,
+	CoordVector& tessCoords,
 	TriVector & tessTris
 	) {
 	// This is triforce tessellation.
@@ -793,9 +793,9 @@ void Tessellate (
 		int face = topology.GetVertexFaces(vertex)[0];  // Choose first face (arbitrary)
 		auto faceVertices = topology.GetFaceVertices(face);
 		LocalCoords coords = getVertexLocalCoords(vertex, face);
-		localCoords.push_back(coords);
+		tessCoords.push_back(coords);
 	}
-	int edge_offset = localCoords.size();
+	int edge_offset = tessCoords.size();
 
 	// Step #2 - Add edge vertices
 	for (int edge = 0; edge < topology.GetNumEdges(); ++edge) {
@@ -812,7 +812,7 @@ void Tessellate (
 		for (int i = 1; i < N; ++i) {  // Only edge interior vertices, not extremities
 			// TODO Refactor constructor
 			auto coords = LocalCoords::interpolate(c0, c1, i, N);
-			localCoords.push_back(coords);
+			tessCoords.push_back(coords);
 		}
 	}
 
@@ -871,9 +871,9 @@ void Tessellate (
 				#pragma omp critical (LocalCoords)
 				{  // Interior point
 					// Create position
-					localCoords.emplace_back(f, i, j);
+					tessCoords.emplace_back(f, i, j);
 					// Record point in map
-					vertex = localCoords.size() - 1;
+					vertex = tessCoords.size() - 1;
 				}
 
 				pointMap.push_back(vertex);
@@ -910,7 +910,7 @@ void Tessellate (
 void Evaluate(
 	const Surface& surface,
 	const size_t N,  // TODO Rename more explicitly
-	const std::vector<LocalCoords>& localCoords,
+	const CoordVector& tessCoords,
 	PosVector& tessPos,
 	PosVector& tessNormals
 ) {
@@ -918,16 +918,16 @@ void Evaluate(
 
 	const auto& topology = surface.refiner->GetLevel(0);
 
-	tessPos.resize(localCoords.size());
-	tessNormals.resize(localCoords.size());
+	tessPos.resize(tessCoords.size());
+	tessNormals.resize(tessCoords.size());
 
     int numBaseVerts = (int) surface.basePositions.size();
 
 	// Evaluate positions and derivatives
 	#pragma omp parallel for
-	for (int vertex = 0; vertex < localCoords.size(); ++vertex) {
+	for (int vertex = 0; vertex < tessCoords.size(); ++vertex) {
 		// Init
-		auto coords = localCoords[vertex];
+		auto coords = tessCoords[vertex];
 
 		// Translate local coords in global ones
 		std::array<float, 2> st;
@@ -1011,12 +1011,12 @@ ExtTriangleMesh *ApplySubdiv(
 	Surface surface(basePositions, baseTriangles, maxLevel);
 
 	// Tessellate
-	std::vector<LocalCoords> localCoords;  // We temporarily store new positions as (face, i, j)
+	CoordVector tessCoords;  // We temporarily store new positions as (face, i, j)
 	size_t tessellationRate = 1 << maxLevel;
-	Tessellate(surface, tessellationRate, localCoords, tessTriangles);
+	Tessellate(surface, tessellationRate, tessCoords, tessTriangles);
 
 	// Evaluate
-	Evaluate(surface, tessellationRate, localCoords, tessPositions, tessNormals);
+	Evaluate(surface, tessellationRate, tessCoords, tessPositions, tessNormals);
 
 	basePositions = tessPositions;
 	baseTriangles = tessTriangles;
