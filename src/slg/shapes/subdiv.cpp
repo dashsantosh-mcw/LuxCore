@@ -619,17 +619,6 @@ struct LocalCoords {
 
 typedef std::vector<LocalCoords> CoordVector;
 
-// Storage of local coordinates in a given edge (for points belonging to an edge)
-struct EdgeCoords {
-	int edge;  // Edge number in opensubdiv topology
-	int v0;  // First edge vertex in osd topology
-	int v1;  // Second edge vertex in osd topology
-	int x;  // Point coordinate on the segment
-	EdgeCoords(int p_edge, int p_v0, int p_v1, int p_x):
-		edge(p_edge), v0(p_v0), v1(p_v1), x(p_x)
-	{ }
-};
-
 TopologyRefinerPtr createTopologyAdaptiveRefiner(
 		const PosVector& positions,
 		const TriVector& triangles,
