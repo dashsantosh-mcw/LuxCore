@@ -775,9 +775,18 @@ void Tessellate (
 
 
 	// Check
-	SDL_LOG("Subdiv - Apdative - Tessellating " << FACE_COUNT << " faces with factor N=" << N);
+	SDL_LOG(
+		"Subdiv - Apdative - Tessellating "
+		<< FACE_COUNT
+		<< " faces with factor N="
+		<< N
+	);
 	if (FACE_COUNT * N * N >= std::numeric_limits<int>::max()) {
-		throw std::runtime_error("FACE_COUNT * N * N > numeric limit (" + ToString(std::numeric_limits<int>::max()) + ")");
+		throw std::runtime_error(
+			"FACE_COUNT * N * N > numeric limit ("
+			+ ToString(std::numeric_limits<int>::max())
+			+ ")"
+		);
 	}
 
 	// Useful variables and constants
@@ -798,38 +807,34 @@ void Tessellate (
 		topology.GetNumVertices()
 		+ numEdgeInteriorPoints * topology.GetNumEdges()
 		+ numTriangleInteriorPoints * topology.GetNumFaces();
+
 	SDL_LOG("Number of coords: " << numCoords);
 
-	// Resize tessTris and tessCoords
+	// Size tessTris and tessCoords
 	tessTris.resize(FACE_COUNT * N * N);
 	tessCoords.resize(numCoords);
 
-	// TODO Simplify
-	// Get vertex local coordinates in given face
-	auto getVertexLocalCoords = [&topology](int vertex, int face) {
-		auto faceVertices = topology.GetFaceVertices(face);
-		if (vertex == faceVertices[0]) {
-			return LocalCoords(face, 0.f, 0.f);
-		} else if (vertex == faceVertices[1]) {
-			return LocalCoords(face, 1.f, 0.f);
-		} else if (vertex == faceVertices[2]) {
-			return LocalCoords(face, 0.f, 1.f);
-		}
-
-		throw std::runtime_error("Error in getVertexLocalCoords");
-	};
-
-
 	// Step #1 - Initialize with initial (coarse) vertices
+	#pragma omp parallel for
 	for (int vertex = 0; vertex < numCoarseVertices; ++vertex) {
 		int face = topology.GetVertexFaces(vertex)[0];  // Choose first face (arbitrary)
 		auto faceVertices = topology.GetFaceVertices(face);
-		LocalCoords coords = getVertexLocalCoords(vertex, face);
-		tessCoords[vertex] = coords;
+		float x, y;
+		if (vertex == faceVertices[0]) {
+			x = 0.f; y = 0.f;
+		} else if (vertex == faceVertices[1]) {
+			x = 1.f; y = 0.f;
+		} else if (vertex == faceVertices[2]) {
+			x = 0.f; y = 1.f;
+		} else {
+			throw std::runtime_error("Error in getVertexLocalCoords");
+		}
+		tessCoords[vertex] = LocalCoords(face, x, y);
 	}
 	offset = numCoarseVertices;
 
 	// Step #2 - Add edge vertices
+	#pragma omp parallel for
 	for (int edge = 0; edge < topology.GetNumEdges(); ++edge) {
 		// Find face
 		int face = topology.GetEdgeFaces(edge)[0];
