@@ -34,7 +34,7 @@ public:
 		luxrays::ExtTriangleMesh *srcMesh,
 		const u_int maxLevel,
 		const float maxEdgeScreenSize,
-		const std::string mode
+		const bool enhanced
 	);
 	virtual ~SubdivShape();
 
@@ -44,7 +44,7 @@ public:
 	static luxrays::ExtTriangleMesh *ApplySubdiv(
 		luxrays::ExtTriangleMesh *srcMesh,
 		const u_int maxLevel,
-		const std::string mode
+		const bool enhanced
 	);
 
 protected:

@@ -634,12 +634,12 @@ struct Surface {
 		if (nRefinedVertices) {
 			Far::PrimvarRefiner primvarRefiner(*refiner);
 
-			Point const * src = basePositions;
-			Point * dst = &localPositions[0];
+			Point const * srcPos = basePositions;
+			Point * dstPos = &localPositions[0];
 			for (int level = 1; level < refiner->GetNumLevels(); ++level) {
-				primvarRefiner.Interpolate(level, src, dst);
-				src = dst;
-				dst += refiner->GetLevel(level).GetNumVertices();
+				primvarRefiner.Interpolate(level, srcPos, dstPos);
+				srcPos = dstPos;
+				dstPos += refiner->GetLevel(level).GetNumVertices();
 			}
 		}
 		if (nLocalPoints) {
@@ -1032,7 +1032,7 @@ SubdivShape::SubdivShape(
 	ExtTriangleMesh *srcMesh,
 	const u_int maxLevel,
 	const float maxEdgeScreenSize,
-	const std::string mode
+	const bool enhanced
 ) {
 	const double startTime = WallClockTime();
 
@@ -1055,7 +1055,7 @@ SubdivShape::SubdivShape(
 					break;
 
 				// Subdivide by one level and re-try
-				ExtTriangleMesh *newMesh = ApplySubdiv(mesh, 1, mode);
+				ExtTriangleMesh *newMesh = ApplySubdiv(mesh, 1, enhanced);
 				SDL_LOG("Subdivided shape step #" << i << " from " << mesh->GetTotalTriangleCount() << " to " << newMesh->GetTotalTriangleCount() << " faces");
 
 				// Replace old mesh with new one
@@ -1065,7 +1065,7 @@ SubdivShape::SubdivShape(
 		} else {
 			SDL_LOG("Subdividing shape " << srcMesh->GetName() << " at level: " << maxLevel);
 
-			mesh = ApplySubdiv(srcMesh, maxLevel, mode);
+			mesh = ApplySubdiv(srcMesh, maxLevel, enhanced);
 		}
 	} else {
 		// Nothing to do, just make a copy
@@ -1142,7 +1142,7 @@ float SubdivShape::MaxEdgeScreenSize(const Camera *camera, ExtTriangleMesh *srcM
 ExtTriangleMesh *SubdivShape::ApplySubdiv(
 	ExtTriangleMesh *srcMesh,
 	const u_int maxLevel,
-	const std::string mode
+	const bool enhanced
 ) {
 	//--------------------------------------------------------------------------
 	// Check data
@@ -1152,26 +1152,15 @@ ExtTriangleMesh *SubdivShape::ApplySubdiv(
 	assert(srcMesh->GetTotalVertexCount() <= std::numeric_limits<int>::max());
 	assert(srcMesh->GetTotalTriangleCount() <= std::numeric_limits<int>::max());
 
-	std::string upper_mode = mode;
-	std::transform(
-		upper_mode.cbegin(),
-		upper_mode.cend(),
-		upper_mode.begin(),
-		[](unsigned char c){ return std::toupper(c); }
-	);
-
-	if (upper_mode == "ENHANCED") {
+	if (enhanced) {
 		SDL_LOG("Subdivision (enhanced) - Starting");
 
 		return enhanced::ApplySubdiv(srcMesh, maxLevel);
 	}
-	else if (upper_mode == "PLAIN") {
+	else {
 		SDL_LOG("Subdivision - Starting");
 
 		return simple::ApplySubdiv(srcMesh, maxLevel);
-	}
-	else {
-		throw std::runtime_error("Subdivision: unknown mode '" + mode + "'");
 	}
 }
 
