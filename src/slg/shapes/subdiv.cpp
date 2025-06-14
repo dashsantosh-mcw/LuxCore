@@ -494,43 +494,68 @@ static Far::TopologyRefiner* createFarTopologyRefiner(const ExtTriangleMesh* src
 
 namespace enhanced {
 
-template <size_t DIMENSION> struct SubdivVec: std::array<float, DIMENSION> {
-	// Minimal required interface
-	SubdivVec() {}
+// TODO
+//template <size_t DIMENSION> struct SubdivVec: std::array<float, DIMENSION> {
+	//// Minimal required interface
+	//SubdivVec() {}
 
-	SubdivVec(const float * src) {
-		for (size_t i = 0; i < DIMENSION; ++i) {
-			(*this)[i] = *(src + i);
-		}
-	}
-	SubdivVec(std::initializer_list<float> src) {
-		assert(src.size() == DIMENSION);
-		for (int i=0; auto e: src) {
-			(*this)[i++] = e;
-		}
+	//SubdivVec(const float * src) {
+		//for (size_t i = 0; i < DIMENSION; ++i) {
+			//(*this)[i] = *(src + i);
+		//}
+	//}
+	//SubdivVec(std::initializer_list<float> src) {
+		//assert(src.size() == DIMENSION);
+		//for (int i=0; auto e: src) {
+			//(*this)[i++] = e;
+		//}
+	//}
+
+	//void Clear(void* = nullptr) {
+		//for (size_t i = 0; i < DIMENSION; ++i) {
+			//(*this)[i] = 0.0f;
+		//}
+	//}
+
+	//inline void AddWithWeight(const SubdivVec<DIMENSION>& src, const float& weight) {
+		//auto i = this->begin();
+		//auto j = src.cbegin();
+		//for (; i != this->end() ; ++i, ++j) {
+			//*i += *j * weight;
+		//}
+	//}
+
+//};
+
+struct Vec3: Point {
+
+	// Minimal required interface
+	Vec3() {}
+
+	Vec3(Point& point) : Point(point) {}
+
+	Vec3(std::initializer_list<float> src) {
+		assert(src.size() == 3);
+		x = src.begin()[0]; // note the replacement for absent operator[]
+		y = src.begin()[1];
+		z = src.begin()[2];
 	}
 
 	void Clear(void* = nullptr) {
-		for (size_t i = 0; i < DIMENSION; ++i) {
-			(*this)[i] = 0.0f;
-		}
+		x = y = z = 0.f;
 	}
 
-	inline void AddWithWeight(const SubdivVec<DIMENSION>& src, const float& weight) {
-		auto i = this->begin();
-		auto j = src.cbegin();
-		for (; i != this->end() ; ++i, ++j) {
-			*i += *j * weight;
-		}
+	inline void AddWithWeight(const Vec3& src, const float weight) {
+		x += src.x * weight;
+		y += src.y * weight;
+		z += src.z * weight;
 	}
 
 };
 
-using Pos = SubdivVec<3>;
-
 // Vector product
-Pos operator * (Pos u, Pos v) {
-	Pos r;
+Vec3 operator * (Vec3 u, Vec3 v) {
+	Vec3 r;
 	r[0] = u[1] * v[2] - u[2] * v[1];
 	r[1] = u[2] * v[0] - u[0] * v[2];
 	r[2] = u[0] * v[1] - u[1] * v[0];
@@ -538,41 +563,42 @@ Pos operator * (Pos u, Pos v) {
 	return r;
 }
 
+using PosVector = std::vector<Vec3>;
+// TODO
+//template<size_t DIMENSION>
+//struct SubdivBuffer: std::vector< SubdivVec<DIMENSION> > {
+	//SubdivBuffer() {};
+	//SubdivBuffer(const float * src, size_t count) {
+		//this->resize(count);
+		//for (size_t i = 0; i < count; ++i) {
+			//(*this)[i] = SubdivVec<3>(src + i * DIMENSION);
+		//}
+	//}
+	//SubdivBuffer(size_t count):
+		//std::vector< SubdivVec<DIMENSION> >(count)
+	//{}
+	//operator SubdivVec<DIMENSION>*() {
+		//return &(*this)[0];
+	//}
+	//operator const float * () {
+		//return reinterpret_cast<float *>(&(*this)[0]);
+	//}
+	//void pack_front(const float * src, size_t count) {
+		//assert(count <= this->size());
+		//for (size_t i = 0; i < count; ++i) {
+			//(*this)[i] = SubdivVec<3>(src + i * DIMENSION);
+		//}
+	//}
+	//void pack_front(const SubdivBuffer& src) {
+		//for (size_t i = 0; i < src.size(); ++i) {
+			//(*this)[i] = src[i];
+		//}
+	//}
+//};
 
-
-
-template<size_t DIMENSION>
-struct SubdivBuffer: std::vector< SubdivVec<DIMENSION> > {
-	SubdivBuffer() {};
-	SubdivBuffer(const float * src, size_t count) {
-		this->resize(count);
-		for (size_t i = 0; i < count; ++i) {
-			(*this)[i] = SubdivVec<3>(src + i * DIMENSION);
-		}
-	}
-	SubdivBuffer(size_t count):
-		std::vector< SubdivVec<DIMENSION> >(count)
-	{}
-	operator SubdivVec<DIMENSION>*() {
-		return &(*this)[0];
-	}
-	operator const float * () {
-		return reinterpret_cast<float *>(&(*this)[0]);
-	}
-	void pack_front(const float * src, size_t count) {
-		assert(count <= this->size());
-		for (size_t i = 0; i < count; ++i) {
-			(*this)[i] = SubdivVec<3>(src + i * DIMENSION);
-		}
-	}
-	void pack_front(const SubdivBuffer& src) {
-		for (size_t i = 0; i < src.size(); ++i) {
-			(*this)[i] = src[i];
-		}
-	}
-};
-
-using PosVector = SubdivBuffer<3>;
+// TODO
+//using PosVector = SubdivBuffer<3>;
+//using PosVector = std::vector<Vec3>;
 
 
 struct Tri: std::array<int, 3> {
@@ -730,8 +756,8 @@ struct Surface {
 		if (nRefinedVertices) {
 			Far::PrimvarRefiner primvarRefiner(*refiner);
 
-			Pos const * src = &basePositions[0];
-			Pos * dst = &localPositions[0];
+			Vec3 const * src = &basePositions[0];
+			Vec3 * dst = &localPositions[0];
 			for (int level = 1; level < refiner->GetNumLevels(); ++level) {
 				primvarRefiner.Interpolate(level, src, dst);
 				src = dst;
@@ -746,6 +772,31 @@ struct Surface {
 				&localPositions[nRefinedVertices]
 			);
 		}
+	}
+
+	// Get number of positions after N-tessellation
+	int getTesselPosCount(int N) {
+		const auto& topology = refiner->GetLevel(0);
+
+		// Number of interior points in an edge
+		const int numEdgeInteriorPoints = N - 1;
+
+		// Number of interior points in a triangle
+		const int numTriangleInteriorPoints = (N - 1) * (N - 2) / 2;
+
+		// Number of coords to be computed
+		const int numCoords =
+			topology.GetNumVertices()
+			+ numEdgeInteriorPoints * topology.GetNumEdges()
+			+ numTriangleInteriorPoints * topology.GetNumFaces();
+
+		return numCoords;
+	}
+
+	// Get number of triangles after N-tessellation
+	int getTesselTriangleCount(int N) {
+		const auto& topology = refiner->GetLevel(0);
+		return topology.GetNumFaces() * N * N;
 	}
 };
 
@@ -809,7 +860,6 @@ void Tessellate (
 
 	// Useful variables and constants
 	int offset;
-	const int tessPosCount = topology.GetNumVertices() + topology.GetNumEdges();  // TODO
 
 	// Number of coarse vertices
 	const int numCoarseVertices = topology.GetNumVertices();
@@ -969,14 +1019,14 @@ void Tessellate (
 void Evaluate(
 	const Surface& surface,
 	const CoordVector& tessCoords,
-	PosVector& tessPos,
+	Point* tessPoints,
 	PosVector& tessNormals
 ) {
 	SDL_LOG("Subdivision (enhanced) - Evaluating");
 
 	const auto& topology = surface.refiner->GetLevel(0);
 
-	tessPos.resize(tessCoords.size());
+	//tessPos.resize(tessCoords.size()); TODO
 	tessNormals.resize(tessCoords.size());
 
     int numBaseVerts = (int) surface.basePositions.size();
@@ -1009,9 +1059,10 @@ void Evaluate(
 		Far::ConstIndexArray cvIndices = surface.patchTable->GetPatchVertices(*handle);
 
 		// Evaluate position and derivatives
-		Pos pos{0.0f, 0.0f, 0.0f};
-		Pos du{0.0f, 0.0f, 0.0f};
-		Pos dv{0.0f, 0.0f, 0.0f};
+		auto pos = static_cast<Vec3*>(tessPoints + vertex);
+		pos->Clear();
+		Vec3 du{0.0f, 0.0f, 0.0f};
+		Vec3 dv{0.0f, 0.0f, 0.0f};
 		for (int cv = 0; cv < cvIndices.size(); ++cv) {
 			int cvIndex = cvIndices[cv];
 
@@ -1020,13 +1071,13 @@ void Evaluate(
 				surface.basePositions[cvIndex] :
 				surface.localPositions[cvIndex - numBaseVerts];
 
-			pos.AddWithWeight(position, pWeights[cv]);
+			pos->AddWithWeight(position, pWeights[cv]);
 			du.AddWithWeight(position, duWeights[cv]);
 			dv.AddWithWeight(position, dvWeights[cv]);
 		}
 
 		// Update output (position and normal)
-		tessPos[vertex] = pos;
+		//tessPos[vertex] = pos;  TODO
 		tessNormals[vertex] = du * dv;
 
 		// Check validity of normal
@@ -1070,42 +1121,33 @@ ExtTriangleMesh *ApplySubdiv(
 		basePositions[i][2] = meshVertices[i].z;
 	}
 
-	// Output structures
-	PosVector tessPositions;
-	PosVector tessNormals;
-	TriVector tessTriangles;
-
 	// Create limit surface (subdivided) from base geometry
 	Surface surface(basePositions, baseTriangles, maxLevel);
 
+	// Compute dimensions
+	size_t tessellationRate = 1 << maxLevel;
+	int pointCount = surface.getTesselPosCount(tessellationRate);
+	int normCount = surface.getTesselPosCount(tessellationRate);
+	int triCount = surface.getTesselTriangleCount(tessellationRate);
+
+	// Output structures
+	auto tessPositions = TriangleMesh::AllocVerticesBuffer(pointCount);
+	//PosVector tessPositions;
+	PosVector tessNormals;
+	TriVector tessTriangles;
+
 	// Tessellate
 	CoordVector tessCoords;  // We temporarily store new positions as (face, i, j)
-	size_t tessellationRate = 1 << maxLevel;
 	Tessellate(surface, tessellationRate, tessCoords, tessTriangles);
 
 	// Evaluate
 	Evaluate(surface, tessCoords, tessPositions, tessNormals);
-
-	// Compute dimensions
-	size_t pointCount = tessPositions.size();
-	size_t normCount = tessNormals.size();
-	size_t triCount = tessTriangles.size();
 
 	SDL_LOG(
 		"Subdivision (enhanced) - Building new mesh: "
 		<< pointCount << " points, "
 		<< triCount << " triangles"
 	);
-
-	// New vertices
-	Point *newVerts = TriangleMesh::AllocVerticesBuffer(pointCount);
-	#pragma omp parallel for
-	for (int i = 0; i < pointCount; ++i) {
-		Point* vert = newVerts + i;
-		vert->x = tessPositions[i][0];
-		vert->y = tessPositions[i][1];
-		vert->z = tessPositions[i][2];
-	}
 
 	// New normals
 	Normal *newNormals = new Normal[normCount];
@@ -1134,7 +1176,7 @@ ExtTriangleMesh *ApplySubdiv(
 
 	// Allocate the new mesh
 	ExtTriangleMesh *newMesh =  new ExtTriangleMesh(
-		pointCount, triCount, newVerts, newTris, newNormals
+		pointCount, triCount, tessPositions, newTris, newNormals
 	);
 
 	return newMesh;
