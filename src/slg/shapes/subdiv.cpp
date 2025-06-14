@@ -654,7 +654,7 @@ typedef std::vector<LocalCoords> CoordVector;
 
 TopologyRefinerPtr createTopologyAdaptiveRefiner(
 		const PosVector& positions,
-		const Triangle * triangles,  // TODO
+		//const Triangle * triangles,  // TODO
 		const ExtTriangleMesh * srcMesh,
 		const Far::PatchTableFactory::Options& patchOptions
 ) {
@@ -675,7 +675,7 @@ TopologyRefinerPtr createTopologyAdaptiveRefiner(
 	desc.numFaces = srcMesh->GetTotalTriangleCount();
 	std::vector<int> vertPerFace(desc.numFaces, 3);
 	desc.numVertsPerFace = &vertPerFace[0];
-	desc.vertIndicesPerFace = reinterpret_cast<const int *>(triangles);
+	desc.vertIndicesPerFace = reinterpret_cast<const int *>(srcMesh->GetTriangles());
 
 	// Create refiner
 	using RefinerFactory = Far::TopologyRefinerFactory<Far::TopologyDescriptor>;
@@ -700,18 +700,18 @@ struct Surface {
 	PatchTablePtr patchTable;
 	PatchMapPtr patchMap;
 	const PosVector& basePositions;  // TODO
-	const Triangle* baseTriangles;
+	//const Triangle* baseTriangles;
 	PosVector localPositions;
 	int maxLevel;
 
 	Surface(
 		const PosVector& p_basePositions,
-		const Triangle* p_baseTriangles,
+		//const Triangle* p_baseTriangles,
 		const ExtTriangleMesh * p_srcMesh,
 		int p_maxLevel
 	):
 		basePositions(p_basePositions),
-		baseTriangles(p_baseTriangles),
+		//baseTriangles(p_baseTriangles),
 		maxLevel(p_maxLevel)
 	{
 		SDL_LOG("Subdivision (enhanced) - Computing patches");
@@ -731,7 +731,7 @@ struct Surface {
 		refiner = std::move(
 			createTopologyAdaptiveRefiner(
 				basePositions,
-				baseTriangles,
+				//baseTriangles,
 				p_srcMesh,
 				patchTableOptions
 			)
@@ -1105,7 +1105,7 @@ ExtTriangleMesh *ApplySubdiv(
 
 	// Initialize internal structures
 	//TriVector baseTriangles(srcMesh->GetTotalTriangleCount());
-	Triangle* baseTriangles = srcMesh->GetTriangles();
+	//Triangle* baseTriangles = srcMesh->GetTriangles();
 	//#pragma omp parallel for
 	//for (int t = 0; t < srcMesh->GetTotalTriangleCount(); ++t) {
 		//baseTriangles[t][0] = luxTriangles[t].v[0];
@@ -1129,7 +1129,7 @@ ExtTriangleMesh *ApplySubdiv(
 	}
 
 	// Create limit surface (subdivided) from base geometry
-	Surface surface(basePositions, baseTriangles, srcMesh, maxLevel);
+	Surface surface(basePositions, srcMesh, maxLevel);
 
 	// Compute dimensions
 	size_t tessellationRate = 1 << maxLevel;
