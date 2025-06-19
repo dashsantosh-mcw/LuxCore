@@ -1073,10 +1073,10 @@ ExtTriangleMesh *ApplySubdiv(
 	Tessellate(surface, tessellationRate, tessCoords, tessTriangles);
 
 	// Interpolate positions on subdivided surface
-	const Point * basePositions = srcMesh->GetVertices();
-	int numBasePositions = srcMesh->GetTotalVertexCount();
-
-	auto subdivPositions = surface.Interpolate(basePositions, numBasePositions);
+	auto subdivPositions = surface.Interpolate(
+		srcMesh->GetVertices(),
+		srcMesh->GetTotalVertexCount()
+	);
 
 	// Evaluate positions on tessellation
 	PointArrayPtr tessPoints;
