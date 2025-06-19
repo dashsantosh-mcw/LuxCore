@@ -677,6 +677,218 @@ struct Surface {
 		{}
 	};
 
+	void Tessellate (
+		const size_t N,
+		CoordVector& tessCoords,
+		Triangle * tessTris
+		) {
+		// This is triforce tessellation.
+		// This tessellation splits edges in N segments,
+		// and generates N² resulting triangles by input triangle.
+		//
+		// Input:
+		//           V2
+		//          / \
+		//		   /  \
+		//        /   \
+		//      V0----V1
+		//
+		//
+		//	Output (N=4):
+		//
+		//          V2
+		//         / \
+		//        E7-E8
+		//       / \/ \
+		//      E5-I3-E6
+		//     / \/ \/ \
+		//    E3-I0-I1-E4
+		//   / \/ \/ \/ \
+		//	V0-E0-E1-E2-V1
+		//
+		//	Nota:
+		//	Vx - initial vertex (to be referenced)
+		//	Ex - edge vertex (to be created)
+		//	Ix - internal vertex (to be created)
+
+		// Some constants
+		const auto& topology = refiner->GetLevel(0);
+		const size_t FACE_COUNT = topology.GetNumFaces();
+		const int FACE_SIZE = 3;  // Of course (triangles)...
+
+
+		// Check
+		SDL_LOG(
+			"Subdivision (enhanced) - Tessellating "
+			<< FACE_COUNT
+			<< " faces / " << topology.GetNumVertices()
+			<< " points with factor N="
+			<< N
+		);
+		if (FACE_COUNT * N * N >= std::numeric_limits<int>::max()) {
+			throw std::runtime_error(
+				"FACE_COUNT * N * N > numeric limit ("
+				+ ToString(std::numeric_limits<int>::max())
+				+ ")"
+			);
+		}
+
+		// Useful variables and constants
+		int offset;
+
+		// Number of coarse vertices
+		const int numCoarseVertices = topology.GetNumVertices();
+
+		// Number of interior points in an edge
+		const int numEdgeInteriorPoints = N - 1;
+
+		// Number of interior points in a triangle
+		const int numTriangleInteriorPoints = (N - 1) * (N - 2) / 2;
+
+		// Number of coords to be computed
+		const int numCoords =
+			topology.GetNumVertices()
+			+ numEdgeInteriorPoints * topology.GetNumEdges()
+			+ numTriangleInteriorPoints * topology.GetNumFaces();
+
+		// Size tessCoords
+		tessCoords.resize(numCoords);
+
+		// Get vertex local coordinates in given face
+		auto getVertexLocalCoords = [&topology](int face, int vertex) {
+			auto faceVertices = topology.GetFaceVertices(face);
+			if (vertex == faceVertices[0]) {
+				return LocalCoords(face, 0.f, 0.f);
+			} else if (vertex == faceVertices[1]) {
+				return LocalCoords(face, 1.f, 0.f);
+			} else if (vertex == faceVertices[2]) {
+				return LocalCoords(face, 0.f, 1.f);
+			}
+
+			throw std::runtime_error("Error in getVertexLocalCoords");
+		};
+
+		// Step #1 - Initialize with initial (coarse) vertices
+		#pragma omp parallel for
+		for (int vertex = 0; vertex < numCoarseVertices; ++vertex) {
+			int face = topology.GetVertexFaces(vertex)[0];  // Choose first face (arbitrary)
+			tessCoords[vertex] = getVertexLocalCoords(face, vertex);
+		}
+		offset = numCoarseVertices;
+
+		// Step #2 - Add edge vertices
+		#pragma omp parallel for
+		for (int edge = 0; edge < topology.GetNumEdges(); ++edge) {
+			// Find face
+			int face = topology.GetEdgeFaces(edge)[0];
+			// Find edge vertices.
+			auto edgeVerts = topology.GetEdgeVertices(edge);
+			int v0 = edgeVerts[0];
+			int v1 = edgeVerts[1];
+
+			LocalCoords c0 = getVertexLocalCoords(face, v0);
+			LocalCoords c1 = getVertexLocalCoords(face, v1);
+
+			for (int i = 1; i < N; ++i) {  // Only edge interior vertices, not extremities
+				LocalCoords coords(c0, c1, i, N);  // Interpolate from c0 and c1
+				tessCoords[offset + edge * numEdgeInteriorPoints + i - 1 ] = coords;
+			}
+		}
+		offset = numCoarseVertices + numEdgeInteriorPoints * topology.GetNumEdges();
+
+		// Step #3 - Add interior points
+		#pragma omp parallel for
+		for (int f = 0; f < FACE_COUNT; ++f) {  // for each face
+			const auto faceVertices = topology.GetFaceVertices(f);
+			const auto faceEdges = topology.GetFaceEdges(f);
+			assert(faceVertices.size() == 3);
+
+			// If (i,j) are local coordinates, and edge length is N,
+			// we have in the triangle: i >= 0, j >= 0, i + j <= N
+			// We then consider k so that i + j + k = N.
+			// If we are on an edge, i * j * k == 0.
+			// If we are on a vertex, i == N or j == N or k == N.
+			// In the face (triangle), after tessellation, we'll have N² points.
+			// Some of them will be shared with other faces, we'll have to deal
+			// with that.
+
+			std::vector<int> pointMap;  // Map points between local numeration and global one
+
+			for (int j = 0; j <= N ; ++j) {
+				for (int i = 0; i <= N - j; ++i) {
+					int k = N - i - j;
+					int vertex;  // Output
+					// Find point type: vertex, edge point, interior point
+					if (i == N || j == N || k == N) {  // Vertex
+						// Vertex point in initial triangle
+						vertex = faceVertices[(i + 2 * j) / N];
+					} else if (i == 0 || j == 0 || k == 0) {  // Edge
+						// Find edge vertices
+						int v0, v1, pos;
+						// Find edge
+						if (i == 0) {
+							v0 = faceVertices[0];
+							v1 = faceVertices[2];
+							pos = j;
+						} else if (j == 0) {
+							v0 = faceVertices[0];
+							v1 = faceVertices[1];
+							pos = i;
+						} else if (k == 0) {
+							v0 = faceVertices[1];
+							v1 = faceVertices[2];
+							pos = j;
+						}
+						int edge = topology.FindEdge(v0, v1);
+						auto edgeVertices = topology.GetEdgeVertices(edge);
+						if (v0 != edgeVertices[0]) {
+							pos = N - pos;
+							std::swap(v0, v1);
+						}
+						vertex = numCoarseVertices + edge * numEdgeInteriorPoints + (pos - 1);
+
+					} else { // Interior point
+						int idx = offset
+							+ numTriangleInteriorPoints * f
+							+ numTriangleInteriorPoints - (N - j) * (N - j - 1) / 2
+							+ i - 1;
+						// Create position
+						tessCoords[idx] = LocalCoords(f, i, j, N);
+						// Record point in map
+						vertex = idx;
+					}
+
+					pointMap.push_back(vertex);
+				}  // ~for j
+			}  // ~for i
+
+			// Create triangles
+
+			// Lambda to get a point in the pointMap, given (i, j)
+			auto pnt = [N, &pointMap](int i, int j) {
+				int idx = (2 * N + 3 - j) * j / 2 + i;
+				return pointMap[idx];
+			};
+
+			int idxTri = f * N * N;
+
+			// Up triangles
+			for (int j = 0; j < N; ++j) {
+				for (int i = 0; i < N - j; ++i, ++idxTri) {
+					tessTris[idxTri] = Triangle(pnt(i, j), pnt(i + 1, j), pnt(i, j + 1));
+				}
+			}
+			// Down triangles
+			for (int j = 0; j < N; ++j) {
+				for (int i = 0; i < N - j - 1; ++i, ++idxTri) {
+					tessTris[idxTri] = Triangle(pnt(i, j + 1), pnt(i + 1, j + 1), pnt(i + 1, j));
+				}
+			}
+
+		}  // ~for face
+
+	}  // ~Tessellate
+
 
 	template <typename T>
 	InterpolatedValues Interpolate(const T* baseValues, int numBaseValues) {
@@ -833,220 +1045,6 @@ struct Surface {
 };
 
 
-void Tessellate (
-	const Surface& surface,
-	const size_t N,
-	CoordVector& tessCoords,
-	Triangle * tessTris
-	) {
-	// This is triforce tessellation.
-	// This tessellation splits edges in N segments,
-	// and generates N² resulting triangles by input triangle.
-	//
-	// Input:
-	//           V2
-	//          / \
-	//		   /  \
-	//        /   \
-	//      V0----V1
-	//
-	//
-	//	Output (N=4):
-	//
-	//          V2
-	//         / \
-	//        E7-E8
-	//       / \/ \
-	//      E5-I3-E6
-	//     / \/ \/ \
-	//    E3-I0-I1-E4
-	//   / \/ \/ \/ \
-	//	V0-E0-E1-E2-V1
-	//
-	//	Nota:
-	//	Vx - initial vertex (to be referenced)
-	//	Ex - edge vertex (to be created)
-	//	Ix - internal vertex (to be created)
-
-	// Some constants
-	const auto& topology = surface.refiner->GetLevel(0);
-	const size_t FACE_COUNT = topology.GetNumFaces();
-	const int FACE_SIZE = 3;  // Of course (triangles)...
-
-
-	// Check
-	SDL_LOG(
-		"Subdivision (enhanced) - Tessellating "
-		<< FACE_COUNT
-		<< " faces / " << topology.GetNumVertices()
-		<< " points with factor N="
-		<< N
-	);
-	if (FACE_COUNT * N * N >= std::numeric_limits<int>::max()) {
-		throw std::runtime_error(
-			"FACE_COUNT * N * N > numeric limit ("
-			+ ToString(std::numeric_limits<int>::max())
-			+ ")"
-		);
-	}
-
-	// Useful variables and constants
-	int offset;
-
-	// Number of coarse vertices
-	const int numCoarseVertices = topology.GetNumVertices();
-
-	// Number of interior points in an edge
-	const int numEdgeInteriorPoints = N - 1;
-
-	// Number of interior points in a triangle
-	const int numTriangleInteriorPoints = (N - 1) * (N - 2) / 2;
-
-	// Number of coords to be computed
-	const int numCoords =
-		topology.GetNumVertices()
-		+ numEdgeInteriorPoints * topology.GetNumEdges()
-		+ numTriangleInteriorPoints * topology.GetNumFaces();
-
-	// Size tessCoords
-	tessCoords.resize(numCoords);
-
-	// Get vertex local coordinates in given face
-	auto getVertexLocalCoords = [&topology](int face, int vertex) {
-		auto faceVertices = topology.GetFaceVertices(face);
-		if (vertex == faceVertices[0]) {
-			return LocalCoords(face, 0.f, 0.f);
-		} else if (vertex == faceVertices[1]) {
-			return LocalCoords(face, 1.f, 0.f);
-		} else if (vertex == faceVertices[2]) {
-			return LocalCoords(face, 0.f, 1.f);
-		}
-
-		throw std::runtime_error("Error in getVertexLocalCoords");
-	};
-
-	// Step #1 - Initialize with initial (coarse) vertices
-	#pragma omp parallel for
-	for (int vertex = 0; vertex < numCoarseVertices; ++vertex) {
-		int face = topology.GetVertexFaces(vertex)[0];  // Choose first face (arbitrary)
-		tessCoords[vertex] = getVertexLocalCoords(face, vertex);
-	}
-	offset = numCoarseVertices;
-
-	// Step #2 - Add edge vertices
-	#pragma omp parallel for
-	for (int edge = 0; edge < topology.GetNumEdges(); ++edge) {
-		// Find face
-		int face = topology.GetEdgeFaces(edge)[0];
-		// Find edge vertices.
-		auto edgeVerts = topology.GetEdgeVertices(edge);
-		int v0 = edgeVerts[0];
-		int v1 = edgeVerts[1];
-
-		LocalCoords c0 = getVertexLocalCoords(face, v0);
-		LocalCoords c1 = getVertexLocalCoords(face, v1);
-
-		for (int i = 1; i < N; ++i) {  // Only edge interior vertices, not extremities
-			LocalCoords coords(c0, c1, i, N);  // Interpolate from c0 and c1
-			tessCoords[offset + edge * numEdgeInteriorPoints + i - 1 ] = coords;
-		}
-	}
-	offset = numCoarseVertices + numEdgeInteriorPoints * topology.GetNumEdges();
-
-	// Step #3 - Add interior points
-	#pragma omp parallel for
-	for (int f = 0; f < FACE_COUNT; ++f) {  // for each face
-		const auto faceVertices = topology.GetFaceVertices(f);
-		const auto faceEdges = topology.GetFaceEdges(f);
-		assert(faceVertices.size() == 3);
-
-		// If (i,j) are local coordinates, and edge length is N,
-		// we have in the triangle: i >= 0, j >= 0, i + j <= N
-		// We then consider k so that i + j + k = N.
-		// If we are on an edge, i * j * k == 0.
-		// If we are on a vertex, i == N or j == N or k == N.
-		// In the face (triangle), after tessellation, we'll have N² points.
-		// Some of them will be shared with other faces, we'll have to deal
-		// with that.
-
-		std::vector<int> pointMap;  // Map points between local numeration and global one
-
-		for (int j = 0; j <= N ; ++j) {
-			for (int i = 0; i <= N - j; ++i) {
-				int k = N - i - j;
-				int vertex;  // Output
-				// Find point type: vertex, edge point, interior point
-				if (i == N || j == N || k == N) {  // Vertex
-					// Vertex point in initial triangle
-					vertex = faceVertices[(i + 2 * j) / N];
-				} else if (i == 0 || j == 0 || k == 0) {  // Edge
-					// Find edge vertices
-					int v0, v1, pos;
-					// Find edge
-					if (i == 0) {
-						v0 = faceVertices[0];
-						v1 = faceVertices[2];
-						pos = j;
-					} else if (j == 0) {
-						v0 = faceVertices[0];
-						v1 = faceVertices[1];
-						pos = i;
-					} else if (k == 0) {
-						v0 = faceVertices[1];
-						v1 = faceVertices[2];
-						pos = j;
-					}
-					int edge = topology.FindEdge(v0, v1);
-					auto edgeVertices = topology.GetEdgeVertices(edge);
-					if (v0 != edgeVertices[0]) {
-						pos = N - pos;
-						std::swap(v0, v1);
-					}
-					vertex = numCoarseVertices + edge * numEdgeInteriorPoints + (pos - 1);
-
-				} else { // Interior point
-					int idx = offset
-						+ numTriangleInteriorPoints * f
-						+ numTriangleInteriorPoints - (N - j) * (N - j - 1) / 2
-						+ i - 1;
-					// Create position
-					tessCoords[idx] = LocalCoords(f, i, j, N);
-					// Record point in map
-					vertex = idx;
-				}
-
-				pointMap.push_back(vertex);
-			}  // ~for j
-		}  // ~for i
-
-		// Create triangles
-
-		// Lambda to get a point in the pointMap, given (i, j)
-		auto pnt = [N, &pointMap](int i, int j) {
-			int idx = (2 * N + 3 - j) * j / 2 + i;
-			return pointMap[idx];
-		};
-
-		int idxTri = f * N * N;
-
-		// Up triangles
-		for (int j = 0; j < N; ++j) {
-			for (int i = 0; i < N - j; ++i, ++idxTri) {
-				tessTris[idxTri] = Triangle(pnt(i, j), pnt(i + 1, j), pnt(i, j + 1));
-			}
-		}
-		// Down triangles
-		for (int j = 0; j < N; ++j) {
-			for (int i = 0; i < N - j - 1; ++i, ++idxTri) {
-				tessTris[idxTri] = Triangle(pnt(i, j + 1), pnt(i + 1, j + 1), pnt(i + 1, j));
-			}
-		}
-
-	}  // ~for face
-
-}  // ~Tessellate
-
-// TODO method of surface
 
 //
 
@@ -1068,7 +1066,7 @@ ExtTriangleMesh *ApplySubdiv(
 	// TODO Output as a struct
 	CoordVector tessCoords;  // We temporarily store new positions as (face, x, y)
 	auto tessTriangles = TriangleMesh::AllocTrianglesBuffer(triCount);
-	Tessellate(surface, tessellationRate, tessCoords, tessTriangles);
+	surface.Tessellate(tessellationRate, tessCoords, tessTriangles);
 
 	// Interpolate positions on subdivided surface
 	auto subdivPositions = surface.Interpolate(
@@ -1090,9 +1088,6 @@ ExtTriangleMesh *ApplySubdiv(
 		<< pointCount << " points, "
 		<< triCount << " triangles"
 	);
-
-	SDL_LOG("Subdivision (enhanced) - Allocating");
-
 
 	// Allocate the new mesh
 	ExtTriangleMesh *newMesh =  new ExtTriangleMesh(
