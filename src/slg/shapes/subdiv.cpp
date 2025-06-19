@@ -58,6 +58,7 @@ using TopologyRefinerPtr = std::unique_ptr<Far::TopologyRefiner>;
 using PtexIndicesPtr = std::unique_ptr<Far::PtexIndices>;
 using PointArrayPtr = std::unique_ptr<Point[]>;
 using NormalArrayPtr = std::unique_ptr<Normal[]>;
+using TriangleArrayPtr = std::unique_ptr<Triangle[]>;
 
 
 //////////////////////////
@@ -677,11 +678,8 @@ struct Surface {
 		{}
 	};
 
-	void Tessellate (
-		const size_t N,
-		CoordVector& tessCoords,
-		Triangle * tessTris
-		) {
+	std::tuple<CoordVector, TriangleArrayPtr, int, int>
+	Tessellate (const size_t N) {
 		// This is triforce tessellation.
 		// This tessellation splits edges in N segments,
 		// and generates N² resulting triangles by input triangle.
@@ -711,11 +709,16 @@ struct Surface {
 		//	Ex - edge vertex (to be created)
 		//	Ix - internal vertex (to be created)
 
+		// Allocate outputs
+		CoordVector tessCoords;
+		int numTriangles = getTesselTriangleCount(N);
+		int numPoints = getTesselPosCount(N);
+		auto tessTris = TriangleArrayPtr(TriangleMesh::AllocTrianglesBuffer(numTriangles));
+
 		// Some constants
 		const auto& topology = refiner->GetLevel(0);
 		const size_t FACE_COUNT = topology.GetNumFaces();
 		const int FACE_SIZE = 3;  // Of course (triangles)...
-
 
 		// Check
 		SDL_LOG(
@@ -887,6 +890,8 @@ struct Surface {
 
 		}  // ~for face
 
+		return std::make_tuple(tessCoords, std::move(tessTris), numPoints, numTriangles);
+
 	}  // ~Tessellate
 
 
@@ -1052,21 +1057,28 @@ ExtTriangleMesh *ApplySubdiv(
 	ExtTriangleMesh *srcMesh,
 	const u_int maxLevel
 ) {
+	// All buffers (triangles, points, normals...) are enclosed in smart pointers
+	// in order to guarantee that memory is released even in case of exception:
+	// please keep it so
+	//
+	// Outputs values are returned as tuples, instead of using ref arguments.
+	// This is for readability: arguments are inputs (only), return values are output
+
+	using std::tie;
+
 	// Create limit surface (subdivided) from base geometry
 	Surface surface(srcMesh, maxLevel);
 
-	// Compute dimensions
+	// Compute tesselletion rate, from level
 	size_t tessellationRate = 1 << maxLevel;
-	int pointCount = surface.getTesselPosCount(tessellationRate);
-	int normCount = surface.getTesselPosCount(tessellationRate);
-	int triCount = surface.getTesselTriangleCount(tessellationRate);
 
 	// Tessellate
-	// TODO Replace CoordVector by osd equivalent
-	// TODO Output as a struct
-	CoordVector tessCoords;  // We temporarily store new positions as (face, x, y)
-	auto tessTriangles = TriangleMesh::AllocTrianglesBuffer(triCount);
-	surface.Tessellate(tessellationRate, tessCoords, tessTriangles);
+	CoordVector tessCoords;
+	TriangleArrayPtr tessTriangles;
+	int numPoints, numTriangles;
+
+	tie(tessCoords, tessTriangles, numPoints, numTriangles) =
+		surface.Tessellate(tessellationRate);
 
 	// Interpolate positions on subdivided surface
 	auto subdivPositions = surface.Interpolate(
@@ -1074,25 +1086,23 @@ ExtTriangleMesh *ApplySubdiv(
 		srcMesh->GetTotalVertexCount()
 	);
 
-	// Evaluate positions on tessellation
+	// Evaluate positions on tessellated mesh
 	PointArrayPtr tessPoints;
 	NormalArrayPtr tessNormals;
-	std::tie(tessPoints, tessNormals) = surface.EvaluatePositions(
-		subdivPositions,
-		tessCoords
-	);
+	tie(tessPoints, tessNormals) =
+		surface.EvaluatePositions(subdivPositions, tessCoords);
 
 
 	SDL_LOG(
 		"Subdivision (enhanced) - Building new mesh: "
-		<< pointCount << " points, "
-		<< triCount << " triangles"
+		<< numPoints << " points, "
+		<< numTriangles << " triangles"
 	);
 
 	// Allocate the new mesh
 	ExtTriangleMesh *newMesh =  new ExtTriangleMesh(
-		pointCount, triCount,
-		tessPoints.release(), tessTriangles, tessNormals.release()
+		numPoints, numTriangles,
+		tessPoints.release(), tessTriangles.release(), tessNormals.release()
 	);
 
 	return newMesh;
