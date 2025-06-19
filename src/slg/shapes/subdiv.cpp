@@ -56,6 +56,9 @@ using PatchTablePtr = std::unique_ptr<Far::PatchTable>;
 using PatchMapPtr = std::unique_ptr<Far::PatchMap>;
 using TopologyRefinerPtr = std::unique_ptr<Far::TopologyRefiner>;
 using PtexIndicesPtr = std::unique_ptr<Far::PtexIndices>;
+using PointArrayPtr = std::unique_ptr<Point[]>;
+using NormalArrayPtr = std::unique_ptr<Normal[]>;
+
 
 //////////////////////////
 //  Simple subdivision  //
@@ -741,6 +744,92 @@ struct Surface {
 		const auto& topology = refiner->GetLevel(0);
 		return topology.GetNumFaces() * N * N;
 	}
+
+	std::tuple<PointArrayPtr, NormalArrayPtr>
+	EvaluatePositions(
+		const Surface::InterpolatedValues& subdivPositions,
+		const CoordVector& tessCoords
+	) {
+		SDL_LOG("Subdivision (enhanced) - Evaluating");
+
+		int numCoords = tessCoords.size();
+
+		// Allocate output structure
+		auto tessPositions = PointArrayPtr(TriangleMesh::AllocVerticesBuffer(numCoords));
+		auto tessNormals = NormalArrayPtr(new Normal[numCoords]);
+
+		const auto& topology = refiner->GetLevel(0);
+
+		//int numBaseVerts = surface.numBasePositions; TODO
+
+		// Evaluate positions and derivatives
+		#pragma omp parallel for
+		for (int vertex = 0; vertex < tessCoords.size(); ++vertex) {
+			// Init
+			auto& coords = tessCoords[vertex];
+
+			// Translate in ptex face
+			int ptexFace = ptexIndices->GetFaceId(coords.face);
+
+			//  Locate the patch corresponding to the face ptex idx and (s,t)
+			//  and evaluate:
+			Far::PatchTable::PatchHandle const * handle =
+				patchMap->FindPatch(ptexFace, coords.x, coords.y);
+			assert(handle);
+
+			float pWeights[20];
+			float duWeights[20];
+			float dvWeights[20];
+			patchTable->EvaluateBasis(
+				*handle, coords.x, coords.y,
+				pWeights, duWeights, dvWeights
+			);
+
+			//  Identify the patch cvs and combine with the evaluated weights --
+			//  remember to distinguish cvs in the base level:
+			Far::ConstIndexArray cvIndices = patchTable->GetPatchVertices(*handle);
+
+			// Evaluate position and derivatives
+			Point& pos = tessPositions[vertex];
+			pos.Clear();
+
+			Vector du;
+			du.Clear();
+
+			Vector dv;
+			dv.Clear();
+
+			auto positions = (const Point *) subdivPositions.refinedValues.get();
+
+			for (int cv = 0; cv < cvIndices.size(); ++cv) {
+				int cvIndex = cvIndices[cv];
+
+				const Point& position = positions[cvIndex];
+
+				pos.AddWithWeight(position, pWeights[cv]);
+				du.AddWithWeight(position, duWeights[cv]);
+				dv.AddWithWeight(position, dvWeights[cv]);
+			}
+
+			// Update output (position and normal)
+			tessNormals[vertex] = Normal(Cross(du, dv));
+
+			// Check validity of normal
+			auto t = tessNormals[vertex];
+			if (t[0] == 0.f && t[1] == 0.f && t[2] == 0.f) {
+				SDL_LOG(
+					"Subdivision (enhanced) - Vertex #" << vertex << ", "
+					<< "uv = (" << coords.x << ", " << coords.y << "), "
+					<< "du = (" << du[0] << ", " << du[1] << ", " << du[2] << "), "
+					<< "dv = (" << dv[0] << ", " << dv[1] << ", " << dv[2] << ")"
+				);
+				SDL_LOG("Subdivision (enhanced) - WARNING - Null normal (vect(du, dv) == 0)");
+			}
+		}  // ~for vertex
+
+		return std::make_tuple(std::move(tessPositions), std::move(tessNormals));
+	}
+
 };
 
 
@@ -959,98 +1048,7 @@ void Tessellate (
 
 // TODO method of surface
 
-using PointArrayPtr = std::unique_ptr<Point[]>;
-using NormalArrayPtr = std::unique_ptr<Normal[]>;
-
 //
-std::tuple<PointArrayPtr, NormalArrayPtr>
-EvaluatePositions(
-	const Surface& surface,
-	const Surface::InterpolatedValues& subdivPositions,
-	const CoordVector& tessCoords
-) {
-	SDL_LOG("Subdivision (enhanced) - Evaluating");
-
-	int numCoords = tessCoords.size();
-
-	// Allocate output structure
-	auto tessPositions = PointArrayPtr(TriangleMesh::AllocVerticesBuffer(numCoords));
-	auto tessNormals = NormalArrayPtr(new Normal[numCoords]);
-
-	const auto& topology = surface.refiner->GetLevel(0);
-	const auto& patchTable = *surface.patchTable;
-	const auto& ptexIndices = *surface.ptexIndices;
-
-    //int numBaseVerts = surface.numBasePositions; TODO
-
-	// Evaluate positions and derivatives
-	#pragma omp parallel for
-	for (int vertex = 0; vertex < tessCoords.size(); ++vertex) {
-		// Init
-		auto& coords = tessCoords[vertex];
-
-		// Translate in ptex face
-		int ptexFace = surface.ptexIndices->GetFaceId(coords.face);
-
-		//  Locate the patch corresponding to the face ptex idx and (s,t)
-		//  and evaluate:
-		Far::PatchTable::PatchHandle const * handle =
-			surface.patchMap->FindPatch(ptexFace, coords.x, coords.y);
-		assert(handle);
-
-		float pWeights[20];
-		float duWeights[20];
-		float dvWeights[20];
-		patchTable.EvaluateBasis(
-			*handle, coords.x, coords.y,
-			pWeights, duWeights, dvWeights
-		);
-
-		//  Identify the patch cvs and combine with the evaluated weights --
-		//  remember to distinguish cvs in the base level:
-		Far::ConstIndexArray cvIndices = patchTable.GetPatchVertices(*handle);
-
-		// Evaluate position and derivatives
-		Point& pos = tessPositions[vertex];
-		pos.Clear();
-
-		Vector du;
-		du.Clear();
-
-		Vector dv;
-		dv.Clear();
-
-		auto positions = (const Point *) subdivPositions.refinedValues.get();
-
-		for (int cv = 0; cv < cvIndices.size(); ++cv) {
-			int cvIndex = cvIndices[cv];
-
-			const Point& position = positions[cvIndex];
-
-			pos.AddWithWeight(position, pWeights[cv]);
-			du.AddWithWeight(position, duWeights[cv]);
-			dv.AddWithWeight(position, dvWeights[cv]);
-		}
-
-		// Update output (position and normal)
-		tessNormals[vertex] = Normal(Cross(du, dv));
-
-		// Check validity of normal
-		auto t = tessNormals[vertex];
-		if (t[0] == 0.f && t[1] == 0.f && t[2] == 0.f) {
-			SDL_LOG(
-				"Subdivision (enhanced) - Vertex #" << vertex << ", "
-				<< "uv = (" << coords.x << ", " << coords.y << "), "
-				<< "du = (" << du[0] << ", " << du[1] << ", " << du[2] << "), "
-				<< "dv = (" << dv[0] << ", " << dv[1] << ", " << dv[2] << ")"
-			);
-			SDL_LOG("Subdivision (enhanced) - WARNING - Null normal (vect(du, dv) == 0)");
-		}
-	}  // ~for vertex
-
-	return std::make_tuple(std::move(tessPositions), std::move(tessNormals));
-}
-
 
 ExtTriangleMesh *ApplySubdiv(
 	ExtTriangleMesh *srcMesh,
@@ -1081,7 +1079,10 @@ ExtTriangleMesh *ApplySubdiv(
 	// Evaluate positions on tessellation
 	PointArrayPtr tessPoints;
 	NormalArrayPtr tessNormals;
-	std::tie(tessPoints, tessNormals) = EvaluatePositions(surface, subdivPositions, tessCoords);
+	std::tie(tessPoints, tessNormals) = surface.EvaluatePositions(
+		subdivPositions,
+		tessCoords
+	);
 
 
 	SDL_LOG(
