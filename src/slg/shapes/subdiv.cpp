@@ -654,6 +654,8 @@ struct Surface {
 		// This is triforce tessellation.
 		// This tessellation splits edges in N segments,
 		// and generates N² resulting triangles by input triangle.
+		// It's been totally reimplemented here in order to use
+		// multithreading (osd implementation is monothreaded...).
 		//
 		// Input:
 		//           V2
@@ -949,6 +951,8 @@ struct Surface {
 
 		const auto& topology = refiner->GetLevel(0);
 
+		auto positions = (const Point *) subdivPositions.refinedValues.get();
+
 		// Evaluate positions and derivatives
 		#pragma omp parallel for
 		for (int vertex = 0; vertex < tessCoords.size(); ++vertex) {
@@ -986,8 +990,6 @@ struct Surface {
 			Vector dv;
 			dv.Clear();
 
-			auto positions = (const Point *) subdivPositions.refinedValues.get();
-
 			for (int cv = 0; cv < cvIndices.size(); ++cv) {
 				int cvIndex = cvIndices[cv];
 
@@ -999,19 +1001,27 @@ struct Surface {
 			}
 
 			// Update output (position and normal)
-			tessNormals[vertex] = Normalize(Normal(Cross(du, dv)));
+			tessNormals[vertex] = Normal(Cross(du, dv));
 
-			// Check validity of normal
-			auto t = tessNormals[vertex];
-			if (t[0] == 0.f && t[1] == 0.f && t[2] == 0.f) {
+			// Check validity of normal and normalize if ok
+			auto& t = tessNormals[vertex];
+			float length = t.Length();
+
+			if (length != 0.f) {
+				t /= length;
+			} else {
 				SDL_LOG(
 					"Subdivision (enhanced) - Vertex #" << vertex << ", "
 					<< "uv = (" << coords.x << ", " << coords.y << "), "
 					<< "du = (" << du[0] << ", " << du[1] << ", " << du[2] << "), "
 					<< "dv = (" << dv[0] << ", " << dv[1] << ", " << dv[2] << ")"
 				);
-				SDL_LOG("Subdivision (enhanced) - WARNING - Null normal (vect(du, dv) == 0)");
+				SDL_LOG("Subdivision (enhanced) - WARNING - "
+					<< "Null normal (vect(du, dv) == 0)"
+				);
 			}
+
+
 		}  // ~for vertex
 
 		return std::make_tuple(std::move(tessPositions), std::move(tessNormals));
@@ -1029,6 +1039,7 @@ struct Surface {
 
 		const auto& topology = refiner->GetLevel(0);
 
+		auto inputValues = (const T *) subdivValues.refinedValues.get();
 
 		// Evaluate
 		#pragma omp parallel for
@@ -1056,8 +1067,6 @@ struct Surface {
 			T& val = tessValues[vertex];
 
 			val.Clear();
-
-			auto inputValues = (const T *) subdivValues.refinedValues.get();
 
 			for (int cv = 0; cv < cvIndices.size(); ++cv) {
 				int cvIndex = cvIndices[cv];
@@ -1160,8 +1169,8 @@ ExtTriangleMesh *ApplySubdiv(
 ) {
 	// Remarks:
 	// All buffers (triangles, points, normals...) are enclosed in smart pointers
-	// in order to guarantee that memory is released even in case of exception:
-	// please keep it so.
+	// in order to guarantee that memory is released even in case of exception araising
+	// during whole process: please keep it so.
 	//
 	// Outputs values are returned as tuples, instead of using byref arguments.
 	// This is for readability: arguments are inputs only, return values are output
@@ -1175,7 +1184,7 @@ ExtTriangleMesh *ApplySubdiv(
 	size_t tessellationRate = 1 << maxLevel;
 
 	// Record initial vertex count
-	u_int numMeshVertex =srcMesh->GetTotalVertexCount();
+	u_int numMeshVertex = srcMesh->GetTotalVertexCount();
 
 	// Tessellate
 	CoordVector tessCoords;
@@ -1241,6 +1250,7 @@ ExtTriangleMesh *ApplySubdiv(
 		tessAlphas.release()
 	);
 
+	// Handle AOVs
 	auto tessAOVs_released = *tessAOVs.release();
 	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; ++i) {
 		newMesh->SetVertexAOV(i, tessAOVs_released[i]);
