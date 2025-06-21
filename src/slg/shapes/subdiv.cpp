@@ -540,7 +540,20 @@ struct LocalCoords {
 	}
 };
 
+
 typedef std::vector<LocalCoords> CoordVector;
+
+struct FloatAdapter {
+	FloatAdapter() : x(0.f) {}
+	FloatAdapter(float p_x): x(p_x) {}
+	void Clear() { x = 0.f; }
+	void AddWithWeight(float value, float weight) { x += value * weight; }
+	operator float() const { return x; }
+	operator float*() { return &x; }
+
+	float x;
+};
+
 
 TopologyRefinerPtr createTopologyAdaptiveRefiner(
 		const ExtTriangleMesh * srcMesh,  // TODO Only topology is needed
@@ -1004,8 +1017,7 @@ struct Surface {
 		return std::make_tuple(std::move(tessPositions), std::move(tessNormals));
 	}
 
-	template<typename T>
-	std::unique_ptr<T[]> Evaluate(
+	template<typename T> std::unique_ptr<T[]> Evaluate(
 		const Surface::InterpolatedValues& subdivValues,
 		const CoordVector& tessCoords
 	) const {
@@ -1042,6 +1054,7 @@ struct Surface {
 
 			// Evaluate
 			T& val = tessValues[vertex];
+
 			val.Clear();
 
 			auto inputValues = (const T *) subdivValues.refinedValues.get();
@@ -1067,46 +1080,50 @@ struct Surface {
 
 };
 
-// This struct helps evaluating multi-layers data, like UV, Colors, Gamma, AOV.
-template <
-	typename EXTRACTOR,
-	typename COORDS,
-	size_t NUM_LAYERS=EXTMESH_MAX_DATA_COUNT
->
+// Helper to evaluate multi-layers data, like UV, Colors, Gamma, AOV.
+// EXTRACTOR is a callable type providing the coarse data.
+// OUT_FLOAT is a flag to get buffer as float*, rather than T*
+template < typename EXTRACTOR, bool OUT_FLOAT=false >
 struct MultiLayerDataEvaluator{
 
-	// Evaluated data are stored as smart pointers (in a vector), so that they
-	// are automatically freed if something goes wrong (exception). At the end,
-	// they can be released to be passed to ExtTriangleMesh constructor.
+	// Evaluated data are stored as smart pointers in a vector (one row per
+	// layer), so that they are automatically freed if anything goes wrong
+	// before the mesh is built (any exception...). Each element of the vector
+	// is a buffer for a layer. At the end, the buffers have to be passed to
+	// ExtTriangleMesh constructor, which takes ownership. In that way, they
+	// must be released by this object.
 
 	using DATA = std::remove_pointer_t<std::invoke_result_t<EXTRACTOR, u_int>>;
 	using DATA_BUFFER = std::unique_ptr<DATA[]>;
 
+	// Let the possibility to return an array of float* (for Alpha, essentially)
+	using DATA_OUT = std::conditional_t<OUT_FLOAT, float, DATA>;
+
+	// Return type for evaluation
 	struct EvaluatedLayers: std::vector<DATA_BUFFER> {
 
-		using ReleasedDataLayers = std::array<DATA *, NUM_LAYERS>;
-
-		// Constructor
+		// Return-object constructor
 		EvaluatedLayers(size_t num_layers):
 			std::vector<DATA_BUFFER>(num_layers)
 		{}
 
-		// Releaser
-		ReleasedDataLayers* release() {
-			for (size_t layer = 0; layer < NUM_LAYERS; ++layer) {
-				res[layer] = (*this)[layer].release();
+		// Return-object releaser
+		std::array<DATA_OUT *, EXTMESH_MAX_DATA_COUNT>* release() {
+			for (size_t layer = 0; layer < EXTMESH_MAX_DATA_COUNT; ++layer) {
+				res[layer] = reinterpret_cast<DATA_OUT *>((*this)[layer].release());
 			}
 			return &res;
 		}
 
-		ReleasedDataLayers res;  // Released
+		std::array<DATA_OUT *, EXTMESH_MAX_DATA_COUNT> res;  // Released buffers
 	};
 
+	// Constructor
 	MultiLayerDataEvaluator(
 		const Surface& p_surface,
 		EXTRACTOR p_getLayerData,
 		u_int p_layerSize,
-		const COORDS& p_coords
+		const CoordVector& p_coords
 	):
 		surface(p_surface),
 		getLayerData(p_getLayerData),
@@ -1114,9 +1131,10 @@ struct MultiLayerDataEvaluator{
 		coords(p_coords)
 	{}
 
+	// Evaluator
 	EvaluatedLayers evaluate() {
-		EvaluatedLayers res(NUM_LAYERS);
-		for (size_t layer = 0; layer < NUM_LAYERS; ++layer) {
+		EvaluatedLayers res(EXTMESH_MAX_DATA_COUNT);
+		for (size_t layer = 0; layer < EXTMESH_MAX_DATA_COUNT; ++layer) {
 			DATA* layerData = getLayerData(layer);
 			if (layerData) {
 				auto interpolatedData = surface.Interpolate(layerData, layerSize);
@@ -1130,7 +1148,7 @@ struct MultiLayerDataEvaluator{
 	const Surface& surface;
 	const size_t layerSize;
 	const std::function<DATA*(u_int)> getLayerData;
-	const COORDS& coords;
+	const CoordVector& coords;
 
 };
 
@@ -1182,25 +1200,51 @@ ExtTriangleMesh *ApplySubdiv(
 	}
 
 	// Evaluate UV
-	auto extractor = [&srcMesh](u_int layer) { return srcMesh->GetUVs(layer); };
-	MultiLayerDataEvaluator EvaluatorUV(surface, extractor, numMeshVertex, tessCoords);
+	auto extractorUV = [&srcMesh](u_int layer) { return srcMesh->GetUVs(layer); };
+	MultiLayerDataEvaluator EvaluatorUV(surface, extractorUV, numMeshVertex, tessCoords);
 	auto tessUVs = EvaluatorUV.evaluate();
 
-	// Allocate the new mesh
+	// Evaluate Colors
+	auto extractorCols = [&srcMesh](u_int layer) { return srcMesh->GetColors(layer); };
+	MultiLayerDataEvaluator EvaluatorCols(surface, extractorCols, numMeshVertex, tessCoords);
+	auto tessCols = EvaluatorCols.evaluate();
+
+	// Evaluate Alphas
+	auto extractorAlphas = [&srcMesh, &numMeshVertex](u_int layer)
+		{ return (FloatAdapter*) srcMesh->GetAlphas(layer); };
+	MultiLayerDataEvaluator<decltype(extractorAlphas), true>
+		EvaluatorAlphas(surface, extractorAlphas, numMeshVertex, tessCoords);
+	auto tessAlphas = EvaluatorAlphas.evaluate();
+
+	// Evaluate AOVs
+	auto extractorAOVs = [&srcMesh](u_int layer)
+		{ return (FloatAdapter*) srcMesh->GetVertexAOVs(layer); };
+	MultiLayerDataEvaluator<decltype(extractorAOVs), true>
+		EvaluatorAOVs(surface, extractorAOVs, numMeshVertex, tessCoords);
+	auto tessAOVs = EvaluatorAOVs.evaluate();
+
+	// Allocate the new mesh and release buffers (transfer ownership to new
+	// mesh)
 	SDL_LOG(
 		"Subdivision (enhanced) - Building new mesh: "
 		<< numPoints << " points, "
 		<< numTriangles << " triangles"
 	);
 
-
 	ExtTriangleMesh *newMesh =  new ExtTriangleMesh(
 		u_int(numPoints), u_int(numTriangles),
 		tessPoints.release(),
 		tessTriangles.release(),
 		tessNormals.release(),
-		tessUVs.release(), nullptr, nullptr
+		tessUVs.release(),
+		tessCols.release(),
+		tessAlphas.release()
 	);
+
+	auto tessAOVs_released = *tessAOVs.release();
+	for (u_int i = 0; i < EXTMESH_MAX_DATA_COUNT; ++i) {
+		newMesh->SetVertexAOV(i, tessAOVs_released[i]);
+	}
 
 	return newMesh;
 
