@@ -894,15 +894,15 @@ struct Surface {
 			// Up triangles
 			for (int j = 0; j < N; ++j) {
 				for (int i = 0; i < N - j; ++i, ++idxTri) {
-					//tessTris[idxTri] = Triangle(pnt(i, j), pnt(i + 1, j), pnt(i, j + 1));
-					tessTris[idxTri] = Triangle(pnt(i, j), pnt(i, j +1), pnt(i+1, j));
+					tessTris[idxTri] = Triangle(pnt(i, j), pnt(i + 1, j), pnt(i, j + 1));
+					//tessTris[idxTri] = Triangle(pnt(i, j), pnt(i, j +1), pnt(i+1, j));
 				}
 			}
 			// Down triangles
 			for (int j = 0; j < N; ++j) {
 				for (int i = 0; i < N - j - 1; ++i, ++idxTri) {
-					tessTris[idxTri] = Triangle(pnt(i, j + 1), pnt(i + 1, j + 1), pnt(i + 1, j));
-					//tessTris[idxTri] = Triangle(pnt(i, j + 1), pnt(i + 1, j), pnt(i + 1, j + 1));
+					tessTris[idxTri] = Triangle(pnt(i, j + 1), pnt(i + 1, j), pnt(i + 1, j + 1));
+					//tessTris[idxTri] = Triangle(pnt(i, j + 1), pnt(i + 1, j + 1), pnt(i + 1, j));
 				}
 			}
 
