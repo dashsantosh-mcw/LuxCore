@@ -158,6 +158,9 @@ set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/build-system/cmake")
 #
 ################################################################################
 
+# Ensure compiler version meets minimum requirements
+INCLUDE(CheckCompilerVersion)
+
 # Nota: please keep all 'find_package' gathered here (for maintenance reasons)
 message(STATUS "LuxCore - Add dependency targets")
 find_package(OpenMP REQUIRED)
