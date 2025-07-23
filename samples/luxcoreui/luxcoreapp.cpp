@@ -243,11 +243,11 @@ void LuxCoreApp::SetFilmResolution(const unsigned int width, const unsigned int 
 	StartRendering();
 }
 
-void LuxCoreApp::LoadRenderConfig(const std::string &fileName) {
+void LuxCoreApp::LoadRenderConfig(const std::string &fileName, const std::string &filePath) {
 	DeleteRendering();
 
 	// Set the current directory to place where the configuration file is
-	boost::filesystem::current_path(boost::filesystem::path(fileName).parent_path());
+	boost::filesystem::current_path(boost::filesystem::path(filePath));
 
 	// Clear the file name resolver list
 	luxcore::ClearFileNameResolverPaths();
