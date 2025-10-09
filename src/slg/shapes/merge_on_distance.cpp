@@ -19,13 +19,15 @@
 // This shape modifier will merge vertices whose interdistance is lower than
 // a given threshold
 
+#include <cassert>
 #include <vector>
 #include <cmath>
 #include <algorithm>
 #include <unordered_map>
 #include <tuple>
 #include <format>
-#include <omp.h>
+
+#include "oneapi/tbb.h"
 
 #include "luxrays/core/exttrianglemesh.h"
 #include "slg/shapes/merge_on_distance.h"
@@ -34,27 +36,9 @@
 
 using luxrays::Point;
 using luxrays::WallClockTime;
+using namespace oneapi::tbb;
 
 namespace {
-class DSU {
-	std::vector<int> parent;
-public:
-	DSU(int n) : parent(n) {
-		for (int i = 0; i < n; ++i) parent[i] = i;
-	}
-	int find(int u) {
-		while (parent[u] != u) {
-			parent[u] = parent[parent[u]];
-			u = parent[u];
-		}
-		return u;
-	}
-	void unite(int u, int v) {
-		u = find(u);
-		v = find(v);
-		if (u != v) parent[v] = u;
-	}
-};
 
 bool nearly_equal(float a, float b)
 {
@@ -70,6 +54,152 @@ bool nearly_equal(float a, float b, int factor /* a factor of epsilon */)
 	return min_a <= b && max_a >= b;
 }
 
+
+class UnionFind {
+public:
+    UnionFind() {}
+
+    // Find the root of the set containing element i
+    int find(int i) {
+        if (parent.find(i) == parent.end()) {
+            parent[i] = i;
+            rank[i] = 0;
+        }
+        if (parent[i] != i) {
+            parent[i] = find(parent[i]); // Path compression
+        }
+        return parent[i];
+    }
+
+    // Union the sets containing elements i and j
+    void unite(int i, int j) {
+        int rootI = find(i);
+        int rootJ = find(j);
+
+        if (rootI != rootJ) {
+            // Union by rank
+            if (rank[rootI] > rank[rootJ]) {
+                parent[rootJ] = rootI;
+            } else if (rank[rootI] < rank[rootJ]) {
+                parent[rootI] = rootJ;
+            } else {
+                parent[rootJ] = rootI;
+                rank[rootI]++;
+            }
+        }
+    }
+
+    // Overload the += operator to merge two UnionFind instances
+    UnionFind operator+=(UnionFind& other) {
+
+        for (const auto& pair : other.parent) {
+            unite(pair.first, pair.second);
+        }
+
+        return (*this);
+    }
+
+private:
+    std::unordered_map<int, int> parent;
+    std::unordered_map<int, int> rank;
+
+    friend std::ostream& operator<<(std::ostream& os, const UnionFind& uf);
+};
+
+std::ostream& operator<<(std::ostream& os, const UnionFind& uf) {
+    os << "Parent: ";
+    for (const auto& pair : uf.parent) {
+        os << "(" << pair.first << ", " << pair.second << ") ";
+    }
+    os << "\nRank: ";
+    for (const auto& pair : uf.rank) {
+        os << "(" << pair.first << ", " << pair.second << ") ";
+    }
+    return os;
+}
+
+
+union CellId {
+	CellId(int16_t x, int16_t y, int16_t z) {
+		i16[0] = 0;
+		i16[1] = x;
+		i16[2] = y;
+		i16[3] = z;
+	}
+	CellId(uint64_t id) : u64(id) {}
+	CellId(const CellId& other) { u64 = other.u64; }
+
+	int16_t x() const { return i16[1]; }
+	int16_t y() const { return i16[2]; }
+	int16_t z() const { return i16[3]; }
+	uint64_t id() const { return u64; }
+
+	bool operator==(const CellId& other) const {
+		return u64 == other.u64;
+	}
+private:
+	uint64_t u64;
+	int16_t i16[4];
+};
+
+}
+
+namespace std {
+  template <> struct hash<CellId>
+  {
+    size_t operator()(const CellId & x) const
+    {
+      return x.id();
+    }
+  };
+}
+
+namespace {
+using GridType = std::unordered_map<CellId, std::vector<u_int>>;
+
+void ProcessGrid(
+	const GridType& grid,
+    const Point* points,
+    UnionFind& dsu  // Out param
+) {
+    tbb::mutex dsuMutex; // Protect dsu.unite
+
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, grid.size()),
+        [&](const tbb::blocked_range<size_t>& r) {
+            auto it = grid.begin();
+            std::advance(it, r.begin());
+            for (size_t i = r.begin(); i != r.end(); ++i, ++it) {
+                auto& [cellId, cellPoints] = *it;
+
+                // Check adjacent cells
+                for (int16_t dx = -1; dx <= 1; ++dx) {
+                    for (int16_t dy = -1; dy <= 1; ++dy) {
+                        for (int16_t dz = -1; dz <= 1; ++dz) {
+                            CellId adjCellId(
+								cellId.x() + dx, cellId.y() + dy, cellId.z() + dz
+							);
+                            auto adjIt = grid.find(adjCellId);
+                            if (adjIt == grid.end()) continue;
+
+                            for (u_int idx : cellPoints) {
+                                for (int adjIdx : adjIt->second) {
+                                    if (idx >= adjIdx) continue;
+                                    float dist = DistanceSquared(points[idx], points[adjIdx]);
+                                    if (nearly_equal(dist, 0.f)) {
+                                        tbb::mutex::scoped_lock lock(dsuMutex);
+                                        dsu.unite(idx, adjIdx);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    );
+}
+
 // Spatial partioning
 // Returns:
 // - The merged points (dynamic array)
@@ -81,63 +211,102 @@ mergePoints(
 	u_int numPoints,
 	float cellSize
 ) {
-	DSU dsu(numPoints);
+	UnionFind dsu;
 
 	// Compute cellSize
-	float minX, minY, minZ;
-	float maxX, maxY, maxZ;
-	minX = minY = minZ = std::numeric_limits<float>::max();
-	maxX = maxY = maxZ = std::numeric_limits<float>::min();
+	float minlimit = std::numeric_limits<float>::min();
+	float maxlimit = std::numeric_limits<float>::max();
 
-	for (u_int i = 0; i < numPoints; ++i) {
-		auto p = points[i];
-		minX = std::min(minX, p.x);
-		minY = std::min(minY, p.y);
-		minZ = std::min(minZ, p.z);
-		maxX = std::max(maxX, p.x);
-		maxY = std::max(maxY, p.y);
-		maxZ = std::max(maxZ, p.z);
-	}
-	float delta = std::max({maxX - minX, maxY - minY, maxZ - minZ});
-	cellSize = delta / static_cast<float>(1 << 10);
-	cellSize = 10;  // TODO
+	using sixfloats = std::tuple<float, float, float, float, float, float>;
+	auto boundingbox = parallel_reduce(
+		blocked_range<Point*>(points, points+numPoints),
+
+		std::make_tuple(maxlimit, maxlimit, maxlimit, minlimit, minlimit, minlimit),
+
+		[](const blocked_range<Point*>& r, sixfloats init) -> sixfloats {
+			auto [minX, minY, minZ, maxX, maxY, maxZ] = init;
+			for(auto p=r.begin(); p!=r.end(); ++p) {
+				minX = std::min(minX, p->x);
+				minY = std::min(minY, p->y);
+				minZ = std::min(minZ, p->z);
+				maxX = std::max(maxX, p->x);
+				maxY = std::max(maxY, p->y);
+				maxZ = std::max(maxZ, p->z);
+			}
+			return std::make_tuple(minX, minY, minZ, maxX, maxY, maxZ);
+		},
+
+		[](sixfloats a, sixfloats b) {
+			auto [minXa, minYa, minZa, maxXa, maxYa, maxZa] = a;
+			auto [minXb, minYb, minZb, maxXb, maxYb, maxZb] = b;
+			return std::make_tuple(
+				std::min(minXa, minXb),
+				std::min(minYa, minYb),
+				std::min(minZa, minZb),
+				std::max(maxXa, maxXb),
+				std::max(maxYa, maxYb),
+				std::max(maxZa, maxZb)
+			);
+		}
+	);
+	auto [minX, minY, minZ, maxX, maxY, maxZ] = boundingbox;
+	Point midPoint((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
+
+	// Compute cell sizes
+	constexpr float numCells = static_cast<float>(1 << 16);
+	float cellSizeX = (maxX - minX) / numCells;
+	float cellSizeY = (maxY - minY) / numCells;
+	float cellSizeZ = (maxZ - minZ) / numCells;
+
+	// Make the cells slightly larger than the bounding box
+	cellSizeX = std::nextafterf(cellSizeX, INFINITY);
+	cellSizeY = std::nextafterf(cellSizeY, INFINITY);
+	cellSizeZ = std::nextafterf(cellSizeZ, INFINITY);
+
+	// Should be positive, eventually
+	assert(cellSizeX > 0.f);
+	assert(cellSizeY > 0.f);
+	assert(cellSizeZ > 0.f);
+
+	SDL_LOG(
+		"Merge On Distance - Bounding box = "
+		<< minX << " / " << maxX << "  "
+		<< minY << " / " << maxY << "  "
+		<< minZ << " / " << maxZ << "  "
+		<< "- cell size "
+		<< cellSizeX << " / " << cellSizeY << " / " << cellSizeZ
+	);
 
 	// Assign points to grid cells
-	std::unordered_map<int, std::vector<int>> grid;
+	GridType grid;
 	for (u_int i = 0; i < numPoints; ++i) {
-		int cellX = static_cast<int>(points[i].x / cellSize);
-		int cellY = static_cast<int>(points[i].y / cellSize);
-		int cellZ = static_cast<int>(points[i].z / cellSize);
-		int cellId = (cellX << 20) | (cellY << 10) | cellZ; // 10+10+10=30 ~ 32 bits
+		auto p = points[i] - midPoint;
+		auto cellX = static_cast<int16_t>(p.x / cellSizeX);
+		auto cellY = static_cast<int16_t>(p.y / cellSizeY);
+		auto cellZ = static_cast<int16_t>(p.z / cellSizeZ);
+
+		assert(cellX < (1 << 15));
+		assert(cellY < (1 << 15));
+		assert(cellZ < (1 << 15));
+
+		CellId cellId(cellX, cellY, cellZ);
 		grid[cellId].push_back(i);
 	}
 
-	// For each cell, compare points within the cell and adjacent cells
-	for (auto& [cellId, cellPoints] : grid) {
-		int cellX = (cellId >> 20) & 0x3FF;
-		int cellY = (cellId >> 10) & 0x3FF;
-		int cellZ = cellId & 0x3FF;
-
-		// Check adjacent cells
-		for (int dx = -1; dx <= 1; ++dx) {
-			for (int dy = -1; dy <= 1; ++dy) {
-				for (int dz = -1; dz <= 1; ++dz) {
-					int adjCellId = ((cellX + dx) << 20) | ((cellY + dy) << 10) | (cellZ + dz);
-					if (grid.find(adjCellId) == grid.end()) continue;
-
-					for (int i : cellPoints) {
-						for (int j : grid[adjCellId]) {
-							if (i >= j) continue; // Avoid duplicate checks
-							float dist = DistanceSquared(points[i], points[j]);
-							if (nearly_equal(dist, 0.f, 1)) {
-								dsu.unite(i, j);
-							}
-						}
-					}
-				}
+	// Debug
+#if 0
+	for (auto& [cellId, vect] : grid) {
+		if (vect.size()) {
+			for (auto v : vect) {
+				SDL_LOG("Cell " << cellId << ":  " << v << " (" << points[v] << ")");
 			}
 		}
 	}
+#endif
+
+	// For each cell, compare points within the cell and adjacent cells
+	// and gather points in small distance
+	ProcessGrid(grid, points, dsu);
 
 	// Group points by their root parent
 	std::unordered_map<u_int, std::vector<u_int>> clusters;
@@ -189,7 +358,6 @@ luxrays::ExtTriangleMesh* slg::MergeOnDistanceShape::ApplyMergeOnDistance(
 	// Compute cellSize
 	float cellSize = 10; // TODO
 
-	SDL_LOG("Enter ApplyMergeOnDistance");
 	// Get points
 	u_int numOldPoints = srcMesh->GetTotalVertexCount();
 	auto [newPoints, numNewPoints, pointMap, histogram] = mergePoints(
