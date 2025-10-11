@@ -29,6 +29,7 @@
 
 #include "oneapi/tbb.h"
 #include "oneapi/tbb/scalable_allocator.h"
+#include "oneapi/tbb/cache_aligned_allocator.h"
 
 #include "luxrays/core/exttrianglemesh.h"
 #include "slg/shapes/merge_on_distance.h"
@@ -190,15 +191,23 @@ namespace std {
 }
 
 namespace {
-using GridType = std::unordered_map<CellId, std::vector<u_int>>;
 
-UnionFind ProcessGrid(const GridType& grid, const Point* points, u_int numPoints) {
+struct alignas(std::hardware_destructive_interference_size)
+GridElem : public std::pair<u_int, luxrays::Point> {
+	GridElem(u_int id, const luxrays::Point& point)
+		: std::pair<u_int, luxrays::Point>(id, point) {}
+};
 
-	auto partitioner = tbb::affinity_partitioner();
+using GridBucket = std::vector<GridElem, tbb::cache_aligned_allocator<GridElem>>;
+using GridType = std::unordered_map<CellId, GridBucket>;
+
+UnionFind ProcessGrid(const GridType& grid, u_int numPoints) {
+
+	auto partitioner = tbb::auto_partitioner();
 
     auto res = tbb::parallel_reduce(
 		// Range
-        tbb::blocked_range<size_t>(0, grid.size(), grid.size()),
+        tbb::blocked_range<size_t>(0, grid.size()),
 
 		// Init
 		UnionFind(numPoints),
@@ -220,11 +229,10 @@ UnionFind ProcessGrid(const GridType& grid, const Point* points, u_int numPoints
                             auto adjIt = grid.find(adjCellId);
                             if (adjIt == grid.end()) continue;
 
-                            for (auto idx : cellPoints) {
-								Point curPoint(points[idx]);
-                                for (auto adjIdx : adjIt->second) {
+                            for (auto [idx, curPoint] : cellPoints) {
+                                for (auto [adjIdx, adjPoint] : adjIt->second) {
                                     if (idx >= adjIdx) continue;
-                                    auto dist = DistanceSquared(curPoint, points[adjIdx]);
+                                    auto dist = DistanceSquared(curPoint, adjPoint);
                                     if (nearly_equal(dist, 0.f)) {
                                         dsu.unite(idx, adjIdx);
                                     }
@@ -326,19 +334,15 @@ mergePoints(Point * points, u_int numPoints) {
 	);
 
 	// Assign points to grid cells
-	GridType grid;
+	GridType grid(numPoints);
 	for (u_int i = 0; i < numPoints; ++i) {
 		auto p = points[i] - midPoint;
 		auto cellX = static_cast<int16_t>(p.x / cellSizeX);
 		auto cellY = static_cast<int16_t>(p.y / cellSizeY);
 		auto cellZ = static_cast<int16_t>(p.z / cellSizeZ);
 
-		assert(cellX < (1 << 15));
-		assert(cellY < (1 << 15));
-		assert(cellZ < (1 << 15));
-
 		CellId cellId(cellX, cellY, cellZ);
-		grid[cellId].push_back(i);
+		grid[cellId].emplace_back(i, points[i]);
 	}
 
 	// Debug
@@ -355,7 +359,7 @@ mergePoints(Point * points, u_int numPoints) {
 	// For each cell, compare points within the cell and adjacent cells
 	// and gather points in small distance
 	SDL_LOG("Before process");
-	auto dsu = ProcessGrid(grid, points, numPoints);
+	auto dsu = ProcessGrid(grid, numPoints);
 	SDL_LOG("After process");
 
 	// Group points by their root parent
