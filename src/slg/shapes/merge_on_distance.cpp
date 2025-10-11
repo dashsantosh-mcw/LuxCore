@@ -26,6 +26,7 @@
 #include <unordered_map>
 #include <tuple>
 #include <format>
+#include <execution>
 
 #include "oneapi/tbb.h"
 #include "oneapi/tbb/scalable_allocator.h"
@@ -398,27 +399,67 @@ UnionFind ProcessGrid(const GridType& grid, u_int numPoints) {
 // Create point clusters
 tbb::concurrent_vector<std::vector<u_int, tbb::scalable_allocator<u_int>>>
 CreateClusters(const UnionFind& dsu, u_int numPoints) {
-	// Group equivalent points into clusters
-	tbb::concurrent_unordered_multimap<u_int, u_int> clusterMap(numPoints);
-	tbb::concurrent_set<u_int> keys;
-	tbb::parallel_for(
+	// Group equivalent points into map
+	using ClusterMap = std::unordered_multimap<
+		u_int,
+		u_int,
+		std::hash<u_int>,
+		std::equal_to<u_int>,
+		tbb::scalable_allocator<std::pair<const u_int, u_int>>
+	>;
+	using ClusterKeys = std::unordered_set<
+		u_int,
+		std::hash<u_int>,
+		std::equal_to<u_int>,
+		tbb::scalable_allocator<u_int>
+	>;
+	using ClusterMapAndKey = std::tuple<ClusterMap, ClusterKeys>;
+
+	auto [map, keys] = tbb::parallel_reduce(
+		// Range
 		tbb::blocked_range<u_int>(0, numPoints),
-		[&](const tbb::blocked_range<u_int>& r) {
+
+		// Init
+		std::tuple(ClusterMap(numPoints), ClusterKeys(numPoints)),
+
+		// Body
+		[&](const tbb::blocked_range<u_int>& r, ClusterMapAndKey&& mapkey)
+			-> ClusterMapAndKey
+		{
+			auto [map, keys] = mapkey;
 			for (u_int i = r.begin(); i != r.end(); ++i) {
 				auto clusterIndex = dsu.find_readonly(i);
-				keys.insert(clusterIndex);
-				clusterMap.emplace(clusterIndex, i);
+				keys.emplace(clusterIndex);
+				map.emplace(clusterIndex, i);
 			}
+			return std::tuple(map, keys);
+		},
+
+		// Reduce
+		[](ClusterMapAndKey&& mapkey1, const ClusterMapAndKey& mapkey2) -> ClusterMapAndKey
+		{
+			auto [map1, key1] = mapkey1;
+			const auto& [map2, key2] = mapkey2;
+
+			map1.insert(map2.cbegin(), map2.cend());
+			key1.insert(key2.cbegin(), key2.cend());
+
+			return std::tuple(map1, key1);
 		}
 	);
+
+	//std::sort(std::execution::par, keys.begin(), keys.end());
+	//auto last = std::unique(std::execution::par, keys.begin(), keys.end());
+	//keys.erase(last, keys.end());
+	SDL_LOG("Middle group");
+
 	// Get an array of clusters
 	tbb::concurrent_vector<std::vector<u_int, tbb::scalable_allocator<u_int>>> clusters;
-	clusters.reserve(clusterMap.size());
+	clusters.reserve(map.size());
 	tbb::parallel_for_each(
 		keys,
 		[&](const auto& key) {
-			const auto& [begin, end] = clusterMap.equal_range(key);
-			std::vector<u_int> cluster;
+			const auto& [begin, end] = map.equal_range(key);
 			auto new_cluster = clusters.emplace_back();
 			new_cluster->reserve(std::distance(begin, end));
 			for (auto it = begin; it != end; ++it) {
