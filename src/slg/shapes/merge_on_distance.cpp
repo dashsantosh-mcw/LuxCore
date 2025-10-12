@@ -166,7 +166,7 @@ std::ostream& operator<<(std::ostream& os, const UnionFind& uf) {
     return os;
 }
 
-// Cell Id, for grid indexing
+// Cell Id, for partition indexing
 union CellId {
 	CellId(int16_t x, int16_t y, int16_t z) {
 		i16[0] = 0;
@@ -204,23 +204,59 @@ namespace std {
 
 namespace {
 
-// Grid definition
+class Grid {
+public:
+	Grid(
+		const Point& p_origin,
+		float p_cellSizeX,
+		float p_cellSizeY,
+		float p_cellSizeZ
+	) :
+		m_origin(p_origin),
+		m_cellSizeX(p_cellSizeX),
+		m_cellSizeY(p_cellSizeY),
+		m_cellSizeZ(p_cellSizeZ)
+	{};
+
+	const Point& origin() const { return m_origin; }
+	const float cellSizeX() const { return m_cellSizeX; }
+	const float cellSizeY() const { return m_cellSizeY; }
+	const float cellSizeZ() const { return m_cellSizeZ; }
+
+private:
+	Point m_origin;
+	float m_cellSizeX, m_cellSizeY, m_cellSizeZ;
+
+};
+
+
+// Partition definition
 struct alignas(std::hardware_destructive_interference_size)
-GridElem : public std::pair<u_int, luxrays::Point> {
-	GridElem(u_int id, const luxrays::Point& point)
+PartitionElem : public std::pair<u_int, luxrays::Point> {
+	PartitionElem(u_int id, const luxrays::Point& point)
 		: std::pair<u_int, luxrays::Point>(id, point) {}
 };
 
-using GridBucket = std::vector<GridElem, tbb::cache_aligned_allocator<GridElem>>;
-using GridAllocator = tbb::scalable_allocator<std::pair<const CellId, GridBucket>>;
-using GridHash = std::hash<CellId>;
-using GridEqual = std::equal_to<CellId>;
-using GridType = std::unordered_map<CellId, GridBucket, GridHash, GridEqual, GridAllocator>;
+using PartitionBucket = std::vector<
+	PartitionElem,
+	tbb::cache_aligned_allocator<PartitionElem>
+>;
+using PartitionAllocator = tbb::scalable_allocator<
+	std::pair<const CellId, PartitionBucket>
+>;
+using PartitionHash = std::hash<CellId>;
+using PartitionEqual = std::equal_to<CellId>;
+using Partition = std::unordered_map<
+	CellId,
+	PartitionBucket,
+	PartitionHash,
+	PartitionEqual,
+	PartitionAllocator
+>;
 
 
-// Compute grid, ie origin point (or midPoint) and cell sizes on X, Y, Z
-std::tuple<Point, float, float, float>
-ComputeGrid(const Point * points, u_int numPoints) {
+// Compute partition, ie origin point (or midPoint) and cell sizes on X, Y, Z
+Grid ComputeGrid(const Point * points, u_int numPoints) {
 
 	constexpr float minlimit = std::numeric_limits<float>::min();
 	constexpr float maxlimit = std::numeric_limits<float>::max();
@@ -252,7 +288,7 @@ ComputeGrid(const Point * points, u_int numPoints) {
 		},
 
 		// Reduce
-		[](sixfloats&& a, sixfloats&& b) {
+		[](const sixfloats& a, const sixfloats& b) {
 			auto [minXa, minYa, minZa, maxXa, maxYa, maxZa] = a;
 			auto [minXb, minYb, minZb, maxXb, maxYb, maxZb] = b;
 			return std::make_tuple(
@@ -280,59 +316,54 @@ ComputeGrid(const Point * points, u_int numPoints) {
 	cellSizeY = std::nextafterf(cellSizeY, INFINITY);
 	cellSizeZ = std::nextafterf(cellSizeZ, INFINITY);
 
-	SDL_LOG("Merge On Distance: Grid dimensions - "
-		<< midPoint << " ("
+	SDL_LOG("Merge On Distance - Grid dimensions: Origin = "
+		<< midPoint << " Cell size = ("
 		<< cellSizeX << ", " << cellSizeY << ", " << cellSizeZ << ")"
 	)
 
-	return std::tuple(midPoint, cellSizeX, cellSizeY, cellSizeZ);
+	return Grid(midPoint, cellSizeX, cellSizeY, cellSizeZ);
 
 }
 
-
-GridType AssignPointsToGrid(
-	Point midPoint,
-	float cellSizeX,
-	float cellSizeY,
-	float cellSizeZ,
-	const Point * points,
-	u_int numPoints
+// Assign points to grid (make a partition)
+Partition AssignPointsToGrid(
+	const Grid& grid, const Point * points, u_int numPoints
 ) {
 	// Avoid tiny sets of data for body
 	constexpr size_t grain = 1024;
 
-	auto grid = tbb::parallel_reduce(
+	auto partition = tbb::parallel_reduce(
 		// Range
 		blocked_range<u_int>(0, numPoints, grain),
 
 		// Init
-		GridType(numPoints),
+		Partition(numPoints),
 
 		// Body
-		[&](const blocked_range<u_int>& r, GridType&& grid) -> GridType {
+		[&](const blocked_range<u_int>& r, Partition&& partition) -> Partition {
 			for (u_int i = r.begin(); i != r.end(); ++i) {
-				auto p = points[i] - midPoint;
-				auto cellX = static_cast<int16_t>(p.x / cellSizeX);
-				auto cellY = static_cast<int16_t>(p.y / cellSizeY);
-				auto cellZ = static_cast<int16_t>(p.z / cellSizeZ);
+				auto p = points[i] - grid.origin();
+				auto cellX = static_cast<int16_t>(p.x / grid.cellSizeX());
+				auto cellY = static_cast<int16_t>(p.y / grid.cellSizeY());
+				auto cellZ = static_cast<int16_t>(p.z / grid.cellSizeZ());
 
 				CellId cellId(cellX, cellY, cellZ);
-				grid[cellId].emplace_back(i, points[i]);
+				partition[cellId].emplace_back(i, points[i]);
 			}
-			return grid;
+			return partition;
 		},
 
 		// Reduce
-		[](GridType&& grid1, GridType&& grid2) -> GridType {
-			grid1.merge(grid2);
-			for (auto& [cellId, gridBucket2] : grid2) {
-				auto& gridBucket1 = grid1[cellId];
-				gridBucket1.reserve(gridBucket1.size() + gridBucket2.size());
-				gridBucket1.insert(
-					gridBucket1.end(), gridBucket2.begin(), gridBucket2.end()
+		[](Partition&& partition1, Partition&& partition2) -> Partition {
+			partition1.merge(partition2);
+			for (auto& [cellId, partitionBucket2] : partition2) {
+				auto& partitionBucket1 = partition1[cellId];
+				partitionBucket1.reserve(partitionBucket1.size() + partitionBucket2.size());
+				partitionBucket1.insert(
+					partitionBucket1.end(), partitionBucket2.begin(), partitionBucket2.end()
 				);
 			}
-			return grid1;
+			return partition1;
 		}
 	);
 
@@ -340,19 +371,21 @@ GridType AssignPointsToGrid(
 #if 0
 	size_t sup = 0;
 	size_t count = 0;
-	for (auto const& [key, value] : grid) {
+	for (auto const& [key, value] : partition) {
 		sup = std::max(value.size(), sup);
 		count += value.size();
 	}
 	SDL_LOG("Grid sup/total: " << sup << " " << count);
 #endif
 
-	return grid;
+	return partition;
 }
 
 
 // Gather similar points (located at zero distance from each others)
-UnionFind ProcessGrid(const GridType& grid, u_int numPoints) {
+// Points have previously been assigned to grid cells, so that we
+// just compare points within cells (saves a lot of time)
+UnionFind GroupPoints(const Partition& partition, u_int numPoints) {
 
 	auto partitioner = tbb::auto_partitioner();
 
@@ -360,7 +393,7 @@ UnionFind ProcessGrid(const GridType& grid, u_int numPoints) {
 #if 0
 	size_t sup = 0;
 	size_t count = 0;
-	for (auto const& [key, value] : grid) {
+	for (auto const& [key, value] : partition) {
 		sup = std::max(value.size(), sup);
 		count += value.size();
 	}
@@ -372,14 +405,14 @@ UnionFind ProcessGrid(const GridType& grid, u_int numPoints) {
 
     auto res = tbb::parallel_reduce(
 		// Range
-        tbb::blocked_range<size_t>(0, grid.size(), grain),
+        tbb::blocked_range<size_t>(0, partition.size(), grain),
 
 		// Init
 		UnionFind(numPoints),
 
 		// Body
-        [&grid](const tbb::blocked_range<size_t>& r, UnionFind&& dsu) -> UnionFind {
-            auto it = grid.begin();
+        [&partition](const tbb::blocked_range<size_t>& r, UnionFind&& dsu) -> UnionFind {
+            auto it = partition.begin();
             std::advance(it, r.begin());
             for (size_t i = r.begin(); i != r.end(); ++i, ++it) {
                 auto [cellId, cellPoints] = *it;
@@ -392,8 +425,8 @@ UnionFind ProcessGrid(const GridType& grid, u_int numPoints) {
                             CellId adjCellId(
 								cellId.x() + dx, cellId.y() + dy, cellId.z() + dz
 							);
-                            auto adjIt = grid.find(adjCellId);
-                            if (adjIt == grid.end()) continue;
+                            auto adjIt = partition.find(adjCellId);
+                            if (adjIt == partition.end()) continue;
 
 							// For each point in current cell and for each point
 							// in adjacent cell, compute distance
@@ -432,6 +465,7 @@ UnionFind ProcessGrid(const GridType& grid, u_int numPoints) {
 
 using Cluster = std::vector<u_int, tbb::scalable_allocator<u_int>>;
 using ClusterVector = std::vector<Cluster, tbb::scalable_allocator<Cluster>>;
+
 
 // Group points into clusters
 ClusterVector CreateClusters(const UnionFind& dsu, u_int numPoints) {
@@ -481,7 +515,8 @@ ClusterVector CreateClusters(const UnionFind& dsu, u_int numPoints) {
 		},
 
 		// Reduce
-		[](ClusterMapAndKey&& mapkey1, const ClusterMapAndKey& mapkey2) -> ClusterMapAndKey
+		[](ClusterMapAndKey&& mapkey1, const ClusterMapAndKey& mapkey2)
+			-> ClusterMapAndKey
 		{
 			auto [map1, keys1] = mapkey1;
 			const auto& [map2, keys2] = mapkey2;
@@ -495,8 +530,6 @@ ClusterVector CreateClusters(const UnionFind& dsu, u_int numPoints) {
 			return std::tuple(map1, keys1);
 		}
 	);
-
-	SDL_LOG("Middle group");
 
 	// Transform the previous structure into a vector of vectors
 
@@ -536,32 +569,43 @@ ClusterVector CreateClusters(const UnionFind& dsu, u_int numPoints) {
 
 
 // Merge point, with spatial partioning acceleration
-// This is the entry point of the algorithm
+// This is the entry point of the merging algorithm
 // Returns:
 // - The merged points (dynamic array)
 // - The number of merged points
 // - A map between old points and new points (vector)
-std::tuple<std::unique_ptr<Point>, u_int, std::vector<u_int>, std::vector<u_int>>
-mergePoints(const Point * points, u_int numPoints) {
+ClusterVector mergePoints(const Point * points, u_int numPoints) {
 
-	// Compute grid dimensions
-	auto [midPoint, cellSizeX, cellSizeY, cellSizeZ] = ComputeGrid(points, numPoints);
-	// Assign points to grid cells
-	// We could have written something smarter with tbb::unordered_multimap
-	// but it may not be worth spending time on that, as the most common
-	// use case should be to call it with low or medium poly
-	GridType grid{
-		AssignPointsToGrid(midPoint, cellSizeX, cellSizeZ, cellSizeZ, points, numPoints)
+	// Compute grid
+	Grid grid{ComputeGrid(points, numPoints)};
+
+	// Assign points to grids cells (in other words: partition)
+	Partition partition{
+		AssignPointsToGrid(grid, points, numPoints)
 	};
 
-
 	// For each cell, compare points within the cell and adjacent cells
-	// and gather points in small distance
-	UnionFind dsu{ProcessGrid(grid, numPoints)};
+	// and gather points at small distance from each others
+	UnionFind dsu{GroupPoints(partition, numPoints)};
 
+	// Finally, reformat result into convenient cluster format
+	// (vector of vectors)
 	ClusterVector clusters{CreateClusters(dsu, numPoints)};
 
-	// Replace each cluster with its centroid
+	return clusters;
+
+}
+
+
+// Recreate a mesh, based on a source mesh and a clusterisation
+luxrays::ExtTriangleMesh* RecreateMesh(
+	const luxrays::ExtTriangleMesh& srcMesh,
+	const ClusterVector& clusters
+) {
+	// Replace each variable with interpolated value
+	auto numPoints = srcMesh.GetTotalVertexCount();
+	auto points = srcMesh.GetVertices();
+
 	auto numNewPoints = clusters.size();
 	std::vector<u_int> pointMap(numPoints);
 	std::unique_ptr<Point> newPoints{
@@ -569,7 +613,6 @@ mergePoints(const Point * points, u_int numPoints) {
 	};
 
 	auto newPointsPtr = newPoints.get();
-	std::vector<u_int> histogram(numPoints);
 
 	// Avoid tiny sets of data for body
 	constexpr size_t grain = 1024;
@@ -596,69 +639,51 @@ mergePoints(const Point * points, u_int numPoints) {
 					[&points](auto idx) -> Point { return points[idx]; }
 				) / cluster_size;
 
-				histogram[newIdx] = cluster_size;
 				newPointsPtr[newIdx] = newPoint;
+
+				//// Recompute normals
+				//std::unique_ptr<luxrays::Normal> newNormals;
+				//if (srcMesh->HasNormals()) {
+					//auto oldNormals = srcMesh->GetNormals();
+					//newNormals.reset(new luxrays::Normal[numNewPoints]);
+					//for (u_int i = 0; i < numOldPoints; ++i) {
+						//newNormals.get()[pointMap[i]] += oldNormals[i];
+					//}
+					//for (u_int j = 0; j < numNewPoints; ++j) {
+						//auto newNormal = newNormals.get()[j];
+						//newNormal /= newNormal.Length();
+					//}
+				//}
+				// Recompute uv
+				// Recompute colors
+				// Recompute alphas
+				// Recompute AOV
+
 			}
 		}
 	);
 
-	auto out = std::make_tuple(
-		std::move(newPoints),
-		numNewPoints,
-		pointMap,
-		histogram
-	);
-	return out;
-}
-} // namespace
-
-
-luxrays::ExtTriangleMesh* slg::MergeOnDistanceShape::ApplyMergeOnDistance(
-	luxrays::ExtTriangleMesh * srcMesh
-) {
-	const double startTime = WallClockTime();
-
-	// Get merged points
-	u_int numOldPoints = srcMesh->GetTotalVertexCount();
-	auto [newPoints, numNewPoints, pointMap, histogram] = mergePoints(
-		srcMesh->GetVertices(),
-		numOldPoints
-	);
-
 	// Recompute triangles
-	u_int numTriangles = srcMesh->GetTotalTriangleCount();
-	auto oldTriangles = srcMesh->GetTriangles();
+	u_int numTriangles = srcMesh.GetTotalTriangleCount();
+	auto oldTriangles = srcMesh.GetTriangles();
 	auto newTriangles = std::unique_ptr<luxrays::Triangle>(
 		luxrays::ExtTriangleMesh::AllocTrianglesBuffer(numTriangles)
 	);
 	auto newTrianglesPtr = newTriangles.get();
-	for (u_int i = 0; i < numTriangles; ++i) {
-		auto oldTriangle = oldTriangles[i];
-		auto newTriangle = luxrays::Triangle(
-			pointMap[oldTriangle.v[0]],
-			pointMap[oldTriangle.v[1]],
-			pointMap[oldTriangle.v[2]]
-		);
-		newTrianglesPtr[i] = newTriangle;
-	}
-
-	//// Recompute normals
-	//std::unique_ptr<luxrays::Normal> newNormals;
-	//if (srcMesh->HasNormals()) {
-		//auto oldNormals = srcMesh->GetNormals();
-		//newNormals.reset(new luxrays::Normal[numNewPoints]);
-		//for (u_int i = 0; i < numOldPoints; ++i) {
-			//newNormals.get()[pointMap[i]] += oldNormals[i];
-		//}
-		//for (u_int j = 0; j < numNewPoints; ++j) {
-			//auto newNormal = newNormals.get()[j];
-			//newNormal /= newNormal.Length();
-		//}
-	//}
-	// Recompute uv
-	// Recompute colors
-	// Recompute alphas
-	// Recompute AOV
+	tbb::parallel_for(
+		tbb::blocked_range<u_int>(0, numTriangles),
+		[&](const tbb::blocked_range<u_int>& r) {
+			for (u_int i = r.begin(); i != r.end(); ++i) {
+				auto oldTriangle = oldTriangles[i];
+				auto newTriangle = luxrays::Triangle(
+					pointMap[oldTriangle.v[0]],
+					pointMap[oldTriangle.v[1]],
+					pointMap[oldTriangle.v[2]]
+				);
+				newTrianglesPtr[i] = newTriangle;
+			}
+		}
+	);
 
 	auto newMesh = new luxrays::ExtTriangleMesh(
 		numNewPoints,
@@ -672,23 +697,53 @@ luxrays::ExtTriangleMesh* slg::MergeOnDistanceShape::ApplyMergeOnDistance(
 		0.f
 	);
 
+	return newMesh;
+}
+
+
+
+} // namespace
+
+
+namespace slg {
+
+luxrays::ExtTriangleMesh*
+MergeOnDistanceShape::ApplyMergeOnDistance(luxrays::ExtTriangleMesh * srcMesh) {
+
+	const double startTime = WallClockTime();
+
+	// Get merged points
+	auto clusters = mergePoints(
+		srcMesh->GetVertices(),
+		srcMesh->GetTotalVertexCount()
+	);
+
+	auto dstMesh = RecreateMesh(*srcMesh, clusters);
+
+
 	SDL_LOG(
 		"Merge On Distance - Reducing from "
 		<< srcMesh->GetTotalVertexCount()
 		<< " to "
-		<< numNewPoints
+		<< dstMesh->GetTotalVertexCount()
 		<< " vertices"
 	);
 
 	const double endTime = WallClockTime();
-	SDL_LOG(std::format("Merging time: {:.3f} secs", endTime - startTime));
+	SDL_LOG(
+		std::format(
+			"Merge On Distance - Merging time: {:.3f} secs", endTime - startTime
+		)
+	);
 
-	return newMesh;
+	return dstMesh;
 }
 
 luxrays::ExtTriangleMesh *
-slg::MergeOnDistanceShape::RefineImpl(const slg::Scene *scene) {
+MergeOnDistanceShape::RefineImpl(const slg::Scene *scene) {
 	return mesh;
 }
+
+}  // namespace slg
 
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4
