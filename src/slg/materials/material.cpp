@@ -200,6 +200,7 @@ Properties Material::ToProperties(const ImageMapCache &imgMapCache, const bool u
 	if (backTransparencyTex)
 		props.Set(Property("scene.materials." + name + ".transparency.back")(backTransparencyTex->GetSDLValue()));
 	props.Set(Property("scene.materials." + name + ".transparency.shadow")(passThroughShadowTransparency));
+	props.Set(Property("scene.materials." + name + ".transparency.shadowoverride")(passThroughShadowTransparencyOverride));
 	props.Set(Property("scene.materials." + name + ".id")(matID));
 
 	props.Set(Property("scene.materials." + name + ".emission.gain")(emittedGain));
