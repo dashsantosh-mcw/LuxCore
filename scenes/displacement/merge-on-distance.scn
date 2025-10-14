@@ -40,6 +40,7 @@ scene.shapes.Unnamed#Box_mesh.ply = "merge-on-distance/b0da7550d6fe3e6a88c266e7c
 
 scene.shapes.Merged.type = mergeondistance
 scene.shapes.Merged.source = Unnamed#Box_mesh
+scene.shapes.Merged.tolerance = 1
 
 scene.shapes.Subdivided.type = subdiv
 scene.shapes.Subdivided.source = Merged

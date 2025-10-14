@@ -389,8 +389,21 @@ ExtTriangleMesh *Scene::CreateShape(const string &shapeName, const Properties &p
 	} else if (shapeType == "mergeondistance") {
 		const string sourceMeshName = props.Get(Property(propName + ".source")("")).Get<string>();
 		if (!extMeshCache.IsExtMeshDefined(sourceMeshName))
-			throw runtime_error("Unknown shape name in a mergeondistance shape: " + shapeName);
-		shape = new MergeOnDistanceShape((ExtTriangleMesh *)extMeshCache.GetExtMesh(sourceMeshName));
+			throw runtime_error(
+				"Unknown source shape name '" + sourceMeshName + "'"
+				+ "in mergeondistance shape '" + shapeName + "'"
+			);
+
+		const u_int tolerance = Clamp(
+			props.Get(Property(propName + ".tolerance")(1)).Get<u_int>(),
+			1u,
+			std::numeric_limits<u_int>::max()
+		);
+
+		shape = new MergeOnDistanceShape(
+			(ExtTriangleMesh *)extMeshCache.GetExtMesh(sourceMeshName),
+			tolerance
+		);
 	} else
 
 		throw runtime_error("Unknown shape type: " + shapeType);

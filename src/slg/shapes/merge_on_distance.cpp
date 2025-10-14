@@ -49,12 +49,12 @@ bool nearly_equal(float a, float b)
 		&& std::nextafter(a, std::numeric_limits<float>::max()) >= b;
 }
 
-bool nearly_equal(float a, float b, int factor /* a factor of epsilon */)
+bool nearly_equal(float a, float b, u_int tolerance /* a factor of epsilon */)
 {
-	float min_a = a - (a - std::nextafter(a, std::numeric_limits<float>::lowest())) * factor;
-	float max_a = a + (std::nextafter(a, std::numeric_limits<float>::max()) - a) * factor;
+	float min_a = a - (a - std::nextafter(a, std::numeric_limits<float>::lowest())) * tolerance;
+	float max_a = a + (std::nextafter(a, std::numeric_limits<float>::max()) - a) * tolerance;
 
-	return min_a <= b && max_a >= b;
+	return min_a <= b && b <= max_a;
 }
 
 
@@ -399,7 +399,8 @@ Partition AssignPointsToGrid(
 // each others)
 // Points have previously been assigned to grid cells, so that we
 // just compare points within same cells (saves a lot of time)
-UnionFind GroupPoints(const Partition& partition, u_int numPoints) {
+// 'tolerance' is a parameter for float comparison
+UnionFind GroupPoints(const Partition& partition, u_int numPoints, u_int tolerance) {
 
 	auto partitioner = tbb::auto_partitioner();
 
@@ -425,7 +426,9 @@ UnionFind GroupPoints(const Partition& partition, u_int numPoints) {
 		UnionFind(numPoints),
 
 		// Body
-        [&partition](const tbb::blocked_range<size_t>& r, UnionFind&& dsu) -> UnionFind {
+        [&partition, tolerance](const tbb::blocked_range<size_t>& r, UnionFind&& dsu)
+			-> UnionFind
+		{
             auto it = partition.begin();
             std::advance(it, r.begin());
             for (size_t i = r.begin(); i != r.end(); ++i, ++it) {
@@ -448,7 +451,7 @@ UnionFind GroupPoints(const Partition& partition, u_int numPoints) {
                                 for (auto [adjIdx, adjPoint] : adjIt->second) {
                                     if (idx >= adjIdx) continue;
                                     auto dist = DistanceSquared(curPoint, adjPoint);
-                                    if (nearly_equal(dist, 0.f)) {
+                                    if (nearly_equal(dist, 0.f, tolerance)) {
                                         dsu.unite(idx, adjIdx);
                                     }
                                 }
@@ -594,7 +597,7 @@ ClusterVector CreateClusters(const UnionFind& dsu, u_int numPoints) {
 // Returns:
 // - The merged points, in the form of clusters (vector of vectors)
 //
-ClusterVector mergePoints(const Point * points, u_int numPoints) {
+ClusterVector mergePoints(const Point * points, u_int numPoints, u_int tolerance) {
 
 	// Compute grid for spatial partitioning
 	Grid grid{ComputeGrid(points, numPoints)};
@@ -605,9 +608,9 @@ ClusterVector mergePoints(const Point * points, u_int numPoints) {
 	};
 
 	// For each cell, compare points within the cell and adjacent cells
-	// and gather points at small distance from each others.
+	// and gather points at (nearly) zero distance from each others.
 	// Gathering is made via a Union Find algo
-	UnionFind dsu{GroupPoints(partition, numPoints)};
+	UnionFind dsu{GroupPoints(partition, numPoints, tolerance)};
 
 	// Finally, reformat result into convenient cluster format (vector of
 	// vectors)
@@ -881,13 +884,16 @@ luxrays::ExtTriangleMesh* RecreateMesh(
 
 namespace slg {
 
-MergeOnDistanceShape::MergeOnDistanceShape(luxrays::ExtTriangleMesh * srcMesh) {
+MergeOnDistanceShape::MergeOnDistanceShape(
+	luxrays::ExtTriangleMesh * srcMesh,
+	u_int tolerance
+) {
 
 	SDL_LOG("Merge On Distance - Applying to " << srcMesh->GetName());
 
 	const double startTime = WallClockTime();
 
-	mesh = ApplyMergeOnDistance(srcMesh);
+	mesh = ApplyMergeOnDistance(srcMesh, tolerance);
 
 	const double endTime = WallClockTime();
 	SDL_LOG(
@@ -903,13 +909,17 @@ MergeOnDistanceShape::~MergeOnDistanceShape() {
 }
 
 luxrays::ExtTriangleMesh*
-MergeOnDistanceShape::ApplyMergeOnDistance(luxrays::ExtTriangleMesh * srcMesh) {
+MergeOnDistanceShape::ApplyMergeOnDistance(
+	luxrays::ExtTriangleMesh * srcMesh,
+	u_int tolerance
+) {
 
 
 	// Get merged points
 	auto clusters = mergePoints(
 		srcMesh->GetVertices(),
-		srcMesh->GetTotalVertexCount()
+		srcMesh->GetTotalVertexCount(),
+		tolerance
 	);
 
 	auto dstMesh = RecreateMesh(*srcMesh, clusters);
