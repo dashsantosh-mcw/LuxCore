@@ -43,25 +43,62 @@ using namespace oneapi::tbb;
 
 namespace {
 
-bool nearly_equal(float a, float b)
-{
-	return std::nextafter(a, std::numeric_limits<float>::lowest()) <= b
-		&& std::nextafter(a, std::numeric_limits<float>::max()) >= b;
-}
+	//TODO
+//bool nearly_equal(float a, float b)
+//{
+	//return std::nextafter(a, std::numeric_limits<float>::lowest()) <= b
+		//&& std::nextafter(a, std::numeric_limits<float>::max()) >= b;
+//}
 
-bool nearly_equal(float a, float b, u_int tolerance /* a factor of epsilon */)
-{
-	float min_a = a - (a - std::nextafter(a, std::numeric_limits<float>::lowest())) * tolerance;
-	float max_a = a + (std::nextafter(a, std::numeric_limits<float>::max()) - a) * tolerance;
+//bool nearly_equal(float a, float b, u_int tolerance [> a factor of epsilon <])
+//{
+	//float min_a = a - (a - std::nextafter(a, std::numeric_limits<float>::lowest())) * tolerance;
+	//float max_a = a + (std::nextafter(a, std::numeric_limits<float>::max()) - a) * tolerance;
 
-	return min_a <= b && b <= max_a;
-}
+	//return min_a <= b && b <= max_a;
+//}
 
-float distance(const luxrays::Point& p1, const luxrays::Point& p2) {
-	float m0 = std::fabs(p2[0] - p1[0]);
-	float m1 = std::fabs(p2[1] - p1[1]);
-	float m2 = std::fabs(p2[2] - p1[2]);
-	return std::max({m0, m1, m2});
+//float distance(const luxrays::Point& p1, const luxrays::Point& p2) {
+	//float m0 = std::fabs(p2[0] - p1[0]);
+	//float m1 = std::fabs(p2[1] - p1[1]);
+	//float m2 = std::fabs(p2[2] - p1[2]);
+	//return std::max({m0, m1, m2});
+//}
+
+
+class NearlyEqualComparator {
+public:
+
+	explicit NearlyEqualComparator(unsigned int tolerance) :
+		boundmin(minus_epsilon * float(tolerance)),
+		boundmax(plus_epsilon * float(tolerance))
+	{}
+	inline bool compare(const float a, const float b) const {
+		auto delta = b - a;
+		return (boundmin <= delta and delta <= boundmax);
+	}
+
+private:
+	inline static const float minus_epsilon =
+		std::nextafter(0.f, std::numeric_limits<float>::lowest());
+
+	inline static const float plus_epsilon =
+		std::nextafter(0.f, std::numeric_limits<float>::max());
+
+	const float boundmin;
+	const float boundmax;
+};
+
+
+inline bool compare_points(
+	const luxrays::Point& p1,
+	const luxrays::Point& p2,
+	const NearlyEqualComparator& comparator
+) {
+	bool m0 = comparator.compare(p1[0], p2[0]);
+	bool m1 = comparator.compare(p1[1], p2[1]);
+	bool m2 = comparator.compare(p1[2], p2[2]);
+	return m0 && m1 && m2;
 }
 
 
@@ -320,11 +357,13 @@ Grid ComputeGrid(const Point * points, u_int numPoints) {
 
 // The partition object (and subobjects)
 
-// Partition element: a point number and its coordinates
+using PartitionPoint = std::pair<u_int, luxrays::Point>;
+
+// Partition element: a point number and its coordinates, padded and aligned
 struct alignas(std::hardware_destructive_interference_size)
-PartitionElem : public std::pair<u_int, luxrays::Point> {
+PartitionElem : public PartitionPoint {
 	PartitionElem(u_int id, const luxrays::Point point)
-		: std::pair<u_int, luxrays::Point>(id, point) {}
+		: PartitionPoint(id, point) {}
 };
 
 using PartitionBucket = std::vector<
@@ -427,6 +466,7 @@ class PointGrouping {
 	u_int numPoints;
 	static constexpr size_t grain = 0;  // TODO
 	static constexpr auto ADJACENCY = adjacency();
+	NearlyEqualComparator comparator;
 
 public:
 
@@ -437,6 +477,7 @@ public:
 		partition(p_partition),
 		tolerance(p_tolerance),
 		numPoints(p_numPoints),
+		comparator(NearlyEqualComparator(p_tolerance)),
 		dsu(UnionFind(numPoints))
 	{}
 
@@ -445,6 +486,7 @@ public:
 		partition(x.partition),
 		tolerance(x.tolerance),
 		numPoints(x.numPoints),
+		comparator(x.comparator),
 		dsu(UnionFind(numPoints))
 	{}
 
@@ -467,15 +509,15 @@ public:
 
 					// For each point in current cell and for each point
 					// in adjacent cell, compute distance
-						for (auto& [adjIdx, adjPoint] : adjPoints) {
-							if (idx >= adjIdx) continue;
-							auto dist = distance(curPoint, adjPoint);
-							if (nearly_equal(dist, 0.f, tolerance)) {
-								dsu.unite(idx, adjIdx);
-							}
+					for (auto& [adjIdx, adjPoint] : adjPoints) {
+						if (idx >= adjIdx) continue;
+						bool are_equivalent = compare_points(curPoint, adjPoint, comparator);
+						if (are_equivalent) {
+							dsu.unite(idx, adjIdx);
 						}
-					}  // for dx, dy, dz
-				}
+					}
+				}  // for dx, dy, dz
+			}
 		}  // for i
 	}  // operator()
 
