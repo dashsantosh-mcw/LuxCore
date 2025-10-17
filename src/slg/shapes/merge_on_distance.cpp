@@ -50,15 +50,15 @@ namespace {
 class NearlyEqualComparator {
 public:
 
-	explicit NearlyEqualComparator(unsigned int tolerance) :
+	explicit NearlyEqualComparator(const unsigned int tolerance) :
 		boundmin(minus_epsilon * float(tolerance)),
 		boundmax(plus_epsilon * float(tolerance))
 	{}
 	inline bool compare(const float a, const float b) const {
-		float delta1 = b - a;
-		float delta2 = a - b;
-		bool res1 = (boundmin <= delta1 and delta1 <= boundmax);
-		bool res2 = (boundmin <= delta2 and delta2 <= boundmax);
+		const float delta1 = b - a;
+		const float delta2 = a - b;
+		const bool res1 = (boundmin <= delta1 and delta1 <= boundmax);
+		const bool res2 = (boundmin <= delta2 and delta2 <= boundmax);
 		return res1 or res2;
 	}
 
@@ -79,9 +79,9 @@ inline bool compare_points(
 	const luxrays::Point& p2,
 	const NearlyEqualComparator& comparator
 ) {
-	bool m0 = comparator.compare(p1[0], p2[0]);
-	bool m1 = comparator.compare(p1[1], p2[1]);
-	bool m2 = comparator.compare(p1[2], p2[2]);
+	const bool m0 = comparator.compare(p1[0], p2[0]);
+	const bool m1 = comparator.compare(p1[1], p2[1]);
+	const bool m2 = comparator.compare(p1[2], p2[2]);
 	return m0 && m1 && m2;
 }
 
@@ -89,7 +89,7 @@ inline bool compare_points(
 class alignas(std::hardware_destructive_interference_size) UnionFind {
 public:
     UnionFind() {}
-    explicit UnionFind(size_t count) {
+    explicit UnionFind(const size_t count) {
 		reserve(count);
 	}
 	UnionFind(const UnionFind& other) :
@@ -112,7 +112,7 @@ public:
 	}
 
     // Find the root of the set containing element i
-    u_int find(u_int i) {
+    u_int find(const u_int i) {
         if (parent.find(i) == parent.end()) {
             parent[i] = i;
             rank[i] = 0;
@@ -124,9 +124,9 @@ public:
     }
 
     // Union the sets containing elements i and j
-    void unite(u_int i, u_int j) {
-        u_int rootI = find(i);
-        u_int rootJ = find(j);
+    void unite(const u_int i, const u_int j) {
+        const u_int rootI = find(i);
+        const u_int rootJ = find(j);
 
         if (rootI != rootJ) {
             // Union by rank
@@ -142,7 +142,7 @@ public:
     }
 
 	// Reserve space
-	void reserve(size_t count) {
+	void reserve(const size_t count) {
 		parent.reserve(count);
 		rank.reserve(count);
 	}
@@ -157,12 +157,12 @@ public:
         return (*this);
     }
 
-	size_t size() {
+	size_t size() const {
 		return parent.size();
 	}
 
 	// Find without compression
-	u_int find_readonly(u_int i) const {
+	u_int find_readonly(const u_int i) const {
 		auto res = parent.find(i);
         if (res != parent.end()) {
 			return res->second;
@@ -199,13 +199,13 @@ std::ostream& operator<<(std::ostream& os, const UnionFind& uf) {
 // - 3-uple of signed int 16
 // - an unsigned int 64 (with first 16 bits set to zero)
 union CellId {
-	CellId(int16_t x, int16_t y, int16_t z) {
+	CellId(const int16_t x, const int16_t y, const int16_t z) {
 		i16[0] = 0;
 		i16[1] = x;
 		i16[2] = y;
 		i16[3] = z;
 	}
-	CellId(uint64_t id) : u64(id) {
+	CellId(const uint64_t id) : u64(id) {
 		if (i16[0]) {
 			throw std::runtime_error("Invalid CellId");
 		}
@@ -280,8 +280,8 @@ public:
 	const float cellSizeZ() const { return m_cellSizeZ; }
 
 private:
-	Point m_origin;
-	float m_cellSizeX, m_cellSizeY, m_cellSizeZ;
+	const Point m_origin;
+	const float m_cellSizeX, m_cellSizeY, m_cellSizeZ;
 
 };
 
@@ -322,8 +322,8 @@ Grid ComputeGrid(const Point * points, u_int numPoints) {
 
 		// Reduce
 		[](const sixfloats& a, const sixfloats& b) {
-			auto [minXa, minYa, minZa, maxXa, maxYa, maxZa] = a;
-			auto [minXb, minYb, minZb, maxXb, maxYb, maxZb] = b;
+			const auto [minXa, minYa, minZa, maxXa, maxYa, maxZa] = a;
+			const auto [minXb, minYb, minZb, maxXb, maxYb, maxZb] = b;
 			return std::make_tuple(
 				std::min(minXa, minXb),
 				std::min(minYa, minYb),
@@ -335,7 +335,7 @@ Grid ComputeGrid(const Point * points, u_int numPoints) {
 		}
 	);
 
-	auto [minX, minY, minZ, maxX, maxY, maxZ] = boundingbox;
+	const auto [minX, minY, minZ, maxX, maxY, maxZ] = boundingbox;
 	Point midPoint((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
 
 	// Compute cell sizes
@@ -404,13 +404,15 @@ Partition AssignPointsToGrid(
 		// Body
 		[&](const blocked_range<u_int>& r, Partition&& partition) -> Partition {
 			for (u_int i = r.begin(); i != r.end(); ++i) {
-				auto p = points[i] - grid.origin();
-				auto cellX = static_cast<int16_t>(p.x / grid.cellSizeX());
-				auto cellY = static_cast<int16_t>(p.y / grid.cellSizeY());
-				auto cellZ = static_cast<int16_t>(p.z / grid.cellSizeZ());
+				const auto point = points[i];
 
-				CellId cellId(cellX, cellY, cellZ);
-				partition[cellId].emplace_back(i, points[i]);
+				const auto p = point - grid.origin();
+				const auto cellX = static_cast<int16_t>(p.x / grid.cellSizeX());
+				const auto cellY = static_cast<int16_t>(p.y / grid.cellSizeY());
+				const auto cellZ = static_cast<int16_t>(p.z / grid.cellSizeZ());
+				const CellId cellId(cellX, cellY, cellZ);
+
+				partition[cellId].emplace_back(i, point);
 			}
 			return partition;
 		},
@@ -418,7 +420,7 @@ Partition AssignPointsToGrid(
 		// Reduce
 		[](Partition&& partition1, Partition&& partition2) -> Partition {
 			partition1.merge(partition2);
-			for (auto& [cellId, partitionBucket2] : partition2) {
+			for (const auto& [cellId, partitionBucket2] : partition2) {
 				auto& partitionBucket1 = partition1[cellId];
 				partitionBucket1.reserve(partitionBucket1.size() + partitionBucket2.size());
 				partitionBucket1.insert(
@@ -430,7 +432,7 @@ Partition AssignPointsToGrid(
 	);
 
 	// Debug
-#if 1
+#if 0
 	size_t sup = 0;
 	size_t count = 0;
 	for (auto const& [key, value] : partition) {
@@ -465,8 +467,8 @@ constexpr std::array<std::array<int, 3>, 27> adjacency() {
 // 'tolerance' is a parameter for float comparison
 class PointGrouping {
 	const Partition& partition;
-	NearlyEqualComparator& comparator;
-	u_int numPoints;
+	const NearlyEqualComparator& comparator;
+	const u_int numPoints;
 	static constexpr auto ADJACENCY = adjacency();
 
 public:
@@ -476,7 +478,7 @@ public:
 	// Constructor (plain)
 	PointGrouping(
 		const Partition& p_partition,
-		NearlyEqualComparator p_comparator,
+		const NearlyEqualComparator& p_comparator,
 		u_int p_numPoints
 	) :
 		partition(p_partition),
@@ -498,22 +500,22 @@ public:
 		auto it = partition.begin();
 		std::advance(it, r.begin());
 		for (auto i = r.begin(); i != r.end(); ++i, ++it) {
-			auto& [cellId, cellPoints] = *it;
+			const auto& [cellId, cellPoints] = *it;
 
-			for (auto& [idx, curPoint] : cellPoints) {
+			for (const auto& [idx, curPoint] : cellPoints) {
 				// Check adjacent cells
-				for (auto [dx, dy, dz] : ADJACENCY) {
+				for (const auto [dx, dy, dz] : ADJACENCY) {
 					// Skip out-of-bound cells
 					if (cellId.out_of_bound(dx, dy, dz)) continue;
-					CellId adjCellId(cellId, dx, dy, dz);
+					const CellId adjCellId(cellId, dx, dy, dz);
 
-					auto adjIt = partition.find(adjCellId);
+					const auto adjIt = partition.find(adjCellId);
 					if (adjIt == partition.end()) continue;
-					auto& adjPoints = adjIt->second;
+					const auto& adjPoints = adjIt->second;
 
 					// For each point in current cell and for each point
 					// in adjacent cell, compute distance
-					for (auto& [adjIdx, adjPoint] : adjPoints) {
+					for (const auto& [adjIdx, adjPoint] : adjPoints) {
 						if (idx >= adjIdx) continue;
 						if (compare_points(curPoint, adjPoint, comparator)) {
 							dsu.unite(idx, adjIdx);
@@ -552,7 +554,7 @@ UnionFind GroupPoints(const Partition& partition, u_int numPoints, u_int toleran
 
 	// Avoid tiny sets of data for body
 	//constexpr size_t grain = 1024;
-	constexpr size_t grain = 512;
+	constexpr size_t grain = 1024;
 	const auto partition_size = partition.size();
 	const NearlyEqualComparator comparator(tolerance);
 
@@ -591,7 +593,7 @@ ClusterVector CreateClusters(const UnionFind& dsu, u_int numPoints) {
 	constexpr size_t grain = 1024;
 
 	// Get clusters as a multimap and a set of keys
-	auto [map, keys] = tbb::parallel_reduce(
+	const auto [map, keys] = tbb::parallel_reduce(
 		// Range
 		tbb::blocked_range<u_int>(0, numPoints, grain),
 
@@ -620,7 +622,7 @@ ClusterVector CreateClusters(const UnionFind& dsu, u_int numPoints) {
 		[](ClusterMapAndKey&& mapkey1, const ClusterMapAndKey& mapkey2)
 			-> ClusterMapAndKey
 		{
-			auto [map1, keys1] = mapkey1;
+			auto& [map1, keys1] = mapkey1;
 			const auto& [map2, keys2] = mapkey2;
 
 			map1.reserve(map1.size() + map2.size());
@@ -635,7 +637,7 @@ ClusterVector CreateClusters(const UnionFind& dsu, u_int numPoints) {
 
 	// Transform the previous structure into a vector of vectors
 
-	auto clusters = tbb::parallel_reduce(
+	const auto clusters = tbb::parallel_reduce(
 		// Range
 		tbb::blocked_range<size_t>(0, keys.size(), grain),
 
@@ -685,11 +687,11 @@ ClusterVector CreateClusters(const UnionFind& dsu, u_int numPoints) {
 ClusterVector mergePoints(const Point * points, u_int numPoints, u_int tolerance) {
 
 	// Compute grid for spatial partitioning
-	Grid grid{ComputeGrid(points, numPoints)};
+	const Grid grid{ComputeGrid(points, numPoints)};
 	SDL_LOG("After grid");
 
 	// Assign points to grids cells (in other words: partition)
-	Partition partition{
+	const Partition partition{
 		AssignPointsToGrid(grid, points, numPoints)
 	};
 	SDL_LOG("After partition");
@@ -697,12 +699,12 @@ ClusterVector mergePoints(const Point * points, u_int numPoints, u_int tolerance
 	// For each cell, compare points within the cell and adjacent cells
 	// and gather points at (nearly) zero distance from each others.
 	// Gathering is made via a Union Find algo
-	UnionFind dsu{GroupPoints(partition, numPoints, tolerance)};
+	const UnionFind dsu{GroupPoints(partition, numPoints, tolerance)};
 	SDL_LOG("After group");
 
 	// Finally, reformat result into convenient cluster format (vector of
 	// vectors)
-	ClusterVector clusters{CreateClusters(dsu, numPoints)};
+	const ClusterVector clusters{CreateClusters(dsu, numPoints)};
 	SDL_LOG("After cluster");
 
 	return clusters;
