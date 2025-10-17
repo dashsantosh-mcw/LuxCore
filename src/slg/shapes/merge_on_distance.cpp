@@ -569,103 +569,64 @@ UnionFind GroupPoints(const Partition& partition, u_int numPoints, u_int toleran
 
 
 using Cluster = std::vector<u_int, tbb::scalable_allocator<u_int>>;
-using ClusterVector = std::vector<Cluster, tbb::scalable_allocator<Cluster>>;
+
+using ClusterMap = std::unordered_map<
+	u_int,
+	Cluster,
+	std::hash<u_int>,
+	std::equal_to<u_int>,
+	tbb::scalable_allocator<std::pair<const u_int, Cluster>>
+>;
 
 // Group equivalent points into clusters
-ClusterVector CreateClusters(const UnionFind& dsu, u_int numPoints) {
-	// Group equivalent points into map
-	using ClusterMap = std::unordered_multimap<
-		u_int,
-		u_int,
-		std::hash<u_int>,
-		std::equal_to<u_int>,
-		tbb::scalable_allocator<std::pair<const u_int, u_int>>
-	>;
-	using ClusterKeys = std::unordered_set<
-		u_int,
-		std::hash<u_int>,
-		std::equal_to<u_int>,
-		tbb::scalable_allocator<u_int>
-	>;
-	using ClusterMapAndKey = std::tuple<ClusterMap, ClusterKeys>;
-
+ClusterMap CreateClusters(const UnionFind& dsu, u_int numPoints) {
 	// Avoid tiny sets of data for body
 	constexpr size_t grain = 1024;
 
-	// Get clusters as a multimap and a set of keys
-	const auto [map, keys] = tbb::parallel_reduce(
+	// Get clusters as a map of vectors
+	const auto clusters = tbb::parallel_reduce(
 		// Range
 		tbb::blocked_range<u_int>(0, numPoints, grain),
 
 		// Init
-		std::tuple(ClusterMap(grain), ClusterKeys(grain)),
+		ClusterMap(grain),
 
 		// Body
-		[&dsu](const tbb::blocked_range<u_int>& r, ClusterMapAndKey&& mapkey)
-			-> ClusterMapAndKey
+		[&dsu](const tbb::blocked_range<u_int>& r, ClusterMap&& map)
+			-> ClusterMap
 		{
-			auto [map, keys] = mapkey;
-
-			const auto number_of_elements = r.end() - r.begin();
-			map.reserve(number_of_elements);
-			keys.reserve(number_of_elements);
-
-			for (u_int i = r.begin(); i != r.end(); ++i) {
-				auto clusterIndex = dsu.find_readonly(i);
-				keys.insert(clusterIndex);
-				map.emplace(clusterIndex, i);
+			for (auto i = r.begin(); i != r.end(); ++i) {
+				const auto clusterIndex = dsu.find_readonly(i);
+				map[clusterIndex].push_back(i);
 			}
-			return std::make_tuple(map, keys);
+			return map;
 		},
 
 		// Reduce
-		[](ClusterMapAndKey&& mapkey1, const ClusterMapAndKey& mapkey2)
-			-> ClusterMapAndKey
+		[](ClusterMap&& map1, ClusterMap&& map2)
+			-> ClusterMap
 		{
-			auto& [map1, keys1] = mapkey1;
-			const auto& [map2, keys2] = mapkey2;
+			if (map1.size() < map2.size()) {
+				std::swap(map1, map2);
+			}
 
 			map1.reserve(map1.size() + map2.size());
-			keys1.reserve(keys1.size() + keys2.size());
 
-			map1.insert(map2.cbegin(), map2.cend());
-			keys1.insert(keys2.cbegin(), keys2.cend());
+			map1.merge(map2);
 
-			return std::tuple(map1, keys1);
-		}
-	);
-
-	// Transform the previous structure into a vector of vectors
-
-	const auto clusters = tbb::parallel_reduce(
-		// Range
-		tbb::blocked_range<size_t>(0, keys.size(), grain),
-
-		// Init
-		ClusterVector(),
-
-		// Body
-		[&](const auto& r, ClusterVector&& clustervect) -> ClusterVector {
-			auto it = keys.begin();
-			std::advance(it, r.begin());
-			for (auto i = r.begin(); i != r.end(); ++i, ++it) {
-				const auto& [begin, end] = map.equal_range(*it);
-				Cluster cluster;
-				cluster.reserve(std::distance(begin, end));
-				for (auto itval = begin; itval != end; ++itval) {
-					cluster.push_back(itval->second);
-				}
-				clustervect.push_back(cluster);
+			for(const auto& p: map2) {
+				auto& cluster1 = map1[p.first];
+				auto& cluster2 = p.second;
+				cluster1.reserve(cluster1.size() + cluster2.size());
+				cluster1.insert(
+					cluster1.end(),
+					cluster2.begin(),
+					cluster2.end()
+				);
 			}
-			return clustervect;
-		},
 
-		// Reduce
-		[](ClusterVector&& a, const ClusterVector& b) -> ClusterVector {
-			std::copy(b.begin(), b.end(), std::back_inserter(a));
-			return a;
+			return map1;
 		}
-
 	);
 
 	return clusters;
@@ -682,30 +643,26 @@ ClusterVector CreateClusters(const UnionFind& dsu, u_int numPoints) {
 // large collection of points
 //
 // Returns:
-// - The merged points, in the form of clusters (vector of vectors)
+// - The merged points, in the form of clusters (map of vectors)
 //
-ClusterVector mergePoints(const Point * points, u_int numPoints, u_int tolerance) {
+ClusterMap mergePoints(const Point * points, u_int numPoints, u_int tolerance) {
 
 	// Compute grid for spatial partitioning
 	const Grid grid{ComputeGrid(points, numPoints)};
-	SDL_LOG("After grid");
 
 	// Assign points to grids cells (in other words: partition)
 	const Partition partition{
 		AssignPointsToGrid(grid, points, numPoints)
 	};
-	SDL_LOG("After partition");
 
 	// For each cell, compare points within the cell and adjacent cells
 	// and gather points at (nearly) zero distance from each others.
 	// Gathering is made via a Union Find algo
 	const UnionFind dsu{GroupPoints(partition, numPoints, tolerance)};
-	SDL_LOG("After group");
 
 	// Finally, reformat result into convenient cluster format (vector of
 	// vectors)
-	const ClusterVector clusters{CreateClusters(dsu, numPoints)};
-	SDL_LOG("After cluster");
+	const ClusterMap clusters{CreateClusters(dsu, numPoints)};
 
 	return clusters;
 
@@ -716,7 +673,7 @@ ClusterVector mergePoints(const Point * points, u_int numPoints, u_int tolerance
 // Replace each variable with interpolated value
 luxrays::ExtTriangleMesh* RecreateMesh(
 	const luxrays::ExtTriangleMesh& srcMesh,
-	const ClusterVector& clusters
+	const ClusterMap& clusters
 ) {
 	const auto numPoints = srcMesh.GetTotalVertexCount();
 	const auto srcPoints = srcMesh.GetVertices();
@@ -788,9 +745,13 @@ luxrays::ExtTriangleMesh* RecreateMesh(
 	// Compute merged values of points, normals, uv etc.
 	tbb::parallel_for(
         tbb::blocked_range<size_t>(0, numNewPoints, grain),
+
 		[&](tbb::blocked_range<size_t>& r) {
-			for (auto newIdx = r.begin(); newIdx != r.end(); ++newIdx) {
-				auto& cluster = clusters[newIdx];
+			auto it = clusters.begin();
+			std::advance(it, r.begin());
+
+			for (auto newIdx = r.begin(); newIdx != r.end(); ++newIdx, ++it) {
+				const auto& cluster = it->second;
 				auto cluster_size = cluster.size();
 				if (!cluster_size) continue;
 
@@ -909,7 +870,7 @@ luxrays::ExtTriangleMesh* RecreateMesh(
 		tbb::blocked_range<u_int>(0, numTriangles),
 		[&](const tbb::blocked_range<u_int>& r) {
 			for (u_int i = r.begin(); i != r.end(); ++i) {
-				auto oldTriangle = oldTriangles[i];
+				auto& oldTriangle = oldTriangles[i];
 				auto newTriangle = luxrays::Triangle(
 					pointMap[oldTriangle.v[0]],
 					pointMap[oldTriangle.v[1]],
