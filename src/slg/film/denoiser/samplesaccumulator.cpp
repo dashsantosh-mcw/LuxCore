@@ -273,12 +273,12 @@ void SamplesAccumulator::ComputeSampleStatistics(bcd::SamplesStatisticsImages &i
 bcd::SamplesStatisticsImages SamplesAccumulator::GetSamplesStatistics() const {
 	bcd::SamplesStatisticsImages stats(m_samplesStatisticsImages);
 	ComputeSampleStatistics(stats);
-	return move(stats);
+	return std::move(stats);
 }
 
 bcd::SamplesStatisticsImages SamplesAccumulator::ExtractSamplesStatistics() {
 	ComputeSampleStatistics(m_samplesStatisticsImages);
-	return move(m_samplesStatisticsImages);
+	return std::move(m_samplesStatisticsImages);
 }
 
 //------------------------------------------------------------------------------

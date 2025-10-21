@@ -63,7 +63,7 @@ template<typename T> void GetArray(const pybind11::object &obj, std::vector<T> &
 
       const pybind11::ssize_t size = len(arrayList);
       if (size % (width + stride) != 0)
-        throw std::runtime_error("Wrong data size in GetArray() method: " + size);
+        throw std::runtime_error("Wrong data size in GetArray() method: " + std::to_string(size));
 
       if (stride == 0) {
         a.reserve(size);
@@ -88,7 +88,7 @@ template<typename T> void GetArray(const pybind11::object &obj, std::vector<T> &
       if (!PyObject_GetBuffer(obj.ptr(), &view, PyBUF_SIMPLE)) {
         size_t size = view.len / sizeof(T);
         if (size % (width + stride) != 0)
-          throw std::runtime_error("Wrong data size in GetArray() method: " + size);
+          throw std::runtime_error("Wrong data size in GetArray() method: " + std::to_string(size));
 
         T *buffer = (T *)view.buf;
 
