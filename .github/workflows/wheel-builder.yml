@@ -188,11 +188,11 @@ jobs:
           # Arm: opensubdiv
           script: |
             if ('${{ runner.arch }}' == 'X64') {
-              target = '13.0';
+              target = '14.0';  // Required by libomp
               arch='x86_64';
             }
             else {
-              target = '15.0';
+              target = '15.0';  // Required by libomp
               arch='armv8';
             }
             core.exportVariable('MACOSX_DEPLOYMENT_TARGET', target);
@@ -205,7 +205,7 @@ jobs:
         run: |
             # We make conan believe we use apple-clang (see profiles), but
             # actually we use recent version of llvm, to get full compatibility
-            # with C++20
+            # with C++20 (in particular: joining threads)
             brew install llvm@20
             LLVM_PREFIX=$(brew --prefix llvm@20)
             echo "PATH=$LLVM_PREFIX/bin:$PATH" >> $GITHUB_ENV
