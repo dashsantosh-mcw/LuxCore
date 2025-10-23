@@ -87,6 +87,7 @@ target_link_libraries(luxcore PRIVATE
     boost::boost
     spdlog::spdlog_header_only
     openimageio::openimageio
+    openjp2
     embree::embree
     luxparser
 )
