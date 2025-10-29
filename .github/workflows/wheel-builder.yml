@@ -376,7 +376,7 @@ jobs:
             if [[ ${{ matrix.os }} == 'macos-15-intel' ]]; then
               # Full test for Intel
               echo "Testing x86_64"
-              #pyluxcoretest
+              pyluxcoretest
             elif [[ ${{ matrix.os }} == 'macos-15' ]]; then
               # Light test, as ARM runner raises an OpenCL driver issue otherwise
               echo "Testing arm"
