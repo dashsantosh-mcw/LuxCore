@@ -305,7 +305,6 @@ add_subdirectory(src/luxrays)
 add_subdirectory(src/slg)
 add_subdirectory(src/luxcore)
 add_subdirectory(src/pyluxcore)
-add_subdirectory(src/pyluxcoretools)
 
 ################################################################################
 #
