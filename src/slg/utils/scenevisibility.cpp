@@ -20,10 +20,13 @@
 
 #include <boost/format.hpp>
 
+#include "luxrays/core/randomgen.h"
+#include "luxrays/usings.h"
 #include "luxrays/utils/thread.h"
 
 #include "slg/core/indexoctree.h"
 #include "slg/scene/scene.h"
+#include "slg/cameras/camera.h"
 #include "slg/engines/renderengine.h"
 #include "slg/utils/scenevisibility.h"
 #include "slg/utils/pathdepthinfo.h"
@@ -45,7 +48,7 @@ using namespace slg;
 
 template <class T>
 SceneVisibility<T>::TraceVisibilityThread::TraceVisibilityThread(SceneVisibility<T> &svis, const u_int index,
-		SobolSamplerSharedData &sobolSharedData,
+		std::shared_ptr<SobolSamplerSharedData> sobolSharedData,
 		IndexOctree<T> *octree, std::mutex &octreeMutex,
 		std::atomic<u_int> &gParticlesCount,
 		u_int &cacheLookUp, u_int &cacheHits,
@@ -74,24 +77,24 @@ void SceneVisibility<T>::TraceVisibilityThread::Start() {
 
 template <class T>
 void SceneVisibility<T>::TraceVisibilityThread::Join() {
-	if (renderThread) {
+	if (renderThread && renderThread->joinable()) {
 		renderThread->join();
 	}
 }
 
 template <class T>
-void SceneVisibility<T>::TraceVisibilityThread::GenerateEyeRay(CameraConstPtr camera, Ray &eyeRay,
+void SceneVisibility<T>::TraceVisibilityThread::GenerateEyeRay(CameraConstRef camera, Ray &eyeRay,
 		PathVolumeInfo &volInfo, Sampler *sampler, SampleResult &sampleResult) const {
-	const u_int *subRegion = camera->filmSubRegion;
+	const u_int *subRegion = camera.filmSubRegion;
 	sampleResult.filmX = subRegion[0] + sampler->GetSample(0) * (subRegion[1] - subRegion[0] + 1);
 	sampleResult.filmY = subRegion[2] + sampler->GetSample(1) * (subRegion[3] - subRegion[2] + 1);
 
 	const float timeSample = sampler->GetSample(4);
 	const float time = (sv.timeStart <= sv.timeEnd) ?
 		Lerp(timeSample, sv.timeStart, sv.timeEnd) :
-		camera->GenerateRayTime(timeSample);
+		camera.GenerateRayTime(timeSample);
 
-	camera->GenerateRay(time, sampleResult.filmX, sampleResult.filmY, &eyeRay, &volInfo,
+	camera.GenerateRay(time, sampleResult.filmX, sampleResult.filmY, &eyeRay, &volInfo,
 		sampler->GetSample(2), sampler->GetSample(3));
 }
 
@@ -110,12 +113,12 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc(std::stop_token stop_
 	// This is really used only by Windows for 64+ threads support
 	SetThreadGroupAffinity(threadIndex);
 
-	auto scene = sv.scene.lock();
-	auto camera = scene->camera;
+	auto& scene = sv.scene;
+	auto& camera = scene.GetCamera();
 
 	// Initialize the sampler
-	RandomGenerator rnd(1 + threadIndex);
-	SobolSampler sampler(&rnd, NULL, NULL, true, 0.f, 0.f,
+	auto rnd = std::make_unique<RandomGenerator>(1 + threadIndex);
+	SobolSampler sampler(rnd, nullptr, NULL, true, 0.f, 0.f,
 			16, 16, 1, 1,
 			visibilitySobolSharedData);
 
@@ -188,7 +191,7 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc(std::stop_token stop_
 
 				RayHit eyeRayHit;
 				Spectrum connectionThroughput;
-				const bool hit = scene->Intersect(NULL,
+				const bool hit = scene.Intersect(NULL,
 						EYE_RAY | (sampleResult.firstPathVertex ? CAMERA_RAY : GENERIC_RAY),
 						&volInfo, sampler.GetSample(sampleOffset),
 						&eyeRay, &eyeRayHit, &bsdf, &connectionThroughput,
@@ -329,7 +332,7 @@ void SceneVisibility<T>::TraceVisibilityThread::RenderFunc(std::stop_token stop_
 //------------------------------------------------------------------------------
 
 template <class T>
-SceneVisibility<T>::SceneVisibility(SceneConstPtr scn, vector<T> &parts,
+SceneVisibility<T>::SceneVisibility(SceneConstRef scn, vector<T> &parts,
 		const u_int maxDepth,  const u_int sampleCount,
 		const float hitRate, const float r, const float ang,
 		const float t0, const float t1) :
@@ -355,7 +358,8 @@ void SceneVisibility<T>::Build() {
 	unique_ptr<IndexOctree<T> > particlesOctree(AllocOctree());
 	std::mutex particlesOctreeMutex;
 
-	SobolSamplerSharedData visibilitySobolSharedData(131, nullptr);
+	auto visibilitySobolSharedData =
+		std::make_shared<SobolSamplerSharedData>(131, std::experimental::observer_ptr<Film>());
 
 	std::atomic<u_int> globalVisibilityParticlesCount(0);
 	u_int visibilityCacheLookUp = 0;

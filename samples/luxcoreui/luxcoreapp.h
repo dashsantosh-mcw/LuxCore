@@ -43,14 +43,18 @@
 
 #define LA_ARRAYSIZE(_ARR)	((int)(sizeof(_ARR) / sizeof(*_ARR)))
 
+using luxcore::RenderConfigPtr;
+using luxcore::RenderSessionPtr;
+
+
 class LuxCoreApp {
 public:
-	LuxCoreApp(std::shared_ptr<luxcore::RenderConfig> renderConfig);
+	LuxCoreApp(RenderConfigPtr & renderConfig);
 	~LuxCoreApp();
 
 	void RunApp(
             std::shared_ptr<luxcore::RenderState> startState = nullptr,
-            std::shared_ptr<luxcore::Film> startFilm = nullptr
+            const std::unique_ptr<luxcore::Film> & startFilm = nullptr
           );
 
 	bool isGPURenderingAvailable() const { return isOpenCLAvailable || isCUDAAvailable; }
@@ -103,8 +107,8 @@ private:
 	void DrawBackgroundLogo();
 	void UpdateMoveStep();
 	void SetRenderingEngineType(const std::string &engineType);
-	void RenderConfigParse(std::shared_ptr<const luxrays::Properties> samplerProps);
-	void RenderSessionParse(std::shared_ptr<const luxrays::Properties> samplerProps);
+	void RenderConfigParse(const std::unique_ptr<luxrays::Properties> & samplerProps);
+	void RenderSessionParse(const std::unique_ptr<luxrays::Properties> & samplerProps);
 	void AdjustFilmResolutionToWindowSize(unsigned int *filmWidth, unsigned int *filmHeight);
 	void SetFilmResolution(const unsigned int filmWidth, const unsigned int filmHeight);
 	void IncScreenRefreshInterval();
@@ -114,7 +118,7 @@ private:
 	void LoadRenderConfig(const std::string &configFileName, const std::string &configFilePath);
 	void StartRendering(
             std::shared_ptr<luxcore::RenderState> startState = nullptr,
-            std::shared_ptr<luxcore::Film> startFilm = nullptr
+            const std::unique_ptr<luxcore::Film> & startFilm = nullptr
         );
 	void DeleteRendering();
 
@@ -163,9 +167,9 @@ private:
 	HelpWindow helpWindow;
 	UserImportancePaintWindow userImportancePaintWindow;
 
-	std::weak_ptr<luxcore::RenderConfig> config;
+	RenderConfigPtr & config;
 
-	std::unique_ptr<luxcore::RenderSession> session;
+	RenderSessionPtr session;
 
 	GLuint renderFrameBufferTexID;
 	GLenum renderFrameBufferTexMinFilter, renderFrameBufferTexMagFilter;

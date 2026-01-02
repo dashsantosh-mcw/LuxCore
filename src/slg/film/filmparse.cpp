@@ -124,20 +124,20 @@ void Film::ParseOutputs(const Properties &props) {
 			}
 			case FilmOutputs::RGB_IMAGEPIPELINE: {
 				const u_int imagePipelineIndex = props.Get(Property("film.outputs." + outputName + ".index")(0)).Get<u_int>();
-				auto prop = std::make_shared<Properties>();
+				auto prop = std::make_unique<Properties>();
 				prop->Set(Property("index")(imagePipelineIndex));
 
-				filmOutputs.Add(FilmOutputs::RGB_IMAGEPIPELINE, fileName, prop);
+				filmOutputs.Add(FilmOutputs::RGB_IMAGEPIPELINE, fileName, std::move(prop));
 				break;
 			}
 			case FilmOutputs::RGBA_IMAGEPIPELINE: {
 				const u_int imagePipelineIndex = props.Get(Property("film.outputs." + outputName + ".index")(0)).Get<u_int>();
-				auto prop = std::make_shared<Properties>();
+				auto prop = std::make_unique<Properties>();
 				prop->Set(Property("index")(imagePipelineIndex));
 
 				if (!initialized)
 					AddChannel(Film::ALPHA);
-				filmOutputs.Add(FilmOutputs::RGBA_IMAGEPIPELINE, fileName, prop);
+				filmOutputs.Add(FilmOutputs::RGBA_IMAGEPIPELINE, fileName, std::move(prop));
 				break;
 			}
 			case FilmOutputs::ALPHA: {
@@ -345,14 +345,14 @@ void Film::ParseOutputs(const Properties &props) {
 			}
 			case FilmOutputs::MATERIAL_ID_MASK: {
 				const u_int materialID = props.Get(Property("film.outputs." + outputName + ".id")(255)).Get<u_int>();
-				auto prop = std::make_shared<Properties>();
+				auto prop = std::make_unique<Properties>();
 				prop->Set(Property("id")(materialID));
 
 				if (!initialized) {
 					AddChannel(Film::MATERIAL_ID);
 					AddChannel(Film::MATERIAL_ID_MASK, prop);
 				}
-				filmOutputs.Add(FilmOutputs::MATERIAL_ID_MASK, fileName, prop);
+				filmOutputs.Add(FilmOutputs::MATERIAL_ID_MASK, fileName, std::move(prop));
 				break;
 			}
 			case FilmOutputs::DIRECT_SHADOW_MASK: {
@@ -369,10 +369,10 @@ void Film::ParseOutputs(const Properties &props) {
 			}
 			case FilmOutputs::RADIANCE_GROUP: {
 				const u_int lightID = props.Get(Property("film.outputs." + outputName + ".id")(0)).Get<u_int>();
-				auto prop = std::make_shared<Properties>();
+				auto prop = std::make_unique<Properties>();
 				prop->Set(Property("id")(lightID));
 
-				filmOutputs.Add(FilmOutputs::RADIANCE_GROUP, fileName, prop);
+				filmOutputs.Add(FilmOutputs::RADIANCE_GROUP, fileName, std::move(prop));
 				break;
 			}
 			case FilmOutputs::UV: {
@@ -391,14 +391,14 @@ void Film::ParseOutputs(const Properties &props) {
 			}
 			case FilmOutputs::BY_MATERIAL_ID: {
 				const u_int materialID = props.Get(Property("film.outputs." + outputName + ".id")(255)).Get<u_int>();
-				auto prop = std::make_shared<Properties>();
+				auto prop = std::make_unique<Properties>();
 				prop->Set(Property("id")(materialID));
 
 				if (!initialized) {
 					AddChannel(Film::MATERIAL_ID);
 					AddChannel(Film::BY_MATERIAL_ID, prop);
 				}
-				filmOutputs.Add(FilmOutputs::BY_MATERIAL_ID, fileName, prop);
+				filmOutputs.Add(FilmOutputs::BY_MATERIAL_ID, fileName, std::move(prop));
 				break;
 			}
 			case FilmOutputs::IRRADIANCE: {
@@ -420,26 +420,26 @@ void Film::ParseOutputs(const Properties &props) {
 			}
 			case FilmOutputs::OBJECT_ID_MASK: {
 				const u_int materialID = props.Get(Property("film.outputs." + outputName + ".id")(255)).Get<u_int>();
-				auto prop = std::make_shared<Properties>();
+				auto prop = std::make_unique<Properties>();
 				prop->Set(Property("id")(materialID));
 
 				if (!initialized) {
 					AddChannel(Film::OBJECT_ID);
 					AddChannel(Film::OBJECT_ID_MASK, prop);
 				}
-				filmOutputs.Add(FilmOutputs::OBJECT_ID_MASK, fileName, prop);
+				filmOutputs.Add(FilmOutputs::OBJECT_ID_MASK, fileName, std::move(prop));
 				break;
 			}
 			case FilmOutputs::BY_OBJECT_ID: {
 				const u_int materialID = props.Get(Property("film.outputs." + outputName + ".id")(255)).Get<u_int>();
-				auto prop = std::make_shared<Properties>();
+				auto prop = std::make_unique<Properties>();
 				prop->Set(Property("id")(materialID));
 
 				if (!initialized) {
 					AddChannel(Film::OBJECT_ID);
 					AddChannel(Film::BY_OBJECT_ID, prop);
 				}
-				filmOutputs.Add(FilmOutputs::BY_OBJECT_ID, fileName, prop);
+				filmOutputs.Add(FilmOutputs::BY_OBJECT_ID, fileName, std::move(prop));
 				break;
 			}
 			case FilmOutputs::SAMPLECOUNT: {
@@ -660,7 +660,7 @@ ImagePipeline *Film::CreateImagePipeline(const Properties &props, const string &
 			} else if (type == "BACKGROUND_IMG") {
 				auto im = ImageMap::FromProperties(props, prefix);
 
-				imagePipeline->AddPlugin(new BackgroundImgPlugin(im));
+				imagePipeline->AddPlugin(new BackgroundImgPlugin(std::move(im)));
 			} else if (type == "BLOOM") {
 				const float radius = Clamp(props.Get(Property(prefix + ".radius")(.07)).Get<double>(), 0.0, 1.0);
 				const float weight = Clamp(props.Get(Property(prefix + ".weight")(.25)).Get<double>(), 0.0, 1.0);
@@ -846,7 +846,7 @@ void Film::ParseImagePipelines(const Properties &props) {
 // Film parser
 //------------------------------------------------------------------------------
 
-void Film::Parse(PropertiesConstPtr props) {
+void Film::Parse(PropertiesPtr props) {
 	//--------------------------------------------------------------------------
 	// Check if there is a new image pipeline definition
 	//--------------------------------------------------------------------------
@@ -908,7 +908,7 @@ void Film::Parse(PropertiesConstPtr props) {
 			}
 
 			convTest = new FilmConvTest(
-				shared_from_this(), haltNoiseThreshold, haltNoiseThresholdWarmUp,
+				FilmOPtr(this), haltNoiseThreshold, haltNoiseThresholdWarmUp,
 				haltNoiseThresholdTestStep, haltNoiseThresholdUseFilter,
 				haltNoiseThresholdImagePipelineIndex);
 		}
@@ -956,7 +956,7 @@ void Film::Parse(PropertiesConstPtr props) {
 		}
 
 		noiseEstimation = new FilmNoiseEstimation(
-			shared_from_this(), noiseEstimationWarmUp,
+			*this, noiseEstimationWarmUp,
 			noiseEstimationTestStep, noiseEstimationFilterScale,
 			noiseEstimationImagePipelineIndex
 		);

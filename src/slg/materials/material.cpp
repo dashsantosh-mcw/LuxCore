@@ -32,8 +32,8 @@ using namespace slg;
 // Material
 //------------------------------------------------------------------------------
 
-Material::Material(TextureConstPtr frontTransp, TextureConstPtr backTransp,
-		TextureConstPtr emitted, TextureConstPtr bump) :
+Material::Material(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
+		TextureConstOPtr emitted, TextureConstOPtr bump) :
 		NamedObject("material"),
 		matID(0), lightID(0),
 		directLightSamplingType(DLS_AUTO), emittedImportance(1.f),
@@ -72,8 +72,8 @@ void Material::SetEmittedTheta(const float theta) {
 	}
 }
 
-void Material::SetEmissionMap(ImageMapConstPtr map) {
-	emissionMap = map;
+void Material::SetEmissionMap(ImageMapConstRef map) {
+	emissionMap.reset(&map);
 	delete emissionFunc;
 	if (emissionMap)
 		emissionFunc = new SampleableSphericalFunction(new ImageMapSphericalFunction(emissionMap));
@@ -81,10 +81,30 @@ void Material::SetEmissionMap(ImageMapConstPtr map) {
 		emissionFunc = nullptr;
 }
 
+// Interior volume
+VolumeConstOPtr Material::GetInteriorVolume(const HitPoint &hitPoint,
+	const float passThroughEvent) const { return interiorVolume; }
+VolumeConstOPtr Material::GetInteriorVolume() const { return interiorVolume; }
+void Material::SetInteriorVolume(VolumeConstOPtr vol) { interiorVolume = vol; }
+void Material::SetInteriorVolume(VolumeConstRef vol) {
+	interiorVolume.reset(std::addressof(vol));
+}
+
+// Exterior Volume
+VolumeConstOPtr Material::GetExteriorVolume(const HitPoint &hitPoint,
+	const float passThroughEvent) const { return exteriorVolume; }
+VolumeConstOPtr Material::GetExteriorVolume() const { return exteriorVolume; }
+void Material::SetExteriorVolume(VolumeConstOPtr vol) { exteriorVolume = vol; }
+void Material::SetExteriorVolume(VolumeConstRef vol) {
+	exteriorVolume.reset(std::addressof(vol));
+}
+
+
+
 Spectrum Material::GetPassThroughTransparency(const HitPoint &hitPoint,
 		const luxrays::Vector &localFixedDir, const float passThroughEvent,
 		const bool backTracing) const {
-	TextureConstPtr transparencyTex = (hitPoint.intoObject != backTracing) ? frontTransparencyTex : backTransparencyTex;
+	TextureConstOPtr transparencyTex = (hitPoint.intoObject != backTracing) ? frontTransparencyTex : backTransparencyTex;
 	
 	if (transparencyTex) {
 		const float weight = Clamp(transparencyTex->GetFloatValue(hitPoint), 0.f, 1.f);
@@ -191,90 +211,88 @@ void Material::UpdateAvgPassThroughTransparency() {
 	avgPassThroughTransparency = frontTransparencyTex ? Clamp(frontTransparencyTex->Filter(), 0.f, 1.f) : 1.f;
 }
 
-Properties Material::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
-	luxrays::Properties props;
+PropertiesUPtr Material::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
 	if (frontTransparencyTex)
-		props.Set(Property("scene.materials." + name + ".transparency.front")(frontTransparencyTex->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".transparency.front")(frontTransparencyTex->GetSDLValue()));
 	if (backTransparencyTex)
-		props.Set(Property("scene.materials." + name + ".transparency.back")(backTransparencyTex->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".transparency.shadow")(passThroughShadowTransparency));
-	props.Set(Property("scene.materials." + name + ".transparency.shadowoverride")(passThroughShadowTransparencyOverride));
-	props.Set(Property("scene.materials." + name + ".id")(matID));
+		props->Set(Property("scene.materials." + name + ".transparency.back")(backTransparencyTex->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".transparency.shadow")(passThroughShadowTransparency));
+	props->Set(Property("scene.materials." + name + ".transparency.shadowoverride")(passThroughShadowTransparencyOverride));
+	props->Set(Property("scene.materials." + name + ".id")(matID));
 
-	props.Set(Property("scene.materials." + name + ".emission.gain")(emittedGain));
-	props.Set(Property("scene.materials." + name + ".emission.power")(emittedPower));
-	props.Set(Property("scene.materials." + name + ".emission.normalizebycolor")(emittedPowerNormalize));
-	props.Set(Property("scene.materials." + name + ".emission.efficiency")(emittedEfficiency));
-	props.Set(Property("scene.materials." + name + ".emission.theta")(emittedTheta));
-	props.Set(Property("scene.materials." + name + ".emission.id")(lightID));
-	props.Set(Property("scene.materials." + name + ".emission.importance")(emittedImportance));
+	props->Set(Property("scene.materials." + name + ".emission.gain")(emittedGain));
+	props->Set(Property("scene.materials." + name + ".emission.power")(emittedPower));
+	props->Set(Property("scene.materials." + name + ".emission.normalizebycolor")(emittedPowerNormalize));
+	props->Set(Property("scene.materials." + name + ".emission.efficiency")(emittedEfficiency));
+	props->Set(Property("scene.materials." + name + ".emission.theta")(emittedTheta));
+	props->Set(Property("scene.materials." + name + ".emission.id")(lightID));
+	props->Set(Property("scene.materials." + name + ".emission.importance")(emittedImportance));
 	if (emittedTex)
-		props.Set(Property("scene.materials." + name + ".emission")(emittedTex->GetSDLValue()));
+		props->Set(Property("scene.materials." + name + ".emission")(emittedTex->GetSDLValue()));
 	if (emissionMap) {
 		const string fileName = useRealFileName ?
-			emissionMap->GetName() : imgMapCache.GetSequenceFileName(emissionMap);
-		props.Set(Property("scene.materials." + name + ".emission.mapfile")(fileName));
-		props.Set(emissionMap->ToProperties("scene.materials." + name, false));
+			emissionMap->GetName() : imgMapCache.GetSequenceFileName(*emissionMap);
+		props->Set(Property("scene.materials." + name + ".emission.mapfile")(fileName));
+		props->Set(emissionMap->ToProperties("scene.materials." + name, false));
 	}
-	props.Set(Property("scene.materials." + name + ".emission.temperature")(emittedTemperature));
-	props.Set(Property("scene.materials." + name + ".emission.temperature.normalize")(emittedNormalizeTemperature));
+	props->Set(Property("scene.materials." + name + ".emission.temperature")(emittedTemperature));
+	props->Set(Property("scene.materials." + name + ".emission.temperature.normalize")(emittedNormalizeTemperature));
 
 	switch (directLightSamplingType) {
 		case DLS_ENABLED:
-			props.Set(Property("scene.materials." + name + ".emission.directlightsampling.type")("ENABLED"));
+			props->Set(Property("scene.materials." + name + ".emission.directlightsampling.type")("ENABLED"));
 			break;
 		case DLS_DISABLED:
-			props.Set(Property("scene.materials." + name + ".emission.directlightsampling.type")("DISABLED"));
+			props->Set(Property("scene.materials." + name + ".emission.directlightsampling.type")("DISABLED"));
 			break;
 		case DLS_AUTO:
-			props.Set(Property("scene.materials." + name + ".emission.directlightsampling.type")("AUTO"));
+			props->Set(Property("scene.materials." + name + ".emission.directlightsampling.type")("AUTO"));
 			break;
 		default:
 			throw runtime_error("Unknown MaterialEmissionDLSType in Material::ToProperties(): " + ToString(directLightSamplingType));
 	}
 
 	if (bumpTex)
-		props.Set(Property("scene.materials." + name + ".bumptex")(bumpTex->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".bumpsamplingdistance")(bumpSampleDistance));
+		props->Set(Property("scene.materials." + name + ".bumptex")(bumpTex->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".bumpsamplingdistance")(bumpSampleDistance));
 
 	if (interiorVolume)
-		props.Set(Property("scene.materials." + name + ".volume.interior")(interiorVolume->GetName()));
+		props->Set(Property("scene.materials." + name + ".volume.interior")(interiorVolume->GetName()));
 	if (exteriorVolume)
-		props.Set(Property("scene.materials." + name + ".volume.exterior")(exteriorVolume->GetName()));
+		props->Set(Property("scene.materials." + name + ".volume.exterior")(exteriorVolume->GetName()));
 		
-	props.Set(Property("scene.materials." + name + ".visibility.indirect.diffuse.enable")(isVisibleIndirectDiffuse));
-	props.Set(Property("scene.materials." + name + ".visibility.indirect.glossy.enable")(isVisibleIndirectGlossy));
-	props.Set(Property("scene.materials." + name + ".visibility.indirect.specular.enable")(isVisibleIndirectSpecular));
+	props->Set(Property("scene.materials." + name + ".visibility.indirect.diffuse.enable")(isVisibleIndirectDiffuse));
+	props->Set(Property("scene.materials." + name + ".visibility.indirect.glossy.enable")(isVisibleIndirectGlossy));
+	props->Set(Property("scene.materials." + name + ".visibility.indirect.specular.enable")(isVisibleIndirectSpecular));
 
-	props.Set(Property("scene.materials." + name + ".shadowcatcher.enable")(isShadowCatcher));
-	props.Set(Property("scene.materials." + name + ".shadowcatcher.onlyinfinitelights")(isShadowCatcherOnlyInfiniteLights));
+	props->Set(Property("scene.materials." + name + ".shadowcatcher.enable")(isShadowCatcher));
+	props->Set(Property("scene.materials." + name + ".shadowcatcher.onlyinfinitelights")(isShadowCatcherOnlyInfiniteLights));
 
-	props.Set(Property("scene.materials." + name + ".photongi.enable")(isPhotonGIEnabled));
-	props.Set(Property("scene.materials." + name + ".holdout.enable")(isHoldout));
+	props->Set(Property("scene.materials." + name + ".photongi.enable")(isPhotonGIEnabled));
+	props->Set(Property("scene.materials." + name + ".holdout.enable")(isHoldout));
 
 	return props;
 }
 
-void Material::UpdateMaterialReferences(MaterialConstPtr oldMat, MaterialConstPtr newMat) {
-	if (oldMat == interiorVolume)
-		interiorVolume = dynamic_pointer_cast<const Volume>(newMat);
-	if (oldMat == exteriorVolume)
-		exteriorVolume = dynamic_pointer_cast<const Volume>(newMat);
+void Material::UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat) {
+	updvol(interiorVolume, oldMat, newMat);
+	updvol(exteriorVolume, oldMat, newMat);
 }
 
 void Material::AddReferencedMaterials(
-	std::unordered_set<MaterialConstPtr> &referencedMats
+	std::unordered_set<const Material *> &referencedMats
 ) const {
-	referencedMats.insert(shared_from_this());
+	referencedMats.insert(this);
 	if (interiorVolume)
-		referencedMats.insert(interiorVolume);
+		referencedMats.insert(interiorVolume.get());
 	if (exteriorVolume)
-		referencedMats.insert(exteriorVolume);
+		referencedMats.insert(exteriorVolume.get());
 }
 
-void Material::AddReferencedTextures(std::unordered_set<TextureConstPtr>  &referencedTexs) const {
+void Material::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	if (frontTransparencyTex)
 		frontTransparencyTex->AddReferencedTextures(referencedTexs);
 	if (backTransparencyTex)
@@ -285,23 +303,23 @@ void Material::AddReferencedTextures(std::unordered_set<TextureConstPtr>  &refer
 		bumpTex->AddReferencedTextures(referencedTexs);
 }
 
-void Material::AddReferencedImageMaps(std::unordered_set<ImageMapConstPtr > &referencedImgMaps) const {
+void Material::AddReferencedImageMaps(std::unordered_set<const ImageMap *> &referencedImgMaps) const {
 	if (emissionMap)
-		referencedImgMaps.insert(emissionMap);
+		referencedImgMaps.insert(emissionMap.get());
 }
 
 // Update any reference to oldTex with newTex
-void Material::UpdateTextureReferences(TextureConstPtr oldTex, TextureConstPtr newTex) {
-	if (frontTransparencyTex == oldTex) {
-		frontTransparencyTex = newTex;
+void Material::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
+	if (frontTransparencyTex == &oldTex) {
+		frontTransparencyTex.reset(&newTex);
 		UpdateAvgPassThroughTransparency();
 	}
-	if (backTransparencyTex == oldTex)
-		backTransparencyTex = newTex;
-	if (emittedTex == oldTex)
-		emittedTex = newTex;
-	if (bumpTex == oldTex)
-		bumpTex = newTex;
+	if (backTransparencyTex == &oldTex)
+		backTransparencyTex.reset(&newTex);
+	if (emittedTex == &oldTex)
+		emittedTex.reset(&newTex);
+	if (bumpTex == &oldTex)
+		bumpTex.reset(&newTex);
 }
 
 string Material::MaterialType2String(const MaterialType type) {
@@ -336,7 +354,7 @@ string Material::MaterialType2String(const MaterialType type) {
 	}
 }
 
-float Material::ComputeGlossiness(TextureConstPtr t1, TextureConstPtr t2, TextureConstPtr t3) {
+float Material::ComputeGlossiness(TextureConstOPtr t1, TextureConstOPtr t2, TextureConstOPtr t3) {
 	const float glossinessT1 = t1 ? t1->Filter() : 1.f;
 	const float glossinessT2 = t2 ? t2->Filter() : 1.f;
 	const float glossinessT3 = t3 ? t3->Filter() : 1.f;
@@ -348,7 +366,7 @@ float Material::ComputeGlossiness(TextureConstPtr t1, TextureConstPtr t2, Textur
 // IOR utilities
 //------------------------------------------------------------------------------
 
-float slg::ExtractExteriorIors(const HitPoint &hitPoint, TextureConstPtr exteriorIor) {
+float slg::ExtractExteriorIors(const HitPoint &hitPoint, TextureConstOPtr exteriorIor) {
 	float nc = 1.f;
 	if (exteriorIor)
 		nc = exteriorIor->GetFloatValue(hitPoint);
@@ -358,7 +376,7 @@ float slg::ExtractExteriorIors(const HitPoint &hitPoint, TextureConstPtr exterio
 	return nc;
 }
 
-float slg::ExtractInteriorIors(const HitPoint &hitPoint, TextureConstPtr interiorIor) {
+float slg::ExtractInteriorIors(const HitPoint &hitPoint, TextureConstOPtr interiorIor) {
 	float nt = 1.f;
 	if (interiorIor)
 		nt = interiorIor->GetFloatValue(hitPoint);

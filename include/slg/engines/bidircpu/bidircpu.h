@@ -73,7 +73,7 @@ protected:
 		return a * a; // Power heuristic
 	}
 
-	virtual luxrays::JThreadPtr AllocRenderThread() {
+	virtual luxrays::JThreadUPtr AllocRenderThread() {
 		auto t = std::make_unique<luxrays::JThread>(
 			std::bind_front(&BiDirCPURenderThread::RenderFunc, this)
 		);
@@ -81,8 +81,8 @@ protected:
 		return std::move(t);
 	}
 
-	void AOVWarmUp(std::stop_token stop_token, luxrays::RandomGenerator *rndGen);
-	
+	void AOVWarmUp(std::stop_token stop_token, const luxrays::RandomGeneratorUPtr & rndGen);
+
 	SampleResult &AddResult(std::vector<SampleResult> &sampleResults, const bool fromLight) const;
 	void RenderFunc(std::stop_token stop_token);
 
@@ -92,7 +92,7 @@ protected:
 		const PathVertexVM &eyeVertex, SampleResult &eyeSampleResult) const;
 	void DirectHitLight(const bool finiteLightSource, const PathVertexVM &eyeVertex,
 		SampleResult &eyeSampleResult) const;
-	void DirectHitLight(LightSourceConstPtr light, const luxrays::Spectrum &lightRadiance,
+	void DirectHitLight(LightSourceConstRef light, const luxrays::Spectrum &lightRadiance,
 		const float directPdfA, const float emissionPdfW,
 		const PathVertexVM &eyeVertex, luxrays::Spectrum *radiance) const;
 
@@ -105,7 +105,7 @@ protected:
 
 	bool TraceLightPath(const float time,
 		const SamplerUPtr& sampler,
-		CameraPtr camera,
+		CameraConstRef camera,
 		std::vector<PathVertexVM> &lightPathVertices,
 		std::vector<SampleResult> &sampleResults) const;
 	bool Bounce(const float time, const SamplerUPtr& sampler, const u_int sampleOffset,
@@ -123,13 +123,13 @@ class SobolSamplerSharedData;
 
 class BiDirCPURenderEngine : public CPUNoTileRenderEngine {
 public:
-	BiDirCPURenderEngine(RenderConfigConstRef cfg);
+	BiDirCPURenderEngine(RenderConfigRef cfg);
 	virtual ~BiDirCPURenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
 	virtual std::string GetTag() const { return GetObjectTag(); }
 
-	virtual RenderStatePtr GetRenderState();
+	virtual RenderStateSPtr GetRenderState();
 
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
@@ -137,8 +137,8 @@ public:
 
 	static RenderEngineType GetObjectType() { return BIDIRCPU; }
 	static std::string GetObjectTag() { return "BIDIRCPU"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(RenderConfigConstRef rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	// Signed because of the delta parameter
 	u_int maxEyePathDepth, maxLightPathDepth;
@@ -163,21 +163,22 @@ public:
 	friend class BiDirCPURenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual void InitFilm();
 	virtual void StartLockLess();
 	virtual void StopLockLess();
 
-	FilmSampleSplatter *sampleSplatter;
 	PhotonGICache *photonGICache;
 
 	u_int aovWarmupSPP;
-	std::unique_ptr<SobolSamplerSharedData> aovWarmupSamplerSharedData;
+	// We'll use a shared_ptr for shared data since, by design, the
+	// ownership is shared among several objects...
+	SobolSamplerSharedDataSPtr aovWarmupSamplerSharedData;
 
 private:
-	CPURenderThread *NewRenderThread(const u_int index, luxrays::IntersectionDevice *device) {
-		return new BiDirCPURenderThread(this, index, device);
+	CPURenderThreadUPtr NewRenderThread(const u_int index, luxrays::IntersectionDevice *device) {
+		return std::make_unique<BiDirCPURenderThread>(this, index, device);
 	}
 };
 

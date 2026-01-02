@@ -24,10 +24,10 @@ using namespace std;
 using namespace luxrays;
 using namespace slg;
 
-Properties Film::ToProperties(const Properties &cfg) {
-	Properties props;
+PropertiesUPtr Film::ToProperties(const Properties &cfg) {
+	auto props = std::make_unique<Properties>();
 	
-	props <<
+	*props <<
 			cfg.Get(Property("film.width")(640u)) <<
 			cfg.Get(Property("film.height")(480u)) <<
 			cfg.Get(Property("film.safesave")(true)) <<
@@ -44,8 +44,8 @@ Properties Film::ToProperties(const Properties &cfg) {
 			FilmOutputs::ToProperties(cfg);
 
 	// Add also all image pipeline definitions
-	props << cfg.GetAllProperties("film.imagepipeline.");
-	props << cfg.GetAllProperties("film.imagepipelines.");
+	*props << *cfg.GetAllProperties("film.imagepipeline.");
+	*props << *cfg.GetAllProperties("film.imagepipelines.");
 
 	return props;
 }
@@ -102,7 +102,7 @@ bool Film::GetFilmSize(const Properties &cfg,
 	return subRegionUsed;
 }
 
-FilmPtr Film::FromProperties(PropertiesConstPtr cfg) {
+FilmUPtr Film::FromProperties(PropertiesPtr cfg) {
 	//--------------------------------------------------------------------------
 	// Create the Film
 	//--------------------------------------------------------------------------
@@ -114,7 +114,7 @@ FilmPtr Film::FromProperties(PropertiesConstPtr cfg) {
 	if (filmSubRegionUsed)
 		SLG_LOG("Film sub-region: " << filmSubRegion[0] << " " << filmSubRegion[1] << filmSubRegion[2] << " " << filmSubRegion[3]);
 
-	FilmPtr film = Film::Create(filmFullWidth, filmFullHeight,
+	FilmUPtr film = Film::Create(filmFullWidth, filmFullHeight,
 			filmSubRegionUsed ? filmSubRegion : nullptr);
 
 	// For compatibility with the past
@@ -149,7 +149,7 @@ FilmPtr Film::FromProperties(PropertiesConstPtr cfg) {
 	// Add the default output
 	//--------------------------------------------------------------------------
 
-	auto filmProps = std::make_shared<Properties>();
+	auto filmProps = std::make_unique<Properties>();
 	*filmProps <<
 		Property("film.outputs.0.type")("RGB_IMAGEPIPELINE") <<
 		Property("film.outputs.0.filename")("image.png");

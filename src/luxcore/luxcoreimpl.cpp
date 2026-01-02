@@ -19,10 +19,15 @@
 #include <boost/format.hpp>
 #include <boost/serialization/shared_ptr.hpp>
 #include <boost/serialization/unique_ptr.hpp>
+#include <memory>
+#include <stdexcept>
+#include <typeinfo>
 
 #include "luxcore/luxcorelogger.h"
+#include "luxrays/core/exttrianglemesh.h"
 #include "luxrays/core/intersectiondevice.h"
 #include "luxrays/utils/fileext.h"
+#include "luxrays/utils/properties.h"
 #include "luxrays/utils/serializationutils.h"
 #include "luxrays/utils/safesave.h"
 #include "slg/slg.h"
@@ -36,6 +41,7 @@
 #include "slg/engines/filesaver/filesaver.h"
 #include "slg/film/imagepipeline/plugins/intel_oidn.h"
 #include "luxcore/luxcore.h"
+#include "slg/usings.h"
 #include "luxcore/luxcoreimpl.h"
 
 using namespace std;
@@ -48,31 +54,36 @@ using namespace luxcore::detail;
 //------------------------------------------------------------------------------
 
 // Standalone film
-std::shared_ptr<FilmImpl> FilmImpl::Create(slg::FilmPtr film) {
-	return std::make_shared<FilmImplStandalone>(film);
+std::unique_ptr<FilmImpl> FilmImpl::Create(const std::string &fileName) {
+	return std::make_unique<FilmImplStandalone>(fileName);
 }
-std::shared_ptr<FilmImpl> FilmImpl::Create(const std::string &fileName) {
-	return std::make_shared<FilmImplStandalone>(fileName);
-}
-std::shared_ptr<FilmImpl> FilmImpl::Create(
-	luxrays::PropertiesConstPtr props,
+std::unique_ptr<FilmImpl> FilmImpl::Create(
+	luxrays::PropertiesPtr props,
 	const bool hasPixelNormalizedChannel,
 	const bool hasScreenNormalizedChannel
 ) {
-	return std::make_shared<FilmImplStandalone>(
+	return std::make_unique<FilmImplStandalone>(
 		props, hasPixelNormalizedChannel, hasScreenNormalizedChannel
 	);
 }
+// The below factory is mainly intended for deserialization, when
+// the archive yields a FilmUPtr
+std::unique_ptr<FilmImpl> FilmImpl::Create(slg::FilmUPtr&& film) {
+	auto res = std::make_unique<FilmImplStandalone>();
+	res->standAloneFilm = std::move(film);
+	return res;
+}
+
 
 // Session film
-std::shared_ptr<FilmImpl> FilmImpl::Create(RenderSessionImplRef session) {
-	return std::make_shared<FilmImplSession>(session);
+std::unique_ptr<FilmImpl> FilmImpl::Create(RenderSessionImplRef session) {
+	return std::make_unique<FilmImplSession>(session);
 }
 
 unsigned int FilmImpl::GetWidth() const {
 	API_BEGIN_NOARGS();
 
-	const unsigned int result = GetSLGFilm()->GetWidth();
+	const unsigned int result = GetSLGFilm().GetWidth();
 
 	API_RETURN("{}", result);
 
@@ -82,22 +93,27 @@ unsigned int FilmImpl::GetWidth() const {
 unsigned int FilmImpl::GetHeight() const {
 	API_BEGIN_NOARGS();
 
-	const unsigned int result = GetSLGFilm()->GetHeight();
+	const unsigned int result = GetSLGFilm().GetHeight();
 
 	API_RETURN("{}", result);
 
 	return result;
 }
 
-luxrays::Properties FilmImpl::GetStats() const {
+PropertiesUPtr FilmImpl::GetStats() const {
 	API_BEGIN_NOARGS();
 
-	std::shared_ptr<slg::Film> film = GetSLGFilm();
+	//std::unique_ptr<slg::Film> film = std::make_unique<slg::Film>(
+		
+		//GetSLGFilm()
+	//);
+	auto& film = GetSLGFilm();
 
-	Properties stats;
-	stats.Set(Property("stats.film.total.samplecount")(film->GetTotalSampleCount()));
-	stats.Set(Property("stats.film.spp")(film->GetTotalSampleCount() / static_cast<float>(film->GetWidth() * film->GetHeight())));
-	stats.Set(Property("stats.film.radiancegorup.count")(film->GetRadianceGroupCount()));
+	auto stats = std::make_unique<Properties>();
+
+	stats->Set(Property("stats.film.total.samplecount")(film.GetTotalSampleCount()));
+	stats->Set(Property("stats.film.spp")(film.GetTotalSampleCount() / static_cast<float>(film.GetWidth() * film.GetHeight())));
+	stats->Set(Property("stats.film.radiancegorup.count")(film.GetRadianceGroupCount()));
 
 	API_RETURN("{}", ToArgString(stats));
 
@@ -107,7 +123,7 @@ luxrays::Properties FilmImpl::GetStats() const {
 float FilmImpl::GetFilmY(const u_int imagePipelineIndex) const {
 	API_BEGIN_NOARGS();
 
-	const float result = GetSLGFilm()->GetFilmY(imagePipelineIndex);
+	const float result = GetSLGFilm().GetFilmY(imagePipelineIndex);
 
 	API_RETURN("{}", result);
 
@@ -117,58 +133,56 @@ float FilmImpl::GetFilmY(const u_int imagePipelineIndex) const {
 void FilmImpl::Clear() {
 	API_BEGIN_NOARGS();
 
-	GetSLGFilm()->Clear();
+	GetSLGFilm().Clear();
 
 	API_END();
 }
 
-void FilmImpl::AddFilm(std::shared_ptr<const Film> film) {
-	auto filmImpl = dynamic_pointer_cast<const FilmImpl>(film);
-	assert (filmImpl);
+void FilmImpl::AddFilm(FilmConstRef film) {
+	auto& filmImpl = dynamic_cast<const FilmImpl&>(film);
 
-	API_BEGIN("{}", (void *)filmImpl.get());
+	API_BEGIN("{}", (void *)std::addressof(filmImpl));
 
-	AddFilm(film, 0, 0, filmImpl->GetWidth(), filmImpl->GetHeight(), 0, 0);
+	AddFilm(film, 0, 0, filmImpl.GetWidth(), filmImpl.GetHeight(), 0, 0);
 
 	API_END();
 }
 
-void FilmImpl::AddFilm(std::shared_ptr<const Film> film,
+void FilmImpl::AddFilm(FilmConstRef film,
 		const u_int srcOffsetX, const u_int srcOffsetY,
 		const u_int srcWidth, const u_int srcHeight,
 		const u_int dstOffsetX, const u_int dstOffsetY) {
-	auto srcFilmImpl = dynamic_pointer_cast<const FilmImpl>(film);
-	assert (srcFilmImpl);
+	auto& srcFilmImpl = dynamic_cast<const FilmImpl&>(film);
 
-	API_BEGIN("{}, {}, {}, {}, {}, {}, {}", (void *)srcFilmImpl.get(), srcOffsetX, srcOffsetY, srcWidth, srcHeight, dstOffsetX, dstOffsetY);
+	API_BEGIN("{}, {}, {}, {}, {}, {}, {}", (void *)std::addressof(srcFilmImpl), srcOffsetX, srcOffsetY, srcWidth, srcHeight, dstOffsetX, dstOffsetY);
 
-	const FilmImpl *dstFilmImpl = this;
+	const FilmImpl& dstFilmImpl = *this;
 
 	// I have to clip the parameters to avoid an out of bound memory access
 
 	// Check the cases where I have nothing to do
-	if (srcOffsetX >= srcFilmImpl->GetWidth())
+	if (srcOffsetX >= srcFilmImpl.GetWidth())
 		return;
-	if (srcOffsetY >= srcFilmImpl->GetHeight())
+	if (srcOffsetY >= srcFilmImpl.GetHeight())
 		return;
-	if (dstOffsetX >= dstFilmImpl->GetWidth())
+	if (dstOffsetX >= dstFilmImpl.GetWidth())
 		return;
-	if (dstOffsetY >= dstFilmImpl->GetHeight())
+	if (dstOffsetY >= dstFilmImpl.GetHeight())
 		return;
 
 	u_int clippedSrcWidth;
 	// Clip with the src film
-	clippedSrcWidth = Min(srcOffsetX + srcWidth, srcFilmImpl->GetWidth()) - srcOffsetX;
+	clippedSrcWidth = Min(srcOffsetX + srcWidth, srcFilmImpl.GetWidth()) - srcOffsetX;
 	// Clip with the dst film
-	clippedSrcWidth = Min(dstOffsetX + clippedSrcWidth, dstFilmImpl->GetWidth()) - dstOffsetX;
+	clippedSrcWidth = Min(dstOffsetX + clippedSrcWidth, dstFilmImpl.GetWidth()) - dstOffsetX;
 
 	u_int clippedSrcHeight;
 	// Clip with the src film
-	clippedSrcHeight = Min(srcOffsetY + srcHeight, srcFilmImpl->GetHeight()) - srcOffsetY;
+	clippedSrcHeight = Min(srcOffsetY + srcHeight, srcFilmImpl.GetHeight()) - srcOffsetY;
 	// Clip with the dst film
-	clippedSrcHeight = Min(dstOffsetY + clippedSrcHeight, dstFilmImpl->GetHeight()) - dstOffsetY;
+	clippedSrcHeight = Min(dstOffsetY + clippedSrcHeight, dstFilmImpl.GetHeight()) - dstOffsetY;
 
-	GetSLGFilm()->AddFilm(*(srcFilmImpl->GetSLGFilm()),srcOffsetX, srcOffsetY,
+	GetSLGFilm().AddFilm(srcFilmImpl.GetSLGFilm(), srcOffsetX, srcOffsetY,
 			clippedSrcWidth, clippedSrcHeight, dstOffsetX, dstOffsetY);
 
 	API_END();
@@ -177,11 +191,11 @@ void FilmImpl::AddFilm(std::shared_ptr<const Film> film,
 void FilmImpl::SaveOutput(
 	const std::string &fileName,
 	const FilmOutputType type,
-	const PropertiesConstPtr props
+	PropertiesPtr props
 ) const {
 	API_BEGIN("{}, {}, {}", ToArgString(fileName),ToArgString(type), ToArgString(*props));
 
-	GetSLGFilm()->Output(
+	GetSLGFilm().Output(
 		fileName,
 		static_cast<slg::FilmOutputs::FilmOutputType>(type),
 		props
@@ -193,7 +207,7 @@ void FilmImpl::SaveOutput(
 double FilmImpl::GetTotalSampleCount() const {
 	API_BEGIN_NOARGS();
 
-	const double result = GetSLGFilm()->GetTotalSampleCount();
+	const double result = GetSLGFilm().GetTotalSampleCount();
 
 	API_RETURN("{}", result);
 
@@ -203,7 +217,7 @@ double FilmImpl::GetTotalSampleCount() const {
 bool FilmImpl::HasOutput(const FilmOutputType type) const {
 	API_BEGIN("{}", ToArgString(type));
 
-	const bool result = GetSLGFilm()->HasOutput(static_cast<slg::FilmOutputs::FilmOutputType>(type));
+	const bool result = GetSLGFilm().HasOutput(static_cast<slg::FilmOutputs::FilmOutputType>(type));
 
 	API_RETURN("{}", result);
 
@@ -213,7 +227,7 @@ bool FilmImpl::HasOutput(const FilmOutputType type) const {
 unsigned int FilmImpl::GetOutputCount(const FilmOutputType type) const {
 	API_BEGIN("{}", ToArgString(type));
 
-	const unsigned int result = GetSLGFilm()->GetOutputCount(static_cast<slg::FilmOutputs::FilmOutputType>(type));
+	const unsigned int result = GetSLGFilm().GetOutputCount(static_cast<slg::FilmOutputs::FilmOutputType>(type));
 
 	API_RETURN("{}", result);
 
@@ -223,7 +237,7 @@ unsigned int FilmImpl::GetOutputCount(const FilmOutputType type) const {
 size_t FilmImpl::GetOutputSize(const FilmOutputType type) const {
 	API_BEGIN("{}", ToArgString(type));
 
-	const size_t result = GetSLGFilm()->GetOutputSize(
+	const size_t result = GetSLGFilm().GetOutputSize(
 		static_cast<slg::FilmOutputs::FilmOutputType>(type)
 	);
 
@@ -235,7 +249,7 @@ size_t FilmImpl::GetOutputSize(const FilmOutputType type) const {
 unsigned int FilmImpl::GetRadianceGroupCount() const {
 	API_BEGIN_NOARGS();
 
-	const unsigned int result = GetSLGFilm()->GetRadianceGroupCount();
+	const unsigned int result = GetSLGFilm().GetRadianceGroupCount();
 
 	API_RETURN("{}", result);
 
@@ -254,7 +268,7 @@ void FilmImpl::UpdateOutputUInt(const FilmOutputType type, const unsigned int *b
 bool FilmImpl::HasChannel(const FilmChannelType type) const {
 	API_BEGIN("{}", ToArgString(type));
 
-	const bool result = GetSLGFilm()->HasChannel(static_cast<slg::Film::FilmChannelType>(type));
+	const bool result = GetSLGFilm().HasChannel(static_cast<slg::Film::FilmChannelType>(type));
 
 	API_RETURN("{}", result);
 
@@ -264,7 +278,7 @@ bool FilmImpl::HasChannel(const FilmChannelType type) const {
 unsigned int FilmImpl::GetChannelCount(const FilmChannelType type) const {
 	API_BEGIN("{}", ToArgString(type));
 
-	const unsigned int result = GetSLGFilm()->GetChannelCount(static_cast<slg::Film::FilmChannelType>(type));
+	const unsigned int result = GetSLGFilm().GetChannelCount(static_cast<slg::Film::FilmChannelType>(type));
 
 	API_RETURN("{}", result);
 
@@ -327,7 +341,7 @@ void FilmImplSession::UpdateOutputFloat(const FilmOutputType type, const float *
 
 	std::unique_lock<std::mutex> lock(renderSession.GetSLGRenderSession().filmMutex);
 
-	auto film = renderSession.GetSLGRenderSession().film;
+	const auto& film = renderSession.GetSLGRenderSession().film;
 	const unsigned int pixelsCount = film->GetWidth() * film->GetHeight();
 
 		// Only USER_IMPORTANCE can be updated
@@ -393,7 +407,7 @@ float * FilmImplSession::UpdateChannelFloat(const FilmChannelType type,
 	return result;
 }
 
-void FilmImplSession::Parse(PropertiesConstPtr props) {
+void FilmImplSession::Parse(PropertiesPtr props) {
 	API_BEGIN("{}", ToArgString(props));
 
 	throw runtime_error("Film::Parse() can be used only with a stand alone Film");
@@ -475,8 +489,8 @@ void FilmImplSession::SaveFilm(const string &fileName) const {
 	API_END();
 }
 
-slg::FilmPtr FilmImplSession::GetSLGFilm() const {
-	return renderSession.GetSLGRenderSession().film;
+slg::FilmRef FilmImplSession::GetSLGFilm() const {
+	return *renderSession.GetSLGRenderSession().film;
 }
 
 //------------------------------------------------------------------------------
@@ -488,7 +502,7 @@ FilmImplStandalone::FilmImplStandalone(const std::string &fileName) {
 }
 
 FilmImplStandalone::FilmImplStandalone(
-	luxrays::PropertiesConstPtr props,
+	luxrays::PropertiesPtr props,
 	const bool hasPixelNormalizedChannel,
 	const bool hasScreenNormalizedChannel
 ) {
@@ -503,12 +517,9 @@ FilmImplStandalone::FilmImplStandalone(
 	standAloneFilm->Init();
 }
 
-FilmImplStandalone::FilmImplStandalone(std::shared_ptr<slg::Film> film) :
-	standAloneFilm(film)
-{}
+slg::FilmRef FilmImplStandalone::GetSLGFilm() const {
 
-slg::FilmPtr FilmImplStandalone::GetSLGFilm() const {
-	return standAloneFilm;
+	return *standAloneFilm;
 }
 
 void FilmImplStandalone::SaveOutputs() const {
@@ -522,7 +533,7 @@ void FilmImplStandalone::SaveOutputs() const {
 void FilmImplStandalone::SaveFilm(const string &fileName) const {
 	API_BEGIN("{}", ToArgString(fileName));
 
-	slg::Film::SaveSerialized(fileName, standAloneFilm);
+	slg::Film::SaveSerialized(fileName, *standAloneFilm);
 
 	API_END();
 }
@@ -616,7 +627,7 @@ float *FilmImplStandalone::UpdateChannelFloat(const FilmChannelType type,
 	return result;
 }
 
-void FilmImplStandalone::Parse(PropertiesConstPtr props) {
+void FilmImplStandalone::Parse(PropertiesPtr props) {
 	API_BEGIN("{}", ToArgString(props));
 
 	standAloneFilm->Parse(props);
@@ -676,7 +687,7 @@ void FilmImplStandalone::ApplyOIDN(const u_int index) {
 // CameraImpl
 //------------------------------------------------------------------------------
 
-CameraImpl::CameraImpl(const SceneImpl &scn) : scene(scn) {
+CameraImpl::CameraImpl(SceneImpl &scn) : scene(scn) {
 }
 
 CameraImpl::~CameraImpl() {
@@ -685,99 +696,99 @@ CameraImpl::~CameraImpl() {
 const CameraImpl::CameraType CameraImpl::GetType() const {
 	API_BEGIN_NOARGS();
 
-	const CameraImpl::CameraType type = (Camera::CameraType)scene.scene->camera->GetType();
+	const CameraImpl::CameraType type = static_cast<Camera::CameraType>(scene.GetSlgScene().GetCamera().GetType());
 
 	API_RETURN("{}", type);
 
 	return type;
 }
 
-void CameraImpl::Translate(const float x, const float y, const float z) const {
+void CameraImpl::Translate(const float x, const float y, const float z) {
 	API_BEGIN("{}, {}, {}", x, y, z);
 
-	scene.scene->camera->Translate(Vector(x, y, z));
-	scene.scene->editActions.AddAction(slg::CAMERA_EDIT);
+	scene.GetSlgScene().GetCamera().Translate(Vector(x, y, z));
+	scene.GetSlgScene().GetEditActions().AddAction(slg::CAMERA_EDIT);
 
 	API_END();
 }
 
-void CameraImpl::TranslateLeft(const float t) const {
+void CameraImpl::TranslateLeft(const float t) {
 	API_BEGIN("{}", t);
 
-	scene.scene->camera->TranslateLeft(t);
-	scene.scene->editActions.AddAction(slg::CAMERA_EDIT);
+	scene.GetSlgScene().GetCamera().TranslateLeft(t);
+	scene.GetSlgScene().GetEditActions().AddAction(slg::CAMERA_EDIT);
 
 	API_END();
 }
 
-void CameraImpl::TranslateRight(const float t) const {
+void CameraImpl::TranslateRight(const float t) {
 	API_BEGIN("{}", t);
 
-	scene.scene->camera->TranslateRight(t);
-	scene.scene->editActions.AddAction(slg::CAMERA_EDIT);
+	scene.GetSlgScene().GetCamera().TranslateRight(t);
+	scene.GetSlgScene().GetEditActions().AddAction(slg::CAMERA_EDIT);
 
 	API_END();
 }
 
-void CameraImpl::TranslateForward(const float t) const {
+void CameraImpl::TranslateForward(const float t) {
 	API_BEGIN("{}", t);
 
-	scene.scene->camera->TranslateForward(t);
-	scene.scene->editActions.AddAction(slg::CAMERA_EDIT);
+	scene.GetSlgScene().GetCamera().TranslateForward(t);
+	scene.GetSlgScene().GetEditActions().AddAction(slg::CAMERA_EDIT);
 
 	API_END();
 }
 
-void CameraImpl::TranslateBackward(const float t) const {
+void CameraImpl::TranslateBackward(const float t) {
 	API_BEGIN("{}", t);
 
-	scene.scene->camera->TranslateBackward(t);
-	scene.scene->editActions.AddAction(slg::CAMERA_EDIT);
+	scene.GetSlgScene().GetCamera().TranslateBackward(t);
+	scene.GetSlgScene().GetEditActions().AddAction(slg::CAMERA_EDIT);
 
 	API_END();
 }
 
-void CameraImpl::Rotate(const float angle, const float x, const float y, const float z) const {
+void CameraImpl::Rotate(const float angle, const float x, const float y, const float z) {
 	API_BEGIN("{}, {}, {}, {}", angle, x ,y ,z);
 
-	scene.scene->camera->Rotate(angle, Vector(x, y, z));
-	scene.scene->editActions.AddAction(slg::CAMERA_EDIT);
+	scene.GetSlgScene().GetCamera().Rotate(angle, Vector(x, y, z));
+	scene.GetSlgScene().GetEditActions().AddAction(slg::CAMERA_EDIT);
 
 	API_END();
 }
 
-void CameraImpl::RotateLeft(const float angle) const {
+void CameraImpl::RotateLeft(const float angle) {
 	API_BEGIN("{}", angle);
 
-	scene.scene->camera->RotateLeft(angle);
-	scene.scene->editActions.AddAction(slg::CAMERA_EDIT);
+	scene.GetSlgScene().GetCamera().RotateLeft(angle);
+	scene.GetSlgScene().GetEditActions().AddAction(slg::CAMERA_EDIT);
 
 	API_END();
 }
 
-void CameraImpl::RotateRight(const float angle) const {
+void CameraImpl::RotateRight(const float angle) {
 	API_BEGIN("{}", angle);
 
-	scene.scene->camera->RotateRight(angle);
-	scene.scene->editActions.AddAction(slg::CAMERA_EDIT);
+	scene.GetSlgScene().GetCamera().RotateRight(angle);
+	scene.GetSlgScene().GetEditActions().AddAction(slg::CAMERA_EDIT);
 
 	API_END();
 }
 
-void CameraImpl::RotateUp(const float angle) const {
+void CameraImpl::RotateUp(const float angle) {
 	API_BEGIN("{}", angle);
 
-	scene.scene->camera->RotateUp(angle);
-	scene.scene->editActions.AddAction(slg::CAMERA_EDIT);
+	scene.GetSlgScene().GetCamera().RotateUp(angle);
+	scene.GetSlgScene().GetEditActions().AddAction(slg::CAMERA_EDIT);
 
 	API_END();
 }
 
-void CameraImpl::RotateDown(const float angle) const {
+void CameraImpl::RotateDown(const float angle) {
 	API_BEGIN("{}", angle);
 
-	scene.scene->camera->RotateDown(angle);
-	scene.scene->editActions.AddAction(slg::CAMERA_EDIT);
+	scene.GetSlgScene().GetCamera().RotateDown(angle);
+	scene.GetSlgScene().GetEditActions().AddAction(slg::CAMERA_EDIT);
 
 	API_END();
 }
@@ -786,59 +797,71 @@ void CameraImpl::RotateDown(const float angle) const {
 // SceneImpl
 //------------------------------------------------------------------------------
 
-SceneImpl::SceneImpl(Private p, luxrays::PropertiesConstPtr resizePolicyProps) {
-	camera = std::make_unique<CameraImpl>(*this);
-	scene = std::make_unique<slg::Scene>(resizePolicyProps);
-	scenePropertiesCache = std::make_shared<luxrays::Properties>();
-	allocatedScene = true;
-}
+// Case #1: non-owning construction. The scene is owned externally, SceneImpl
+// is just requested to keep a reference on it
+SceneImpl::SceneImpl(Private p, slg::SceneRef scn) :
+	camera(std::make_unique<CameraImpl>(*this)),
+	scenePropertiesCache(std::make_unique<luxrays::Properties>()),
+	internalScene(nullptr),
+	sceneRef(scn)
+{}
+
+// Other cases: SceneImpl owns the scene.
+SceneImpl::SceneImpl(Private p, luxrays::PropertiesPtr resizePolicyProps) :
+	camera(std::make_unique<CameraImpl>(*this)),
+	scenePropertiesCache(std::make_unique<luxrays::Properties>()),
+	internalScene(std::make_unique<slg::Scene>(resizePolicyProps)),
+	sceneRef(*internalScene)
+{}
 
 SceneImpl::SceneImpl(
 	Private p,
-	luxrays::PropertiesConstPtr props,
-	luxrays::PropertiesConstPtr resizePolicyProps
-) {
-	camera = std::make_unique<CameraImpl>(*this);
-	scene = std::make_shared<slg::Scene>(props, resizePolicyProps);
-	scenePropertiesCache = std::make_shared<luxrays::Properties>();
-	allocatedScene = true;
-}
+	luxrays::PropertiesPtr props,
+	luxrays::PropertiesPtr resizePolicyProps
+) :
+	camera(std::make_unique<CameraImpl>(*this)),
+	scenePropertiesCache(std::make_unique<luxrays::Properties>()),
+	internalScene(std::make_unique<slg::Scene>(props, resizePolicyProps)),
+	sceneRef(*internalScene)
+{}
 
-SceneImpl::SceneImpl(
-	Private p,
-	const string &fileName,
-	luxrays::PropertiesConstPtr resizePolicyProps
+static slg::SceneUPtr LoadScene(
+	const string fileName,
+	luxrays::PropertiesPtr resizePolicyProps
 ) {
-	camera = std::make_unique<CameraImpl>(*this);
-	scenePropertiesCache = std::make_shared<luxrays::Properties>();
-
 	const string ext = luxrays::GetFileNameExt(fileName);
 	if (ext == ".bsc") {
 		// The file is in a binary format
-		scene = slg::Scene::LoadSerialized(fileName);
+		return slg::Scene::LoadSerialized(fileName);
 	} else if (ext == ".scn") {
 		// The file is in a text format
-		scene = std::make_shared<slg::Scene>(
-			std::make_shared<Properties>(fileName), resizePolicyProps
+		return std::make_unique<slg::Scene>(
+			std::make_unique<Properties>(fileName), resizePolicyProps
 		);
-	} else
+	} else {
 		throw runtime_error("Unknown scene file extension: " + fileName);
+	}
 
-	allocatedScene = true;
 }
 
-SceneImpl::SceneImpl(Private p, std::shared_ptr<slg::Scene> scn) {
-	camera = std::make_unique<CameraImpl>(*this);
-	scene = scn;
-	allocatedScene = false;
-	scenePropertiesCache = std::make_shared<luxrays::Properties>();
-}
+
+SceneImpl::SceneImpl(
+	Private p,
+	const string fileName,
+	luxrays::PropertiesPtr resizePolicyProps
+) :
+	internalScene(LoadScene(fileName, resizePolicyProps)),
+	sceneRef(*internalScene),
+	camera(std::make_unique<CameraImpl>(*this)),
+	scenePropertiesCache(std::make_unique<luxrays::Properties>())
+{}
+
 
 
 void SceneImpl::GetBBox(float min[3], float max[3]) const {
 	API_BEGIN("{}, {}", (void *)min, (void *)max);
 
-	const BBox &worldBBox = scene->dataSet->GetBBox();
+	const BBox &worldBBox = GetSlgScene().GetDataSet().GetBBox();
 
 	min[0] = worldBBox.pMin.x;
 	min[1] = worldBBox.pMin.y;
@@ -858,10 +881,17 @@ const Camera &SceneImpl::GetCamera() const {
 	return *camera;
 }
 
+Camera &SceneImpl::GetCamera() {
+	API_BEGIN_NOARGS();
+	API_RETURN("{}", (void *)camera.get());
+
+	return *camera;
+}
+
 bool SceneImpl::IsImageMapDefined(const std::string &imgMapName) const {
 	API_BEGIN("{}", ToArgString(imgMapName));
 
-	const bool result = scene->IsImageMapDefined(imgMapName);
+	const bool result = GetSlgScene().IsImageMapDefined(imgMapName);
 
 	API_RETURN("{}", result);
 
@@ -871,7 +901,7 @@ bool SceneImpl::IsImageMapDefined(const std::string &imgMapName) const {
 void SceneImpl::SetDeleteMeshData(const bool v) {
 	API_BEGIN("{}", v);
 
-	scene->extMeshCache.SetDeleteMeshData(v);
+	GetSlgScene().GetExtMeshes().SetDeleteMeshData(v);
 
 	API_END();
 }
@@ -880,12 +910,22 @@ void SceneImpl::SetMeshAppliedTransformation(const std::string &meshName,
 			const float appliedTransMat[16]) {
 	API_BEGIN("{}, {}", ToArgString(meshName), ToArgString(appliedTransMat, 16));
 
-	auto mesh = scene->extMeshCache.GetExtMesh(meshName);
-	auto extTriMesh = dynamic_pointer_cast<ExtTriangleMesh>(mesh);
-	if (!extTriMesh)
-		throw runtime_error(
-			"Applied transformation can be set only for normal meshes: " + meshName
-		);
+	auto& mesh = GetSlgScene().GetExtMeshes().GetExtMesh(meshName);
+
+	auto getExtTriMesh = [&]() -> ExtTriangleMesh& {
+		try {
+			auto& m = dynamic_cast<ExtTriangleMesh&>(mesh);
+			return std::ref(m);
+		}
+		catch(std::bad_cast&) {
+			throw runtime_error(
+				"Applied transformation can be set only for normal meshes: "
+				+ meshName
+			);
+		}
+	};
+
+	ExtTriangleMesh& extTriMesh = getExtTriMesh();
 
 	// I have to transpose the matrix
 	const Matrix4x4 mat(
@@ -895,7 +935,7 @@ void SceneImpl::SetMeshAppliedTransformation(const std::string &meshName,
 		appliedTransMat[3], appliedTransMat[7], appliedTransMat[11], appliedTransMat[15]);
 	const Transform trans(mat);
 
-	extTriMesh->SetLocal2World(trans);
+	extTriMesh.SetLocal2World(trans);
 
 	API_END();
 }
@@ -912,7 +952,7 @@ void SceneImpl::DefineMesh(const std::string &meshName,
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->DefineMesh(meshName, plyNbVerts, plyNbTris, (Point *)p,
+	GetSlgScene().DefineMesh(meshName, plyNbVerts, plyNbTris, (Point *)p,
 			(Triangle *)vi, (Normal *)n,
 			(UV *)uvs, (Spectrum *)cols, alphas);
 
@@ -958,7 +998,7 @@ void SceneImpl::DefineMeshExt(const std::string &meshName,
 	} else
 		fill(slgAlphas.begin(), slgAlphas.end(), nullptr);
 
-	scene->DefineMeshExt(meshName, plyNbVerts, plyNbTris, (Point *)p,
+	GetSlgScene().DefineMeshExt(meshName, plyNbVerts, plyNbTris, (Point *)p,
 			(Triangle *)vi, (Normal *)n,
 			&slgUVs, &slgCols, &slgAlphas);
 
@@ -969,7 +1009,7 @@ void SceneImpl::SetMeshVertexAOV(const string &meshName,
 		const unsigned int index, float *data) {
 	API_BEGIN("{}, {}, {}", ToArgString(meshName), index, (void *)data);
 
-	scene->SetMeshVertexAOV(meshName, index, data);
+	GetSlgScene().SetMeshVertexAOV(meshName, index, data);
 
 	API_END();
 }
@@ -978,7 +1018,7 @@ void SceneImpl::SetMeshTriangleAOV(const string &meshName,
 		const unsigned int index, float *data) {
 	API_BEGIN("{}, {}, {}", ToArgString(meshName), index, (void *)data);
 
-	scene->SetMeshTriangleAOV(meshName, index, data);
+	GetSlgScene().SetMeshTriangleAOV(meshName, index, data);
 
 	API_END();
 }
@@ -986,8 +1026,8 @@ void SceneImpl::SetMeshTriangleAOV(const string &meshName,
 void SceneImpl::SaveMesh(const string &meshName, const string &fileName) {
 	API_BEGIN("{}, {}", ToArgString(meshName), ToArgString(fileName));
 
-	auto mesh = scene->extMeshCache.GetExtMesh(meshName);
-	mesh->Save(fileName);
+	auto& mesh = GetSlgScene().GetExtMeshes().GetExtMesh(meshName);
+	mesh.Save(fileName);
 
 	API_END();
 }
@@ -1006,7 +1046,7 @@ void SceneImpl::DefineStrands(const string &shapeName, const cyHairFile &strands
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->DefineStrands(shapeName, strandsFile,
+	GetSlgScene().DefineStrands(shapeName, strandsFile,
 			(slg::StrendsShape::TessellationType)tesselType, adaptiveMaxDepth, adaptiveError,
 			solidSideCount, solidCapBottom, solidCapTop,
 			useCameraPosition);
@@ -1017,7 +1057,7 @@ void SceneImpl::DefineStrands(const string &shapeName, const cyHairFile &strands
 bool SceneImpl::IsMeshDefined(const std::string &meshName) const {
 	API_BEGIN("{}", ToArgString(meshName));
 
-	const bool result = scene->IsMeshDefined(meshName);
+	const bool result = GetSlgScene().IsMeshDefined(meshName);
 
 	API_RETURN("{}", result);
 
@@ -1027,7 +1067,7 @@ bool SceneImpl::IsMeshDefined(const std::string &meshName) const {
 bool SceneImpl::IsTextureDefined(const std::string &texName) const {
 	API_BEGIN("{}", ToArgString(texName));
 
-	const bool result = scene->IsTextureDefined(texName);
+	const bool result = GetSlgScene().IsTextureDefined(texName);
 
 	API_RETURN("{}", result);
 
@@ -1037,7 +1077,7 @@ bool SceneImpl::IsTextureDefined(const std::string &texName) const {
 bool SceneImpl::IsMaterialDefined(const std::string &matName) const {
 	API_BEGIN("{}", ToArgString(matName));
 
-	const bool result = scene->IsMaterialDefined(matName);
+	const bool result = GetSlgScene().IsMaterialDefined(matName);
 
 	API_RETURN("{}", result);
 
@@ -1047,7 +1087,7 @@ bool SceneImpl::IsMaterialDefined(const std::string &matName) const {
 const unsigned int SceneImpl::GetLightCount() const {
 	API_BEGIN_NOARGS();
 
-	const unsigned int result = scene->lightDefs.GetSize();
+	const unsigned int result = GetSlgScene().GetLightSources().GetSize();
 
 	API_RETURN("{}", result);
 
@@ -1057,20 +1097,20 @@ const unsigned int SceneImpl::GetLightCount() const {
 const unsigned int  SceneImpl::GetObjectCount() const {
 	API_BEGIN_NOARGS();
 
-	const unsigned int result = scene->objDefs.GetSize();
+	const unsigned int result = GetSlgScene().GetObjects().GetSize();
 
 	API_RETURN("{}", result);
 
 	return result;
 }
 
-void SceneImpl::Parse(PropertiesConstPtr props) {
+void SceneImpl::Parse(PropertiesPtr props) {
 	API_BEGIN("{}", ToArgString(props));
 
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->Parse(props);
+	GetSlgScene().Parse(props);
 
 	API_END();
 }
@@ -1090,7 +1130,7 @@ void SceneImpl::DuplicateObject(const std::string &srcObjName, const std::string
 		transMat[2], transMat[6], transMat[10], transMat[14],
 		transMat[3], transMat[7], transMat[11], transMat[15]);
 	const Transform trans(mat);
-	scene->DuplicateObject(srcObjName, dstObjName, trans, objectID);
+	GetSlgScene().DuplicateObject(srcObjName, dstObjName, trans, objectID);
 
 	API_END();
 }
@@ -1116,7 +1156,7 @@ void SceneImpl::DuplicateObject(const std::string &srcObjName, const std::string
 		const unsigned int objectID = objectIDs ? objectIDs[i] : 0xffffffff;
 
 		const string dstObjName = dstObjNamePrefix + ToString(i);
-		scene->DuplicateObject(srcObjName, dstObjName, trans, objectID);
+		GetSlgScene().DuplicateObject(srcObjName, dstObjName, trans, objectID);
 
 		// Move to the next matrix
 		transMat += 16;
@@ -1153,7 +1193,9 @@ void SceneImpl::DuplicateObject(const std::string &srcObjName, const std::string
 		trans[i] = Inverse(Transform(mat));
 	}
 
-	scene->DuplicateObject(srcObjName, dstObjName, MotionSystem(tms, trans), objectID);
+	GetSlgScene().DuplicateObject(
+		srcObjName, dstObjName, MotionSystem(tms, trans), objectID
+	);
 
 	API_END();
 }
@@ -1191,7 +1233,7 @@ void SceneImpl::DuplicateObject(const std::string &srcObjName, const std::string
 		const unsigned int objectID = objectIDs ? objectIDs[j] : 0xffffffff;
 
 		const string dstObjName = dstObjNamePrefix + ToString(j);
-		scene->DuplicateObject(srcObjName, dstObjName, MotionSystem(tms, trans), objectID);
+		GetSlgScene().DuplicateObject(srcObjName, dstObjName, MotionSystem(tms, trans), objectID);
 	}
 	
 	API_END();
@@ -1210,7 +1252,7 @@ void SceneImpl::UpdateObjectTransformation(const std::string &objName, const flo
 		transMat[2], transMat[6], transMat[10], transMat[14],
 		transMat[3], transMat[7], transMat[11], transMat[15]);
 	const Transform trans(mat);
-	scene->UpdateObjectTransformation(objName, trans);
+	GetSlgScene().UpdateObjectTransformation(objName, trans);
 
 	API_END();
 }
@@ -1221,7 +1263,7 @@ void SceneImpl::UpdateObjectMaterial(const std::string &objName, const std::stri
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->UpdateObjectMaterial(objName, matName);
+	GetSlgScene().UpdateObjectMaterial(objName, matName);
 
 	API_END();
 }
@@ -1232,7 +1274,7 @@ void SceneImpl::DeleteObject(const string &objName) {
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->DeleteObject(objName);
+	GetSlgScene().DeleteObject(objName);
 
 	API_END();
 }
@@ -1243,7 +1285,7 @@ void SceneImpl::DeleteObjects(std::vector<std::string> &objNames) {
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->DeleteObjects(objNames);
+	GetSlgScene().DeleteObjects(objNames);
 
 	API_END();
 }
@@ -1254,7 +1296,7 @@ void SceneImpl::DeleteLight(const string &lightName) {
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->DeleteLight(lightName);
+	GetSlgScene().DeleteLight(lightName);
 
 	API_END();
 }
@@ -1265,7 +1307,7 @@ void SceneImpl::DeleteLights(std::vector<std::string> &lightNames) {
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->DeleteLights(lightNames);
+	GetSlgScene().DeleteLights(lightNames);
 
 	API_END();
 }
@@ -1276,7 +1318,7 @@ void SceneImpl::RemoveUnusedImageMaps() {
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->RemoveUnusedImageMaps();
+	GetSlgScene().RemoveUnusedImageMaps();
 
 	API_END();
 }
@@ -1287,7 +1329,7 @@ void SceneImpl::RemoveUnusedTextures() {
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->RemoveUnusedTextures();
+	GetSlgScene().RemoveUnusedTextures();
 }
 
 void SceneImpl::RemoveUnusedMaterials() {
@@ -1296,7 +1338,7 @@ void SceneImpl::RemoveUnusedMaterials() {
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->RemoveUnusedMaterials();
+	GetSlgScene().RemoveUnusedMaterials();
 
 	API_END();
 }
@@ -1305,7 +1347,7 @@ void SceneImpl::RemoveUnusedMeshes() {
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->RemoveUnusedMeshes();
+	GetSlgScene().RemoveUnusedMeshes();
 
 	API_END();
 }
@@ -1317,7 +1359,7 @@ void SceneImpl::DefineImageMapUChar(const std::string &imgMapName,
 	API_BEGIN("{}, {}, {}, {}, {}, {}, {}, {}", ToArgString(imgMapName), (void *)pixels, gamma, channels,
 			width, height, ToArgString(selectionType), ToArgString(wrapType));
 
-	scene->DefineImageMap(imgMapName, pixels, channels, width, height,
+	GetSlgScene().DefineImageMap(imgMapName, pixels, channels, width, height,
 			slg::ImageMapConfig(
 				gamma,
 				slg::ImageMapStorage::StorageType::BYTE,
@@ -1342,7 +1384,7 @@ void SceneImpl::DefineImageMapHalf(const std::string &imgMapName,
             ToArgString(wrapType)
         );
 
-	scene->DefineImageMap(imgMapName, (half *)pixels, channels, width, height,
+	GetSlgScene().DefineImageMap(imgMapName, (half *)pixels, channels, width, height,
 			slg::ImageMapConfig(
 				gamma,
 				slg::ImageMapStorage::StorageType::HALF,
@@ -1367,7 +1409,7 @@ void SceneImpl::DefineImageMapFloat(const std::string &imgMapName,
             ToArgString(wrapType)
         );
 
-	scene->DefineImageMap(imgMapName, pixels, channels, width, height,
+	GetSlgScene().DefineImageMap(imgMapName, pixels, channels, width, height,
 			slg::ImageMapConfig(
 				gamma,
 				slg::ImageMapStorage::StorageType::FLOAT,
@@ -1378,22 +1420,22 @@ void SceneImpl::DefineImageMapFloat(const std::string &imgMapName,
 }
 
 // Note: this method is not part of LuxCore API and it is used only internally
-void SceneImpl::DefineMesh(std::shared_ptr<ExtTriangleMesh> mesh) {
+void SceneImpl::DefineMesh(std::unique_ptr<ExtTriangleMesh>&& mesh) {
 	API_BEGIN("{}", (void *)mesh.get());
 
 	// Invalidate the scene properties cache
 	scenePropertiesCache->Clear();
 
-	scene->DefineMesh(mesh);
+	GetSlgScene().DefineMesh(std::move(mesh));
 
 	API_END();
 }
 
-PropertiesConstPtr SceneImpl::ToProperties() const {
+PropertiesPtr SceneImpl::ToProperties() const {
 	API_BEGIN_NOARGS();
 
 	if (!scenePropertiesCache->GetSize())
-		*scenePropertiesCache << scene->ToProperties(true);
+		*scenePropertiesCache << GetSlgScene().ToProperties(true);
 
 	//API_RETURN("{}", ToArgString(scenePropertiesCache));
 	API_END();
@@ -1401,10 +1443,10 @@ PropertiesConstPtr SceneImpl::ToProperties() const {
 	return scenePropertiesCache;
 }
 
-void SceneImpl::Save(const std::string &fileName) const {
+void SceneImpl::Save(const std::string &fileName) {
 	API_BEGIN("{}", ToArgString(fileName));
 
-	slg::Scene::SaveSerialized(fileName, scene);
+	slg::Scene::SaveSerialized(fileName, std::move(internalScene));
 
 	API_END();
 }
@@ -1415,7 +1457,7 @@ Point *SceneImpl::AllocVerticesBuffer(const unsigned int meshVertCount) {
 auto result = TriangleMesh::AllocVerticesBuffer(meshVertCount);
 
 	API_RETURN("{}", (void *)result);
-	
+
 	return result;
 }
 
@@ -1433,63 +1475,88 @@ auto result = TriangleMesh::AllocTrianglesBuffer(meshTriCount);
 // RenderConfigImpl
 //------------------------------------------------------------------------------
 
+// Case #1: Non owing constructor: RenderConfigImpl is provided a scene (as a ref)
 RenderConfigImpl::RenderConfigImpl(
 	Private p,
-	PropertiesConstPtr props
-) {
-	renderConfig = slg::RenderConfig::Create(props);
-	scene = SceneImpl::Create(renderConfig->scene);
-	allocatedScene = true;
-}
+	PropertiesPtr props,
+	SceneImpl& scn
+) :
+	sceneRef(scn),
+	renderConfig(slg::RenderConfig::Create(std::ref(props), std::ref(scn.GetSlgScene())))
+{}
 
+// Other cases: RenderConfigImpl is requested to build the scene from the properties
+// In these cases, RenderConfigImpl owns the scene
 RenderConfigImpl::RenderConfigImpl(
 	Private p,
-	PropertiesConstPtr props,
-	SceneImplPtr scn
-) {
-	if (not scn) throw std::runtime_error("Null scene in RenderConfigImpl");
-	scene = scn;
-	allocatedScene = false;
-	renderConfig = slg::RenderConfig::Create(props, scene->scene);
-}
+	PropertiesPtr props
+) :
+	renderConfig(slg::RenderConfig::Create(std::ref(props))),  // Build an internal scene
+	internalScene(SceneImpl::Create<slg::SceneRef>(renderConfig->GetScene())),
+	sceneRef(*internalScene)
+{}
 
-RenderConfigImpl::RenderConfigImpl(Private p, const std::string &fileName) {
-	renderConfig = slg::RenderConfig::LoadSerialized(fileName);
-	scene = SceneImpl::Create(renderConfig->scene);
-	allocatedScene = true;
+RenderConfigImpl::RenderConfigImpl(Private p, const std::string fileName) :
+	renderConfig(slg::RenderConfig::LoadSerialized(fileName)),
+	internalScene(SceneImpl::Create<slg::SceneRef>(renderConfig->GetScene())),
+	sceneRef(*internalScene)
+{}
+
+// TODO Move to head of file?
+//static slg::RenderConfigUPtr LoadRenderConfig(sif) {
+
+	//slg::RenderConfigUPtr renderConfig;
+
+	//SerializationInputFile sif(fileName);
+
+	//// Read the render configuration and the scene
+	//sif.GetArchive() >> renderConfig;
+
+	//return renderConfig;
+//}
+
+template <typename T>
+T RenderConfigImpl::ReadFromSIF() const {
+	if (not sif) throw std::runtime_error(
+		"RenderConfig: trying to read from serialization but input is not available"
+	);
+
+	T t;
+	sif->GetArchive() >> t;
+	return t;
 }
 
 RenderConfigImpl::RenderConfigImpl(
 		Private p,
-		const std::string &fileName,
-		std::shared_ptr<RenderStateImpl>& startState,
-		std::shared_ptr<FilmImpl>& startFilm
-) {
-	SerializationInputFile sif(fileName);
-
-	// Read the render configuration and the scene
-	sif.GetArchive() >> renderConfig;
-	scene = SceneImpl::Create(renderConfig->scene);
-	allocatedScene = true;
-
+		const std::string fileName,
+		std::shared_ptr<RenderStateImpl>& startState,  // Out parameter
+		std::unique_ptr<FilmImpl>& startFilm  // Out parameter
+) :
+	sif(fileName),
+	renderConfig(ReadFromSIF<slg::RenderConfigUPtr>()),
+	internalScene(SceneImpl::Create(std::ref(renderConfig->GetScene()))),
+	sceneRef(*internalScene)
+{
 	// Read the render state
 	std::shared_ptr<slg::RenderState> st;
-	sif.GetArchive() >> st;
+	sif->GetArchive() >> st;
 	startState = std::make_shared<RenderStateImpl>(st);
 
-	// Save the film
-	std::shared_ptr<slg::Film> sf;
-	sif.GetArchive() >> sf;
-	startFilm = std::make_shared<FilmImplStandalone>(sf);
+	// Load the film
+	std::unique_ptr<slg::Film> sf;
+	sif->GetArchive() >> sf;
+	startFilm = FilmImpl::Create(std::move(sf));
 
-	if (!sif.IsGood())
-		throw runtime_error("Error while loading serialized render session: " + fileName);
+	if (!sif->IsGood())
+		throw runtime_error(
+			"Error while loading serialized render session: " + fileName
+		);
 }
 
-const Properties &RenderConfigImpl::GetProperties() const {
+PropertiesPtr RenderConfigImpl::GetProperties() const {
 	API_BEGIN_NOARGS();
 
-	const Properties &result = *renderConfig->cfg;
+	auto& result = renderConfig->GetConfigPtr();
 
 	//API_RETURN("{}", ToArgString(result));
 	API_END();
@@ -1507,10 +1574,10 @@ const Property RenderConfigImpl::GetProperty(const std::string &name) const {
 	return result;
 }
 
-const Properties &RenderConfigImpl::ToProperties() const {
+PropertiesPtr RenderConfigImpl::ToProperties() const {
 	API_BEGIN_NOARGS();
 
-	const Properties &result = renderConfig->ToProperties();
+	PropertiesPtr result = renderConfig->ToProperties();
 
 	//API_RETURN("{}", ToArgString(result));
 	API_END();
@@ -1521,7 +1588,7 @@ const Properties &RenderConfigImpl::ToProperties() const {
 const Scene& RenderConfigImpl::GetScene() const {
 	API_BEGIN_NOARGS();
 
-	Scene &result = *scene;
+	Scene &result = sceneRef;
 
 	API_RETURN("{}", (void *)&result);
 
@@ -1531,7 +1598,7 @@ const Scene& RenderConfigImpl::GetScene() const {
 Scene& RenderConfigImpl::GetScene() {
 	API_BEGIN_NOARGS();
 
-	Scene &result = *scene;
+	Scene &result = sceneRef;
 
 	API_RETURN("{}", (void *)&result);
 
@@ -1548,7 +1615,7 @@ bool RenderConfigImpl::HasCachedKernels() const {
 	return result;
 }
 
-void RenderConfigImpl::Parse(PropertiesConstPtr props) {
+void RenderConfigImpl::Parse(PropertiesPtr props) {
 	API_BEGIN("{}", ToArgString(props));
 
 	renderConfig->Parse(*props);
@@ -1568,8 +1635,10 @@ bool RenderConfigImpl::GetFilmSize(unsigned int *filmFullWidth, unsigned int *fi
 		unsigned int *filmSubRegion) const {
 	API_BEGIN("{}, {}, {}", (void *)filmFullWidth, (void *)filmFullHeight, (void *)filmSubRegion);
 
-	const bool result = slg::Film::GetFilmSize(*renderConfig->cfg, filmFullWidth, filmFullHeight, filmSubRegion);
-	
+	const bool result = slg::Film::GetFilmSize(
+		renderConfig->GetConfig(), filmFullWidth, filmFullHeight, filmSubRegion
+	);
+
 	API_RETURN("{}", result);
 
 	return result;
@@ -1577,8 +1646,7 @@ bool RenderConfigImpl::GetFilmSize(unsigned int *filmFullWidth, unsigned int *fi
 
 void RenderConfigImpl::DeleteSceneOnExit() {
 	API_BEGIN_NOARGS();
-
-	allocatedScene = true;
+	// TODO Remove (useless, now)
 
 	API_END();
 }
@@ -1608,10 +1676,10 @@ void RenderConfigImpl::ExportGLTF(const std::string &fileName) const {
 	API_END();
 }
 
-const Properties &RenderConfigImpl::GetDefaultProperties() {
+PropertiesPtr RenderConfigImpl::GetDefaultProperties() {
 	API_BEGIN_NOARGS();
 
-	const Properties &result = slg::RenderConfig::GetDefaultProperties();
+	auto& result = slg::RenderConfig::GetDefaultProperties();
 
 	API_END();
 
@@ -1642,65 +1710,71 @@ void RenderStateImpl::Save(const std::string &fileName) const {
 // RenderSessionImpl
 //------------------------------------------------------------------------------
 
-
 RenderSessionImpl::RenderSessionImpl(
 	Private priv,
-	RenderConfigImplPtr config,
-	std::shared_ptr<RenderStateImpl> startState,
-	std::shared_ptr<FilmImplStandalone> startFilm
+	RenderConfigImplRef config
 ) :
-	renderConfig(config)
+	renderConfig(config),
+	stats(std::make_unique<Properties>())
 {
-	// Create slg session
 	renderSession = std::make_unique<slg::RenderSession>(
-		*config->renderConfig,
-		startState ? startState->renderState : slg::RenderStatePtr(nullptr),
-		startFilm ? startFilm->standAloneFilm : slg::FilmPtr(nullptr)
+		*config.renderConfig,
+		slg::RenderStateSPtr(nullptr),
+		nullptr
 	);
-
-	if (startState) {
-		startState->renderState = nullptr;
-		// startState is not more a valid/usable object after this point, it can
-		// only be deleted
-	}
-
-	if (startFilm) {
-		startFilm->standAloneFilm = nullptr;
-		// startFilm is not more a valid/usable object after this point, it can
-		// only be deleted
-	}
 }
 
 RenderSessionImpl::RenderSessionImpl(
 	Private priv,
-	RenderConfigImplPtr config,
+	RenderConfigImplRef config,
+	std::shared_ptr<RenderStateImpl>& startState,
+	FilmImplStandalone& startFilm
+) :
+	renderConfig(config),
+	stats(std::make_unique<Properties>())
+{
+	// Create slg session
+	renderSession = std::make_unique<slg::RenderSession>(
+		*config.renderConfig,
+		startState->renderState,
+		slg::FilmOPtr(std::addressof(startFilm.GetSLGFilm()))
+	);
+
+}
+
+RenderSessionImpl::RenderSessionImpl(
+	Private priv,
+	RenderConfigImplRef config,
 	const std::string &startStateFileName,
 	const std::string &startFilmFileName
 ) :
-	renderConfig(config)
+	renderConfig(config),
+	stats(std::make_unique<Properties>())
 {
 
 	auto startFilm = slg::Film::LoadSerialized(startFilmFileName);
 	auto startState = slg::RenderState::LoadSerialized(startStateFileName);
 
+	slg::RenderConfigRef rcfg(*config.renderConfig);
+
 	renderSession = std::make_unique<slg::RenderSession>(
-		*config->renderConfig,
+		rcfg,
 		startState,
-		startFilm
+		slg::FilmOPtr(startFilm.get())
 	);
 }
 
 void RenderSessionImpl::InitFilm() {
 	// Only for standalone case: we need to create the session film
-	film = std::make_shared<FilmImplSession>(*this);
+	film = std::make_unique<FilmImplSession>(*this);
 }
 
-RenderConfig & RenderSessionImpl::GetRenderConfig() {
+RenderConfigImplRef RenderSessionImpl::GetRenderConfig() {
 	API_BEGIN_NOARGS();
 
-	API_RETURN("{}", (void *)renderConfig.lock().get());
+	API_RETURN("{}", (void *)&renderConfig);
 
-	return *renderConfig.lock();
+	return renderConfig;
 }
 
 std::shared_ptr<RenderState> RenderSessionImpl::GetRenderState() {
@@ -1757,7 +1831,8 @@ void RenderSessionImpl::EndSceneEdit() {
 	renderSession->EndSceneEdit();
 
 	// Invalidate the scene properties cache
-	renderConfig.lock()->scene->scenePropertiesCache->Clear();
+	auto& sceneimpl = dynamic_cast<SceneImpl&>(renderConfig.GetScene());
+	sceneimpl.scenePropertiesCache->Clear();
 
 	API_END();
 }
@@ -1824,7 +1899,15 @@ void RenderSessionImpl::WaitNewFrame() {
 	API_END();
 }
 
-LuxFilmPtr RenderSessionImpl::GetFilm() {
+LuxFilmRef RenderSessionImpl::GetFilm() {
+	API_BEGIN_NOARGS();
+
+	API_RETURN("{}", (void *)film.get());
+
+	return *film;
+}
+
+FilmImplPtr RenderSessionImpl::GetFilmPtr() {
 	API_BEGIN_NOARGS();
 
 	API_RETURN("{}", (void *)film.get());
@@ -1835,14 +1918,15 @@ LuxFilmPtr RenderSessionImpl::GetFilm() {
 static void SetTileProperties(
 	Properties &props,
 	const string &prefix,
-	const std::deque<const slg::Tile *> &tiles) {
+	const std::deque<const slg::Tile *> &tiles
+) {
 	props.Set(Property(prefix + ".count")((unsigned int)tiles.size()));
 	Property tileCoordProp(prefix + ".coords");
 	Property tilePassProp(prefix + ".pass");
 	Property tilePendingPassesProp(prefix + ".pendingpasses");
 	Property tileErrorProp(prefix + ".error");
 
-	for(auto tile: tiles) {
+	for(auto* tile: tiles) {
 		tileCoordProp.Add(tile->coord.x).Add(tile->coord.y);
 		tilePassProp.Add(tile->pass);
 		tilePendingPassesProp.Add(tile->pendingPasses);
@@ -1874,16 +1958,16 @@ void RenderSessionImpl::UpdateStats() {
 	// update statistics, convergence test and more
 	renderSession->renderEngine->UpdateFilm();
 
-	stats.Set(Property("stats.renderengine.total.raysec")(renderSession->renderEngine->GetTotalRaysSec()));
-	stats.Set(Property("stats.renderengine.total.samplesec")(renderSession->renderEngine->GetTotalSamplesSec()));
-	stats.Set(Property("stats.renderengine.total.samplesec.eye")(renderSession->renderEngine->GetTotalEyeSamplesSec()));
-	stats.Set(Property("stats.renderengine.total.samplesec.light")(renderSession->renderEngine->GetTotalLightSamplesSec()));
-	stats.Set(Property("stats.renderengine.total.samplecount")(renderSession->renderEngine->GetTotalSampleCount()));
-	stats.Set(Property("stats.renderengine.pass")(renderSession->renderEngine->GetPass()));
-	stats.Set(Property("stats.renderengine.pass.eye")(renderSession->renderEngine->GetEyePass()));
-	stats.Set(Property("stats.renderengine.pass.light")(renderSession->renderEngine->GetLightPass()));
-	stats.Set(Property("stats.renderengine.time")(renderSession->renderEngine->GetRenderingTime()));
-	stats.Set(Property("stats.renderengine.convergence")(renderSession->film->GetConvergence()));
+	stats->Set(Property("stats.renderengine.total.raysec")(renderSession->renderEngine->GetTotalRaysSec()));
+	stats->Set(Property("stats.renderengine.total.samplesec")(renderSession->renderEngine->GetTotalSamplesSec()));
+	stats->Set(Property("stats.renderengine.total.samplesec.eye")(renderSession->renderEngine->GetTotalEyeSamplesSec()));
+	stats->Set(Property("stats.renderengine.total.samplesec.light")(renderSession->renderEngine->GetTotalLightSamplesSec()));
+	stats->Set(Property("stats.renderengine.total.samplecount")(renderSession->renderEngine->GetTotalSampleCount()));
+	stats->Set(Property("stats.renderengine.pass")(renderSession->renderEngine->GetPass()));
+	stats->Set(Property("stats.renderengine.pass.eye")(renderSession->renderEngine->GetEyePass()));
+	stats->Set(Property("stats.renderengine.pass.light")(renderSession->renderEngine->GetLightPass()));
+	stats->Set(Property("stats.renderengine.time")(renderSession->renderEngine->GetRenderingTime()));
+	stats->Set(Property("stats.renderengine.convergence")(renderSession->film->GetConvergence()));
 
 	// Intersection devices statistics
 	const vector<IntersectionDevice *> &idevices = renderSession->renderEngine->GetIntersectionDevices();
@@ -1902,61 +1986,63 @@ void RenderSessionImpl::UpdateStats() {
 
 		const string prefix = "stats.renderengine.devices." + uniqueName;
 
-		stats.Set(Property(prefix + ".type")(DeviceDescription::GetDeviceType(dev->GetDeviceDesc()->GetType())));
+		stats->Set(Property(prefix + ".type")(DeviceDescription::GetDeviceType(dev->GetDeviceDesc()->GetType())));
 
 		totalPerf += dev->GetTotalPerformance();
-		stats.Set(Property(prefix + ".performance.total")(dev->GetTotalPerformance()));
-		stats.Set(Property(prefix + ".performance.serial")(dev->GetSerialPerformance()));
-		stats.Set(Property(prefix + ".performance.dataparallel")(dev->GetDataParallelPerformance()));
+		stats->Set(Property(prefix + ".performance.total")(dev->GetTotalPerformance()));
+		stats->Set(Property(prefix + ".performance.serial")(dev->GetSerialPerformance()));
+		stats->Set(Property(prefix + ".performance.dataparallel")(dev->GetDataParallelPerformance()));
 
 		auto hardDev = dynamic_cast<const HardwareDevice *>(dev);
 		if (hardDev) {
-			stats.Set(Property(prefix + ".memory.total")((u_longlong)hardDev->GetDeviceDesc()->GetMaxMemory()));
-			stats.Set(Property(prefix + ".memory.used")((u_longlong)hardDev->GetUsedMemory()));
+			stats->Set(Property(prefix + ".memory.total")((u_longlong)hardDev->GetDeviceDesc()->GetMaxMemory()));
+			stats->Set(Property(prefix + ".memory.used")((u_longlong)hardDev->GetUsedMemory()));
 		} else {
-			stats.Set(Property(prefix + ".memory.total")(0ull));
-			stats.Set(Property(prefix + ".memory.used")(0ull));
+			stats->Set(Property(prefix + ".memory.total")(0ull));
+			stats->Set(Property(prefix + ".memory.used")(0ull));
 		}
 	}
-	stats.Set(devicesNames);
-	stats.Set(Property("stats.renderengine.performance.total")(totalPerf));
+	stats->Set(devicesNames);
+	stats->Set(Property("stats.renderengine.performance.total")(totalPerf));
 
 	// The explicit cast to size_t is required by VisualC++
-	stats.Set(Property("stats.dataset.trianglecount")(renderSession->renderConfig.scene->dataSet->GetTotalTriangleCount()));
+	stats->Set(Property("stats.dataset.trianglecount")(
+		renderSession->renderConfig.GetScene().GetDataSet().GetTotalTriangleCount())
+	);
 
 	// Some engine specific statistic
 	switch (renderSession->renderEngine->GetType()) {
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 		case slg::RTPATHOCL: {
 		auto engine = static_cast<slg::RTPathOCLRenderEngine*>(renderSession->renderEngine.get());
-			stats.Set(Property("stats.rtpathocl.frame.time")(engine->GetFrameTime()));
+			stats->Set(Property("stats.rtpathocl.frame.time")(engine->GetFrameTime()));
 			break;
 		}
 		case slg::TILEPATHOCL: {
 		auto engine = static_cast<slg::TilePathOCLRenderEngine*>(renderSession->renderEngine.get());
 
-			stats.Set(Property("stats.tilepath.tiles.size.x")(engine->GetTileWidth()));
-			stats.Set(Property("stats.tilepath.tiles.size.y")(engine->GetTileHeight()));
+			stats->Set(Property("stats.tilepath.tiles.size.x")(engine->GetTileWidth()));
+			stats->Set(Property("stats.tilepath.tiles.size.y")(engine->GetTileHeight()));
 
 			// Pending tiles
 			{
 				deque<const slg::Tile *> tiles;
 				engine->GetPendingTiles(tiles);
-				SetTileProperties(stats, "stats.tilepath.tiles.pending", tiles);
+				SetTileProperties(*stats, "stats.tilepath.tiles.pending", tiles);
 			}
 
 			// Not converged tiles
 			{
 				deque<const slg::Tile *> tiles;
 				engine->GetNotConvergedTiles(tiles);
-				SetTileProperties(stats, "stats.tilepath.tiles.notconverged", tiles);
+				SetTileProperties(*stats, "stats.tilepath.tiles.notconverged", tiles);
 			}
 
 			// Converged tiles
 			{
 				deque<const slg::Tile *> tiles;
 				engine->GetConvergedTiles(tiles);
-				SetTileProperties(stats, "stats.tilepath.tiles.converged", tiles);
+				SetTileProperties(*stats, "stats.tilepath.tiles.converged", tiles);
 			}
 			break;
 		}
@@ -1964,28 +2050,28 @@ void RenderSessionImpl::UpdateStats() {
 		case slg::TILEPATHCPU: {
 			auto engine = static_cast<slg::CPUTileRenderEngine*>(renderSession->renderEngine.get());
 
-			stats.Set(Property("stats.tilepath.tiles.size.x")(engine->GetTileWidth()));
-			stats.Set(Property("stats.tilepath.tiles.size.y")(engine->GetTileHeight()));
+			stats->Set(Property("stats.tilepath.tiles.size.x")(engine->GetTileWidth()));
+			stats->Set(Property("stats.tilepath.tiles.size.y")(engine->GetTileHeight()));
 
 			// Pending tiles
 			{
 				deque<const slg::Tile *> tiles;
 				engine->GetPendingTiles(tiles);
-				SetTileProperties(stats, "stats.tilepath.tiles.pending", tiles);
+				SetTileProperties(*stats, "stats.tilepath.tiles.pending", tiles);
 			}
 
 			// Not converged tiles
 			{
 				deque<const slg::Tile *> tiles;
 				engine->GetNotConvergedTiles(tiles);
-				SetTileProperties(stats, "stats.tilepath.tiles.notconverged", tiles);
+				SetTileProperties(*stats, "stats.tilepath.tiles.notconverged", tiles);
 			}
 
 			// Converged tiles
 			{
 				deque<const slg::Tile *> tiles;
 				engine->GetConvergedTiles(tiles);
-				SetTileProperties(stats, "stats.tilepath.tiles.converged", tiles);
+				SetTileProperties(*stats, "stats.tilepath.tiles.converged", tiles);
 			}
 			break;
 		}
@@ -2002,10 +2088,10 @@ void RenderSessionImpl::UpdateStats() {
 	API_END();
 }
 
-const Properties &RenderSessionImpl::GetStats() const {
+const PropertiesUPtr & RenderSessionImpl::GetStats() const {
 	API_BEGIN_NOARGS();
 
-	const Properties &result = stats;
+	const PropertiesUPtr &result = stats;
 
 	//API_RETURN("{}", ToArgString(result));
 	API_END();
@@ -2013,7 +2099,7 @@ const Properties &RenderSessionImpl::GetStats() const {
 	return result;
 }
 
-void RenderSessionImpl::Parse(PropertiesConstPtr props) {
+void RenderSessionImpl::Parse(luxrays::PropertiesPtr props) {
 	API_BEGIN("{}", ToArgString(props));
 
 	renderSession->Parse(props);

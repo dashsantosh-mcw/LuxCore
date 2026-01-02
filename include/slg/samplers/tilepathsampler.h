@@ -43,8 +43,8 @@ public:
 
 	static std::unique_ptr<SamplerSharedData> FromProperties(
 		const luxrays::Properties &cfg,
-		luxrays::RandomGenerator *rndGen,
-		FilmPtr film
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		std::experimental::observer_ptr<Film> film
 	);
 
 	// Nothing to share
@@ -56,8 +56,8 @@ public:
 
 class TilePathSampler : public Sampler {
 public:
-	TilePathSampler(luxrays::RandomGenerator *rnd, FilmPtr flm,
-			const FilmSampleSplatter *flmSplatter);
+	TilePathSampler(const luxrays::RandomGeneratorUPtr & rnd, std::experimental::observer_ptr<Film> flm,
+			const FilmSampleSplatterUPtr& flmSplatter);
 	virtual ~TilePathSampler();
 
 	virtual SamplerType GetType() const { return GetObjectType(); }
@@ -72,34 +72,34 @@ public:
 	//--------------------------------------------------------------------------
 
 	void SetAASamples(const u_int aaSamp);
-	void Init(TileWork *tileWork, FilmPtr tileFilm);
-	
+	void Init(TileWork *tileWork, std::experimental::observer_ptr<Film> tileFilm);
+
 	//--------------------------------------------------------------------------
 	// Static methods used by SamplerRegistry
 	//--------------------------------------------------------------------------
 
 	static SamplerType GetObjectType() { return TILEPATHSAMPLER; }
 	static std::string GetObjectTag() { return "TILEPATHSAMPLER"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 	static SamplerUPtr FromProperties(
 		const luxrays::Properties &cfg,
-		luxrays::RandomGenerator *rndGen,
-		FilmPtr film, const FilmSampleSplatter *flmSplatter,
-		SamplerSharedData& sharedData
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		std::experimental::observer_ptr<Film> film, const FilmSampleSplatterUPtr& flmSplatter,
+		SamplerSharedDataSPtr sharedData
 	);
 	static slg::ocl::Sampler *FromPropertiesOCL(const luxrays::Properties &cfg);
 	static void AddRequiredChannels(Film::FilmChannels &channels, const luxrays::Properties &cfg);
 
 private:
-	static const luxrays::Properties &GetDefaultProps();
-	
+	static luxrays::PropertiesUPtr GetDefaultProps();
+
 	void InitNewSample();
-	
+
 	u_int aaSamples;
 	SobolSequence sobolSequence;
 
 	TileWork *tileWork;
-	FilmPtr tileFilm;
+	std::experimental::observer_ptr<Film> tileFilm;
 	u_int tileX, tileY, tilePass;
 
 	float sample0, sample1;

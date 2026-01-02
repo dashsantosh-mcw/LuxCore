@@ -50,7 +50,7 @@ public:
 	} CameraType;
 
 	Camera(const CameraType t) : clipHither(1e-3f), clipYon(1e30f),
-		shutterOpen(0.f), shutterClose(1.f), autoVolume(true), volume(NULL),
+		shutterOpen(0.f), shutterClose(1.f), autoVolume(true), volume(nullptr),
 		motionSystem(NULL), type(t) { }
 	virtual ~Camera() {
 		delete motionSystem;
@@ -105,16 +105,19 @@ public:
 		const float filmX, const float filmY,
 		float *pdfW, float *fluxToRadianceFactor) const = 0;
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
-	virtual void UpdateVolumeReferences(VolumeConstPtr oldVol, VolumeConstPtr newVol);
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual void UpdateVolumeReferences(VolumeConstRef oldVol, VolumeConstRef newVol);
 
-	static CameraPtr AllocCamera(const luxrays::Properties &props);
+	static CameraUPtr AllocCamera(const luxrays::Properties &props);
 
 	// User defined values
 	float clipHither, clipYon, shutterOpen, shutterClose;
 
+	bool HasVolume() const { return bool(volume); }
+	VolumeConstRef GetVolume() const { return *volume; }
+	void SetVolume(VolumeConstRef vol) { volume.reset(&vol); }
+
 	bool autoVolume;
-	VolumeConstPtr volume;
 
 	// For motion blur
 	const luxrays::MotionSystem *motionSystem;
@@ -128,6 +131,7 @@ protected:
 	luxrays::BBox ComputeBBox(const luxrays::Point &orig) const;
 
 	const CameraType type;
+	VolumeConstOPtr volume;
 };
 
 

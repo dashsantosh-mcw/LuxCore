@@ -20,6 +20,7 @@
 #include "luxrays/core/intersectiondevice.h"
 #include "slg/core/sdl.h"
 #include "slg/scene/scene.h"
+#include "slg/cameras/camera.h"
 
 using namespace std;
 using namespace luxrays;
@@ -48,11 +49,11 @@ void Scene::Preprocess(Context& ctx, const u_int filmWidth, const u_int filmHeig
 		}
 
 		// Rebuild the data set
-		dataSet = std::make_shared<DataSet>(ctx);
+		dataSet = std::make_unique<DataSet>(ctx);
 
 		// Add all objects
 		for (u_int i = 0; i < objDefs.GetSize(); ++i)
-			dataSet->Add(objDefs.GetSceneObject(i)->GetExtMesh());
+			dataSet->Add(objDefs.GetSceneObject(i).GetExtMesh());
 
 		dataSet->Preprocess();
 
@@ -94,17 +95,17 @@ void Scene::Preprocess(Context& ctx, const u_int filmWidth, const u_int filmHeig
 			editActions.Has(LIGHTS_EDIT) ||
 			editActions.Has(LIGHT_TYPES_EDIT) ||
 			editActions.Has(IMAGEMAPS_EDIT)) {
-		lightDefs.Preprocess(shared_from_this(), useRTMode);
+		lightDefs.Preprocess(*this, useRTMode);
 	}
 
 	// And for visibility maps
-	lightDefs.UpdateVisibilityMaps(shared_from_this(), useRTMode);
+	lightDefs.UpdateVisibilityMaps(*this, useRTMode);
 
 	//--------------------------------------------------------------------------
 	// Preprocess image maps according resize policy
 	//--------------------------------------------------------------------------
 
-	imgMapCache.Preprocess(shared_from_this(), useRTMode);
+	imgMapCache.Preprocess(*this, useRTMode);
 
 	//--------------------------------------------------------------------------
 	// Reset the edit actions

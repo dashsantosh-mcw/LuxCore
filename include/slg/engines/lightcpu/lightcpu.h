@@ -44,7 +44,7 @@ public:
 	friend class LightCPURenderEngine;
 
 private:
-	virtual luxrays::JThreadPtr AllocRenderThread() {
+	virtual luxrays::JThreadUPtr AllocRenderThread() {
 		auto t = std::make_unique<luxrays::JThread>(
 			std::bind_front(&LightCPURenderThread::RenderFunc, this)
 		);
@@ -57,13 +57,13 @@ private:
 
 class LightCPURenderEngine : public CPUNoTileRenderEngine {
 public:
-	LightCPURenderEngine(RenderConfigConstRef cfg);
+	LightCPURenderEngine(RenderConfigRef cfg);
 	~LightCPURenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
 	virtual std::string GetTag() const { return GetObjectTag(); }
 
-	virtual RenderStatePtr GetRenderState();
+	virtual RenderStateSPtr GetRenderState();
 
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
@@ -71,24 +71,24 @@ public:
 
 	static RenderEngineType GetObjectType() { return LIGHTCPU; }
 	static std::string GetObjectTag() { return "LIGHTCPU"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(RenderConfigConstRef rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class LightCPURenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
+
 
 	virtual void InitFilm();
 	virtual void StartLockLess();
 	virtual void StopLockLess();
 
-	CPURenderThread *NewRenderThread(const u_int index,
+	CPURenderThreadUPtr NewRenderThread(const u_int index,
 			luxrays::IntersectionDevice *device) {
-		return new LightCPURenderThread(this, index, device);
+		return std::make_unique<LightCPURenderThread>(this, index, device);
 	}
 
-	FilmSampleSplatter *sampleSplatter;
 	PathTracer pathTracer;
 };
 

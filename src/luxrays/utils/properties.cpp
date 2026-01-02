@@ -35,6 +35,7 @@
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/archive/iterators/ostream_iterator.hpp>
 
+#include "luxrays/usings.h"
 #include "luxrays/utils/utils.h"
 #include "luxrays/utils/properties.h"
 #include "luxrays/utils/proputils.h"
@@ -79,7 +80,7 @@ Blob::Blob(const string &base64Data) {
 
 Blob &Blob::operator=(const Blob &blob) {
 
-	data.reset(new char[blob.size]);
+	data = std::make_unique<char[]>(blob.size);
 	size = blob.size;
 
 	copy(blob.data.get(), blob.data.get() + blob.size, data.get());
@@ -508,6 +509,15 @@ string Property::GetValuesString() const {
 	return ss.str();
 }
 
+
+PropertyUPtr Property::Renamed(const std::string &newName) const {
+	auto newProp = std::make_unique<Property>(newName);
+	newProp->values.insert(newProp->values.begin(), values.begin(), values.end());
+
+	return newProp;
+}
+
+
 //------------------------------------------------------------------------------
 // Get basic types
 //------------------------------------------------------------------------------
@@ -820,20 +830,29 @@ unsigned int Properties::GetSize() const {
 }
 
 Properties &Properties::Set(const Properties &props) {
-	for(const string &name: props.GetAllNames()) {
+	for(const string name: props.GetAllNames()) {
 		this->Set(props.Get(name));
 	}
 
 	return *this;
 }
 
+Properties &Properties::Set(const PropertiesUPtr &props) {
+	for(const string name: props->GetAllNames()) {
+		this->Set(props->Get(name));
+	}
+
+	return *this;
+}
+
 Properties &Properties::Set(const Properties &props, const string &prefix) {
-	for(const string &name: props.GetAllNames()) {
+	for(const string name: props.GetAllNames()) {
 		Set(props.Get(name).AddedNamePrefix(prefix));
 	}
 
 	return *this;
 }
+
 
 Properties &Properties::SetFromStream(istream &stream) {
 	string line;
@@ -917,13 +936,15 @@ Properties &Properties::Clear() {
 	return *this;
 }
 
-const vector<string> &Properties::GetAllNames() const {
-	return names;
+std::vector<std::string> Properties::GetAllNames() const {
+	std::vector<std::string> res;
+	std::copy(names.begin(), names.end(), std::back_inserter(res));
+	return res;
 }
 
 vector<string> Properties::GetAllNames(const string &prefix) const {
 	vector<string> namesSubset;
-	for(const string &name: names) {
+	for(const string name: names) {
 		if (name.find(prefix) == 0)
 			namesSubset.push_back(name);
 	}
@@ -931,11 +952,11 @@ vector<string> Properties::GetAllNames(const string &prefix) const {
 	return namesSubset;
 }
 
-vector<string> Properties::GetAllNamesRE(const string &regularExpression) const {
+std::vector<string> Properties::GetAllNamesRE(const string &regularExpression) const {
 	std::regex re(regularExpression);
-	
-	vector<string> namesSubset;
-	for(const string &name: names) {
+
+	std::vector<string> namesSubset;
+	for(const string name: names) {
 		if (std::regex_match(name, re))
 			namesSubset.push_back(name);
 	}
@@ -943,12 +964,14 @@ vector<string> Properties::GetAllNamesRE(const string &regularExpression) const 
 	return namesSubset;
 }
 
-vector<string> Properties::GetAllUniqueSubNames(const string &prefix, const bool sorted) const {
+std::vector<std::string> Properties::GetAllUniqueSubNames(
+	const string prefix, const bool sorted
+) const {
 	const size_t fieldsCount = count(prefix.begin(), prefix.end(), '.') + 2;
 
-	set<string> definedNames;
-	vector<string> namesSubset;
-	for(const string &name: names) {
+	std::set<std::string> definedNames;
+	std::vector<std::string> namesSubset;
+	for(const auto name: names) {
 		if (name.find(prefix) == 0) {
 			// Check if it has been already defined
 
@@ -962,7 +985,7 @@ vector<string> Properties::GetAllUniqueSubNames(const string &prefix, const bool
 
 	if (sorted) {
 		std::sort(namesSubset.begin(), namesSubset.end(),
-				[](const string &a, const string &b) -> bool{ 
+			[](const string &a, const string &b) -> bool{
 			// Try to convert a and b to a number
 			int aNumber = 0;
 			bool validA;
@@ -1005,7 +1028,7 @@ vector<string> Properties::GetAllUniqueSubNames(const string &prefix, const bool
 }
 
 bool Properties::HaveNames(const string &prefix) const {
-	for(const string &name: names) {
+	for(const string name: names) {
 		if (name.find(prefix) == 0)
 			return true;
 	}
@@ -1016,7 +1039,7 @@ bool Properties::HaveNames(const string &prefix) const {
 bool Properties::HaveNamesRE(const string &regularExpression) const {
 	std::regex re(regularExpression);
 
-	for(const string &name: names) {
+	for(const string name: names) {
 		if (std::regex_match(name, re))
 			return true;
 	}
@@ -1024,14 +1047,15 @@ bool Properties::HaveNamesRE(const string &regularExpression) const {
 	return false;
 }
 
-Properties Properties::GetAllProperties(const string &prefix) const {
-	Properties subset;
-	for(const string &name: names) {
+std::unique_ptr<Properties> Properties::GetAllProperties(const string &prefix) const {
+	std::unique_ptr<Properties> subset = std::make_unique<Properties>();
+	for(const string name: names) {
 		if (name.find(prefix) == 0)
-			subset.Set(Get(name));
+			subset->Set(Get(name));
 	}
 
-	return subset;
+	return std::move(subset);
+
 }
 
 bool Properties::IsDefined(const string &propName) const {
@@ -1039,34 +1063,37 @@ bool Properties::IsDefined(const string &propName) const {
 }
 
 const Property &Properties::Get(const string &propName) const {
-	std::map<string, Property>::const_iterator it = props.find(propName);
+	auto it = props.find(propName);
 	if (it == props.end())
 		throw runtime_error("Undefined property in Properties::Get(): " + propName);
 
-	return it->second;
+	return *it->second;
 }
 
 const Property &Properties::Get(const Property &prop) const {
-	std::map<string, Property>::const_iterator it = props.find(prop.GetName());
+	auto it = props.find(prop.GetName());
 	if (it == props.end())
 			return prop;
 
-	return it->second;
+	return *it->second;
 }
 
-const Property Properties::Get(const Property &prop, const std::string alternativeName) const {
-	std::map<string, Property>::const_iterator it = props.find(prop.GetName());
-	if (it == props.end()) {
-		// Look for the alternative property name
-		std::map<string, Property>::const_iterator itAlt = props.find(alternativeName);
-	
-		if (itAlt == props.end())
-			return prop;
-		else
-			return itAlt->second.Renamed(prop.GetName());
-	}
+PropertyUPtr Properties::Get(
+	Property&& prop, const std::string alternativeName
+) const {
+	const auto& name = prop.GetName();
 
-	return it->second;
+	auto it = props.find(name);
+	if (it != props.end())
+		return std::make_unique<Property>(*it->second);  // Found
+
+	// Look for the alternative property name
+	auto itAlt = props.find(alternativeName);
+	if (itAlt != props.end())
+		return itAlt->second->Renamed(name);  // Found (alternate)
+
+	// Fall back to input
+	return std::make_unique<Property>(std::move(prop));
 }
 
 void Properties::Delete(const string &propName) {
@@ -1086,13 +1113,13 @@ string Properties::ToString() const {
 	stringstream ss;
 
 	for (vector<string>::const_iterator i = names.begin(); i != names.end(); ++i)
-		ss << props.at(*i).ToString() << "\n";
+		ss << props.at(*i)->ToString() << "\n";
 
 	return ss.str();
 }
 
 Properties &Properties::Set(const Property &prop) {
-	const string &propName = prop.GetName();
+	const string propName = prop.GetName();
 
 	if (!IsDefined(propName)) {
 		// It is a new name
@@ -1102,12 +1129,36 @@ Properties &Properties::Set(const Property &prop) {
 		props.erase(propName);
 	}
 
-	props.insert(pair<string, Property>(propName, prop));
+	props.emplace(propName, std::make_unique<Property>(prop));
 
 	return *this;
 }
 
+Properties &Properties::Set(Property&& prop) {
+	const string propName = prop.GetName();
+
+	if (!IsDefined(propName)) {
+		// It is a new name
+		names.push_back(propName);
+	} else {
+		// std::unordered_set::insert() doesn't overwrite an existing entry
+		props.erase(propName);
+	}
+
+	props.emplace(propName, std::make_unique<Property>(prop));
+
+	return *this;
+}
+
+Properties &Properties::Set(PropertyPtr prop) {
+	return Set(*prop);
+}
+
 Properties &Properties::operator<<(const Property &prop) {
+	return Set(prop);
+}
+
+Properties &Properties::operator<<(Property&& prop) {
 	return Set(prop);
 }
 
@@ -1115,11 +1166,39 @@ Properties &Properties::operator<<(const Properties &props) {
 	return Set(props);
 }
 
-Properties luxrays::operator<<(const Property &prop0, const Property &prop1) {
-	return Properties() << prop0 << prop1;
+Properties &Properties::operator<<(const std::unique_ptr<Properties> &props) {
+	return Set(*props);
 }
 
-Properties luxrays::operator<<(const Property &prop0, const Properties &props) {
-	return Properties() << prop0 << props;
+PropertiesUPtr Properties::Clone() const {
+	auto result = std::make_unique<Properties>();
+
+	// Property map
+	decltype(props) copiedMap;
+
+	for (const auto& [key, value] : props) {
+		copiedMap[key] = std::make_unique<Property>(*value);
+	}
+
+	result->props = std::move(copiedMap);
+
+	// Name vector
+	result->names = names;  // std::vector and std::string should make a deep
+						   // copy out of the box
+
+	return result;
+}
+
+
+Properties &luxrays::operator<<(const Property &prop0, const Property &prop1) {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props << prop0 << prop1;
+	return *props;
+}
+
+Properties &luxrays::operator<<(const Property &prop0, const Properties &props) {
+	PropertiesUPtr res = std::make_unique<Properties>();
+	*res << prop0 << props;
+	return *res;
 }
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

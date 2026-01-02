@@ -26,11 +26,11 @@ using namespace slg;
 // Two-sided material
 //------------------------------------------------------------------------------
 
-TwoSidedMaterial::TwoSidedMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
-		TextureConstPtr emitted, TextureConstPtr bump,
-		MaterialConstPtr frontMat, MaterialConstPtr backMat) :
+TwoSidedMaterial::TwoSidedMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
+		TextureConstOPtr emitted, TextureConstOPtr bump,
+		MaterialConstRef frontMat, MaterialConstRef backMat) :
 			Material(frontTransp, backTransp, emitted, bump),
-			frontMat(frontMat), backMat(backMat) {
+			frontMat(&frontMat), backMat(&backMat) {
 	Preprocess();
 }
 
@@ -67,7 +67,7 @@ void TwoSidedMaterial::Preprocess() {
 	isDelta = IsDeltaImpl();
 }
 
-VolumeConstPtr TwoSidedMaterial::GetInteriorVolume(const HitPoint &hitPoint,
+VolumeConstOPtr TwoSidedMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (interiorVolume)
 		return interiorVolume;
@@ -79,7 +79,7 @@ VolumeConstPtr TwoSidedMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 	}
 }
 
-VolumeConstPtr TwoSidedMaterial::GetExteriorVolume(const HitPoint &hitPoint,
+VolumeConstOPtr TwoSidedMaterial::GetExteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (exteriorVolume)
 		return exteriorVolume;
@@ -191,57 +191,57 @@ void TwoSidedMaterial::Pdf(const HitPoint &hitPoint,
 	}
 }
 
-void TwoSidedMaterial::UpdateMaterialReferences(MaterialConstPtr oldMat, MaterialConstPtr newMat) {
+void TwoSidedMaterial::UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat) {
 	if (frontMat == oldMat)
-		frontMat = newMat;
+		frontMat.reset(&newMat);
 
 	if (backMat == oldMat)
-		backMat = newMat;
-	
+		backMat.reset(&newMat);
+
 	// Update volumes too
 	Material::UpdateMaterialReferences(oldMat, newMat);
-	
+
 	Preprocess();
 }
 
-bool TwoSidedMaterial::IsReferencing(MaterialConstPtr mat) const {
+bool TwoSidedMaterial::IsReferencing(MaterialConstRef mat) const {
 	return frontMat == mat || frontMat->IsReferencing(mat) ||
 		backMat == mat || backMat->IsReferencing(mat);
 }
 
 void TwoSidedMaterial::AddReferencedMaterials(
-	std::unordered_set<MaterialConstPtr> &referencedMats
+	std::unordered_set<const Material *> &referencedMats
 ) const {
 	Material::AddReferencedMaterials(referencedMats);
 
-	referencedMats.insert(frontMat);
+	referencedMats.insert(frontMat.get());
 	frontMat->AddReferencedMaterials(referencedMats);
 
-	referencedMats.insert(backMat);
+	referencedMats.insert(backMat.get());
 	backMat->AddReferencedMaterials(referencedMats);
 }
 
-void TwoSidedMaterial::AddReferencedTextures(std::unordered_set<TextureConstPtr>  &referencedTexs) const {
+void TwoSidedMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	frontMat->AddReferencedTextures(referencedTexs);
 	backMat->AddReferencedTextures(referencedTexs);
 }
 
-void TwoSidedMaterial::UpdateTextureReferences(TextureConstPtr oldTex, TextureConstPtr newTex) {
+void TwoSidedMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
 	Preprocess();
 }
 
-Properties TwoSidedMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr TwoSidedMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("twosided"));
-	props.Set(Property("scene.materials." + name + ".frontmaterial")(frontMat->GetName()));
-	props.Set(Property("scene.materials." + name + ".backmaterial")(backMat->GetName()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("twosided"));
+	props->Set(Property("scene.materials." + name + ".frontmaterial")(frontMat->GetName()));
+	props->Set(Property("scene.materials." + name + ".backmaterial")(backMat->GetName()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }

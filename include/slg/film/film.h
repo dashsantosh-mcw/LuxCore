@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <vector>
 #include <unordered_set>
@@ -32,6 +33,8 @@
 #include <bcd/core/SamplesAccumulator.h>
 
 #include "luxrays/usings.h"
+#include "slg/usings.h"
+
 #include "luxrays/core/hardwaredevice.h"
 #include "luxrays/utils/properties.h"
 #include "luxrays/utils/serializationutils.h"
@@ -154,7 +157,7 @@ public:
 
 	typedef std::unordered_set<FilmChannelType, std::hash<int> > FilmChannels;
 
-	static FilmPtr Create(
+	static FilmUPtr Create(
 		const u_int width,
 		const u_int height,
 		const u_int *subRegion = nullptr
@@ -175,7 +178,7 @@ public:
 	void Resize(const u_int w, const u_int h);
 	void Reset(const bool onlyCounters = false);
 	void Clear();
-	void Parse(luxrays::PropertiesConstPtr props);
+	void Parse(luxrays::PropertiesPtr props);
 
 	//--------------------------------------------------------------------------
 	// Dynamic settings
@@ -221,7 +224,7 @@ public:
 
 	// This one must be called before Init()
 	void AddChannel(const FilmChannelType type,
-		luxrays::PropertiesConstPtr prop = nullptr);
+		luxrays::PropertiesPtr prop = nullptr);
 	// This one must be called before Init()
 	void RemoveChannel(const FilmChannelType type);
 	// This one must be called before Init()
@@ -241,8 +244,8 @@ public:
 		throw std::runtime_error("Called Film::GetChannel() with wrong type");
 	}
 
-	bool HasDataChannel() { return hasDataChannel; }
-	bool HasComposingChannel() { return hasComposingChannel; }
+	bool HasDataChannel() const { return hasDataChannel; }
+	bool HasComposingChannel() const { return hasComposingChannel; }
 
 	void AsyncExecuteImagePipeline(const u_int index);
 	void WaitAsyncExecuteImagePipeline();
@@ -261,7 +264,7 @@ public:
 	void Output(
 		const std::string &fileName,
 		const FilmOutputs::FilmOutputType type,
-		luxrays::PropertiesConstPtr props,
+		luxrays::PropertiesPtr props,
 		const bool executeImagePipeline = true
 	);
 
@@ -288,15 +291,15 @@ public:
 	double GetTotalTime() const {
 		return luxrays::WallClockTime() - statsStartSampleTime;
 	}
-	double GetAvgSampleSec() {
+	double GetAvgSampleSec() const {
 		const double t = GetTotalTime();
 		return (t > 0.0) ? (GetTotalSampleCount() / t) : 0.0;
 	}
-	double GetAvgEyeSampleSec() {
+	double GetAvgEyeSampleSec() const {
 		const double t = GetTotalTime();
 		return (t > 0.0) ? (GetTotalEyeSampleCount() / t) : 0.0;
 	}
-	double GetAvgLightSampleSec() {
+	double GetAvgLightSampleSec() const {
 		const double t = GetTotalTime();
 		return (t > 0.0) ? (GetTotalLightSampleCount() / t) : 0.0;
 	}
@@ -339,11 +342,11 @@ public:
 	
 	// Atomic method versions
 	void AtomicAddSample(const u_int x, const u_int y,
-		const SampleResult &sampleResult, const float weight = 1.f);
+		const SampleResult &sampleResult, const float weight = 1.f) const;
 	void AtomicAddSampleResultColor(const u_int x, const u_int y,
-		const SampleResult &sampleResult, const float weight);
+		const SampleResult &sampleResult, const float weight) const;
 	void AtomicAddSampleResultData(const u_int x, const u_int y,
-		const SampleResult &sampleResult);
+		const SampleResult &sampleResult) const;
 
 	void ReadHWBuffer_IMAGEPIPELINE(const u_int index);
 	void WriteHWBuffer_IMAGEPIPELINE(const u_int index);
@@ -406,55 +409,63 @@ public:
 	}
 
 
-	std::vector<GenericFrameBuffer<4, 1, float> *> channel_RADIANCE_PER_PIXEL_NORMALIZEDs;
-	std::vector<GenericFrameBuffer<3, 0, float> *> channel_RADIANCE_PER_SCREEN_NORMALIZEDs;
-	GenericFrameBuffer<2, 1, float> *channel_ALPHA;
-	std::vector<GenericFrameBuffer<3, 0, float> *> channel_IMAGEPIPELINEs;
-	GenericFrameBuffer<1, 0, float> *channel_DEPTH;
-	GenericFrameBuffer<3, 0, float> *channel_POSITION;
-	GenericFrameBuffer<3, 0, float> *channel_GEOMETRY_NORMAL;
-	GenericFrameBuffer<3, 0, float> *channel_SHADING_NORMAL;
-	GenericFrameBuffer<4, 1, float> *channel_AVG_SHADING_NORMAL;
-	GenericFrameBuffer<1, 0, u_int> *channel_MATERIAL_ID;
-	GenericFrameBuffer<4, 1, float> *channel_DIRECT_DIFFUSE;
-	GenericFrameBuffer<4, 1, float> *channel_DIRECT_DIFFUSE_REFLECT;
-	GenericFrameBuffer<4, 1, float> *channel_DIRECT_DIFFUSE_TRANSMIT;
-	GenericFrameBuffer<4, 1, float> *channel_DIRECT_GLOSSY;
-	GenericFrameBuffer<4, 1, float> *channel_DIRECT_GLOSSY_REFLECT;
-	GenericFrameBuffer<4, 1, float> *channel_DIRECT_GLOSSY_TRANSMIT;
-	GenericFrameBuffer<4, 1, float> *channel_EMISSION;
-	GenericFrameBuffer<4, 1, float> *channel_INDIRECT_DIFFUSE;
-	GenericFrameBuffer<4, 1, float> *channel_INDIRECT_DIFFUSE_REFLECT;
-	GenericFrameBuffer<4, 1, float> *channel_INDIRECT_DIFFUSE_TRANSMIT;
-	GenericFrameBuffer<4, 1, float> *channel_INDIRECT_GLOSSY;
-	GenericFrameBuffer<4, 1, float> *channel_INDIRECT_GLOSSY_REFLECT;
-	GenericFrameBuffer<4, 1, float> *channel_INDIRECT_GLOSSY_TRANSMIT;
-	GenericFrameBuffer<4, 1, float> *channel_INDIRECT_SPECULAR;
-	GenericFrameBuffer<4, 1, float> *channel_INDIRECT_SPECULAR_REFLECT;
-	GenericFrameBuffer<4, 1, float> *channel_INDIRECT_SPECULAR_TRANSMIT;
-	std::vector<GenericFrameBuffer<2, 1, float> *> channel_MATERIAL_ID_MASKs;
-	GenericFrameBuffer<2, 1, float> *channel_DIRECT_SHADOW_MASK;
-	GenericFrameBuffer<2, 1, float> *channel_INDIRECT_SHADOW_MASK;
-	GenericFrameBuffer<2, 0, float> *channel_UV;
-	GenericFrameBuffer<1, 0, float> *channel_RAYCOUNT;
-	std::vector<GenericFrameBuffer<4, 1, float> *> channel_BY_MATERIAL_IDs;
-	GenericFrameBuffer<4, 1, float> *channel_IRRADIANCE;
-	GenericFrameBuffer<1, 0, u_int> *channel_OBJECT_ID;
-	std::vector<GenericFrameBuffer<2, 1, float> *> channel_OBJECT_ID_MASKs;
-	std::vector<GenericFrameBuffer<4, 1, float> *> channel_BY_OBJECT_IDs;
-	GenericFrameBuffer<1, 0, u_int> *channel_SAMPLECOUNT;
-	GenericFrameBuffer<1, 0, float> *channel_CONVERGENCE;
-	GenericFrameBuffer<4, 1, float> *channel_MATERIAL_ID_COLOR;
-	GenericFrameBuffer<4, 1, float> *channel_ALBEDO;
-	GenericFrameBuffer<1, 0, float> *channel_NOISE;
-	GenericFrameBuffer<1, 0, float> *channel_USER_IMPORTANCE;
+	std::vector<std::unique_ptr<GenericFrameBuffer<4, 1, float>> >
+		channel_RADIANCE_PER_PIXEL_NORMALIZEDs;
+	std::vector<std::unique_ptr<GenericFrameBuffer<3, 0, float>> >
+		channel_RADIANCE_PER_SCREEN_NORMALIZEDs;
+	std::vector<std::unique_ptr<GenericFrameBuffer<3, 0, float>> >
+		channel_IMAGEPIPELINEs;
+	std::vector<std::unique_ptr<GenericFrameBuffer<2, 1, float>> >
+		channel_MATERIAL_ID_MASKs;
+	std::vector<std::unique_ptr<GenericFrameBuffer<4, 1, float>> >
+		channel_BY_MATERIAL_IDs;
+	std::vector<std::unique_ptr<GenericFrameBuffer<2, 1, float>> >
+		channel_OBJECT_ID_MASKs;
+	std::vector<std::unique_ptr<GenericFrameBuffer<4, 1, float>> >
+		channel_BY_OBJECT_IDs;
+
+	std::unique_ptr<GenericFrameBuffer<2, 1, float>> channel_ALPHA;
+	std::unique_ptr<GenericFrameBuffer<1, 0, float>> channel_DEPTH;
+	std::unique_ptr<GenericFrameBuffer<3, 0, float>> channel_POSITION;
+	std::unique_ptr<GenericFrameBuffer<3, 0, float>> channel_GEOMETRY_NORMAL;
+	std::unique_ptr<GenericFrameBuffer<3, 0, float>> channel_SHADING_NORMAL;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_AVG_SHADING_NORMAL;
+	std::unique_ptr<GenericFrameBuffer<1, 0, u_int>> channel_MATERIAL_ID;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_DIRECT_DIFFUSE;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_DIRECT_DIFFUSE_REFLECT;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_DIRECT_DIFFUSE_TRANSMIT;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_DIRECT_GLOSSY;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_DIRECT_GLOSSY_REFLECT;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_DIRECT_GLOSSY_TRANSMIT;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_EMISSION;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_INDIRECT_DIFFUSE;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_INDIRECT_DIFFUSE_REFLECT;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_INDIRECT_DIFFUSE_TRANSMIT;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_INDIRECT_GLOSSY;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_INDIRECT_GLOSSY_REFLECT;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_INDIRECT_GLOSSY_TRANSMIT;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_INDIRECT_SPECULAR;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_INDIRECT_SPECULAR_REFLECT;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_INDIRECT_SPECULAR_TRANSMIT;
+	std::unique_ptr<GenericFrameBuffer<2, 1, float>> channel_DIRECT_SHADOW_MASK;
+	std::unique_ptr<GenericFrameBuffer<2, 1, float>> channel_INDIRECT_SHADOW_MASK;
+	std::unique_ptr<GenericFrameBuffer<2, 0, float>> channel_UV;
+	std::unique_ptr<GenericFrameBuffer<1, 0, float>> channel_RAYCOUNT;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_IRRADIANCE;
+	std::unique_ptr<GenericFrameBuffer<1, 0, u_int>> channel_OBJECT_ID;
+	std::unique_ptr<GenericFrameBuffer<1, 0, u_int>> channel_SAMPLECOUNT;
+	std::unique_ptr<GenericFrameBuffer<1, 0, float>> channel_CONVERGENCE;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_MATERIAL_ID_COLOR;
+	std::unique_ptr<GenericFrameBuffer<4, 1, float>> channel_ALBEDO;
+	std::unique_ptr<GenericFrameBuffer<1, 0, float>> channel_NOISE;
+	std::unique_ptr<GenericFrameBuffer<1, 0, float>> channel_USER_IMPORTANCE;
 
 	// (Optional) LuxRays HardwareDevice context
 	bool hwEnable;
 	int hwDeviceIndex;
 
 	luxrays::ContextUPtr ctx;
-	luxrays::DataSetPtr dataSet;
+	luxrays::DataSetSPtr dataSet;
 	luxrays::HardwareDevice *hardwareDevice;
 
 	luxrays::HardwareDeviceBuffer *hw_IMAGEPIPELINE;
@@ -470,15 +481,15 @@ public:
 	luxrays::HardwareDeviceKernel *mergeRADIANCE_PER_SCREEN_NORMALIZEDKernel;
 	luxrays::HardwareDeviceKernel *mergeFinalizeKernel;
 
-	static FilmPtr LoadSerialized(const std::string &fileName);
-	static void SaveSerialized(const std::string &fileName, FilmConstPtr film);
+	static FilmUPtr LoadSerialized(const std::string &fileName);
+	static void SaveSerialized(const std::string &fileName, FilmRef film);
 
 	static bool GetFilmSize(const luxrays::Properties &cfg,
 		u_int *filmFullWidth, u_int *filmFullHeight,
 		u_int *filmSubRegion);
 
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static FilmPtr FromProperties(luxrays::PropertiesConstPtr cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static FilmUPtr FromProperties(luxrays::PropertiesPtr cfg);
 
 	static FilmChannelType String2FilmChannelType(const std::string &type);
 	static const std::string FilmChannelType2String(const FilmChannelType type);
@@ -537,7 +548,7 @@ private:
 	FilmSamplesCounts samplesCounts;
 
 	std::vector<ImagePipeline *> imagePipelines;
-	luxrays::JThreadPtr imagePipelineThread;
+	luxrays::JThreadUPtr imagePipelineThread;
 	bool isAsyncImagePipelineRunning;
 
 	// Halt conditions

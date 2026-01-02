@@ -46,13 +46,13 @@ public:
 	bool RequiresMotionBlurSupport() const { return enableMotionBlurSupport && hasMotionBlur; }
 	bool HasMotionBlur() const { return hasMotionBlur; }
 
-	TriangleMeshID Add(MeshConstPtr mesh);
+	TriangleMeshID Add(MeshConstRef mesh);
 	void Preprocess();
 	bool IsPreprocessed() const { return preprocessed; }
 	void UpdateBBoxes();
 
 	bool HasAccelerator(const AcceleratorType accelType) const;
-	AcceleratorConstPtr GetAccelerator(const AcceleratorType accelType);
+	AcceleratorConstSPtr GetAccelerator(const AcceleratorType accelType) const;
 	bool DoesAllAcceleratorsSupportUpdate() const;
 	void UpdateAccelerators();
 
@@ -75,13 +75,13 @@ private:
 
 	u_longlong totalVertexCount;
 	u_longlong totalTriangleCount;
-	std::deque<MeshConstPtr> meshes;
+	std::deque<const Mesh *> meshes;
 
 	BBox bbox;
 	BSphere bsphere;
 
-	std::mutex accelsMutex;
-	std::unordered_map<AcceleratorType, AcceleratorPtr> accels;
+	mutable std::mutex accelsMutex;
+	mutable std::unordered_map<AcceleratorType, AcceleratorSPtr> accels;  // Cache
 
 	AcceleratorType accelType;
 	bool preprocessed;

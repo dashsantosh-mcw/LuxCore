@@ -42,7 +42,7 @@ public:
 
 protected:
 	void RTRenderFunc(std::stop_token stop_token);
-	virtual luxrays::JThreadPtr AllocRenderThread() {
+	virtual luxrays::JThreadUPtr AllocRenderThread() {
 		auto t = std::make_unique<luxrays::JThread>(
 			std::bind_front(&RTPathCPURenderThread::RTRenderFunc, this)
 		);
@@ -57,7 +57,7 @@ class RTPathCPUSampler;
 
 class RTPathCPURenderEngine : public PathCPURenderEngine {
 public:
-	RTPathCPURenderEngine(RenderConfigConstRef cfg);
+	RTPathCPURenderEngine(RenderConfigRef cfg);
 	~RTPathCPURenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
@@ -73,8 +73,8 @@ public:
 
 	static RenderEngineType GetObjectType() { return RTPATHCPU; }
 	static std::string GetObjectTag() { return "RTPATHCPU"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(RenderConfigConstRef rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class PathCPURenderEngine;
 	friend class RTPathCPURenderThread;
@@ -85,13 +85,13 @@ public:
     };
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual bool IsRTMode() const { return true; }
 	
-	CPURenderThread *NewRenderThread(const u_int index,
+	CPURenderThreadUPtr NewRenderThread(const u_int index,
 			luxrays::IntersectionDevice *device) {
-		return new RTPathCPURenderThread(this, index, device);
+		return std::make_unique<RTPathCPURenderThread>(this, index, device);
 	}
 
 	virtual void StartLockLess();
@@ -101,7 +101,7 @@ protected:
 	virtual void EndSceneEditLockLess(const EditActionList &editActions);
 
 	virtual void BeginFilmEdit();
-	virtual void EndFilmEdit(FilmPtr film, std::mutex *flmMutex);
+	virtual void EndFilmEdit(FilmRef film, std::mutex *flmMutex);
 
 	virtual void UpdateFilmLockLess();
 

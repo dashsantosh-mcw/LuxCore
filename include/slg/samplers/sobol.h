@@ -18,11 +18,14 @@
 
 #ifndef _SLG_SOBOL_SAMPLER_H
 #define	_SLG_SOBOL_SAMPLER_H
+#include <memory>
 
 #include "luxrays/core/randomgen.h"
+#include "luxrays/usings.h"
 #include "luxrays/utils/atomic.h"
 
 #include "slg/slg.h"
+#include "slg/usings.h"
 #include "slg/film/film.h"
 #include "slg/samplers/sampler.h"
 #include "slg/samplers/sobolsequence.h"
@@ -37,29 +40,39 @@ namespace slg {
 
 class SobolSamplerSharedData : public SamplerSharedData {
 public:
-	SobolSamplerSharedData(luxrays::RandomGenerator *rndGen, FilmPtr engineFlm);
-	SobolSamplerSharedData(const u_int seed, FilmPtr engineFlm);
+	// Constructors
+	// Note that film is optional for this object
+	SobolSamplerSharedData(const luxrays::RandomGeneratorUPtr & rndGen, std::experimental::observer_ptr<Film> engineFlm);
+	SobolSamplerSharedData(const u_int seed, std::experimental::observer_ptr<Film> engineFlm);
 	virtual ~SobolSamplerSharedData() { }
 
 	virtual void Reset();
 
-	void GetNewBucket(const u_int bucketCount, u_int *bucketIndex, u_int *seed);
+	std::tuple<u_int, u_int> GetNewBucket(u_int bucketCount);
+
 	u_int GetNewPixelPass(const u_int pixelIndex = 0);
-	
+
 	u_int GetPassCount(const u_int bucketCount) const;
-	
+
 	static std::unique_ptr<SamplerSharedData> FromProperties(
 		const luxrays::Properties &cfg,
-		luxrays::RandomGenerator *rndGen,
-		FilmPtr film
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		std::experimental::observer_ptr<Film> film
 	);
 
-	FilmPtr engineFilm;
-	u_int seedBase;
+	FilmRef GetEngineFilm() { return *engineFilm; }
+	FilmConstRef GetEngineFilm() const { return *engineFilm; }
+	bool HasEngineFilm() { return bool(engineFilm); }
+
+	std::shared_ptr<u_int> seedBase;
 	u_int filmRegionPixelCount;
 
 private:
-	u_int bucketIndex;
+	std::shared_ptr<u_int> bucketIndex;  // This can potentially be accessed by
+										 // multiple objects, so we share
+										 // ownership with all to avoid
+										 // heap-use-after-free
+	std::experimental::observer_ptr<Film> engineFilm;
 
 	// Holds the current pass for each pixel when using adaptive sampling
 	std::vector<u_int> passPerPixel;
@@ -75,12 +88,32 @@ private:
 
 class SobolSampler : public Sampler {
 public:
-	SobolSampler(luxrays::RandomGenerator *rnd, FilmPtr flm,
-			const FilmSampleSplatter *flmSplatter, const bool imgSamplesEnable,
-			const float adaptiveStr, const float adaptiveUserImpWeight,
-			const u_int bucketSize, const u_int tileSize, const u_int superSampling,
-			const u_int overlapping,
-			SobolSamplerSharedData& samplerSharedData
+
+	SobolSampler(
+		const luxrays::RandomGeneratorUPtr & rnd,
+		std::experimental::observer_ptr<Film> flm,
+		const FilmSampleSplatterUPtr& flmSplatter,
+		const bool imgSamplesEnable,
+		const float adaptiveStr,
+		const float adaptiveUserImpWeight,
+		const u_int bucketSize,
+		const u_int tileSize,
+		const u_int superSampling,
+		const u_int overlapping,
+		SamplerSharedDataSPtr samplerSharedData
+	);
+	SobolSampler(
+		const luxrays::RandomGeneratorUPtr & rnd,
+		FilmRef flm,
+		const FilmSampleSplatterUPtr& flmSplatter,
+		const bool imgSamplesEnable,
+		const float adaptiveStr,
+		const float adaptiveUserImpWeight,
+		const u_int bucketSize,
+		const u_int tileSize,
+		const u_int superSampling,
+		const u_int overlapping,
+		SamplerSharedDataSPtr samplerSharedData
 	);
 	virtual ~SobolSampler();
 
@@ -91,7 +124,7 @@ public:
 	virtual float GetSample(const u_int index);
 	virtual void NextSample(const std::vector<SampleResult> &sampleResults);
 
-	virtual luxrays::Properties ToProperties() const;
+	virtual luxrays::PropertiesUPtr ToProperties() const;
 
 	u_int GetPassCount() const;
 
@@ -101,10 +134,12 @@ public:
 
 	static SamplerType GetObjectType() { return SOBOL; }
 	static std::string GetObjectTag() { return "SOBOL"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static SamplerUPtr FromProperties(const luxrays::Properties &cfg, luxrays::RandomGenerator *rndGen,
-		FilmPtr film, const FilmSampleSplatter *flmSplatter,
-		SamplerSharedData& sharedData
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static SamplerUPtr FromProperties(
+		const luxrays::Properties &cfg,
+		const luxrays::RandomGeneratorUPtr & rndGen,
+		std::experimental::observer_ptr<Film> film, const FilmSampleSplatterUPtr& flmSplatter,
+		SamplerSharedDataSPtr sharedData
 	);
 	static slg::ocl::Sampler *FromPropertiesOCL(const luxrays::Properties &cfg);
 	static void AddRequiredChannels(Film::FilmChannels &channels, const luxrays::Properties &cfg);
@@ -113,14 +148,15 @@ private:
 	void InitNewSample();
 	float GetSobolSample(const u_int index);
 
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
-	SobolSamplerSharedData& sharedData;
+	std::shared_ptr<SobolSamplerSharedData> sharedData;
 	SobolSequence sobolSequence;
 	float adaptiveStrength, adaptiveUserImportanceWeight;
 	u_int bucketSize, tileSize, superSampling, overlapping;
 
-	u_int bucketIndex, pixelOffset, passOffset, pass;
+	std::shared_ptr<u_int> bucketIndex;
+	u_int pixelOffset, passOffset, pass;
 	luxrays::TauswortheRandomGenerator rngGenerator;
 
 	float sample0, sample1;

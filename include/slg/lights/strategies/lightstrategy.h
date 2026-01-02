@@ -47,25 +47,30 @@ public:
 	virtual LightStrategyType GetType() const = 0;
 	virtual std::string GetTag() const = 0;
 
-	virtual void Preprocess(SceneConstPtr scn, const LightStrategyTask taskType,
+	virtual void Preprocess(SceneConstRef scn, const LightStrategyTask taskType,
 			const bool useRTMode) = 0;
 
 	// Used for direct light sampling
-	virtual LightSourcePtr SampleLights(
-			SceneConstPtr scene,
+	virtual LightSourceOPtr SampleLights(
+			SceneConstRef scene,
 			const float u,
 			const luxrays::Point &p, const luxrays::Normal &n,
 			const bool isVolume,
 			float *pdf) const = 0;
-	virtual float SampleLightPdf(LightSourceConstPtr light,
-			const luxrays::Point &p, const luxrays::Normal &n,
+
+	virtual float SampleLightPdf(
+			LightSourceConstRef light,
+			const luxrays::Point &p,
+			const luxrays::Normal &n,
 			const bool isVolume) const = 0;
 
 	// Used for light emission
-	virtual LightSourcePtr SampleLights(SceneConstPtr, const float u, float *pdf) const = 0;
+	virtual std::experimental::observer_ptr<LightSource> SampleLights(
+		SceneConstRef, const float u, float *pdf
+	) const = 0;
 
 	// Transform the current object in Properties
-	virtual luxrays::Properties ToProperties() const = 0;
+	virtual luxrays::PropertiesUPtr ToProperties() const = 0;
 
 	static LightStrategyType GetType(const luxrays::Properties &cfg);
 
@@ -74,9 +79,9 @@ public:
 	//--------------------------------------------------------------------------
 
 	// This method is not used at the moment
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 	// Allocate a Object based on the cfg definition
-	static LightStrategyPtr FromProperties(const luxrays::Properties &cfg);
+	static LightStrategyUPtr FromProperties(const luxrays::Properties &cfg);
 	// This method is not used at the moment
 	static std::string FromPropertiesOCL(const luxrays::Properties &cfg);
 
@@ -84,9 +89,12 @@ public:
 	static std::string LightStrategyType2String(const LightStrategyType type);
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	LightStrategy(const LightStrategyType t) : type(t) { }
+
+	std::experimental::observer_ptr<const Scene> scene;  // I think this could be a (mandatory) reference but
+									 // for now, I keep it as a (optional) pointer
 
 private:
 	const LightStrategyType type;

@@ -26,9 +26,9 @@ using namespace slg;
 // MatteTranslucent material
 //------------------------------------------------------------------------------
 
-MatteTranslucentMaterial::MatteTranslucentMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
-		TextureConstPtr emitted, TextureConstPtr bump,
-		TextureConstPtr refl, TextureConstPtr trans) :
+MatteTranslucentMaterial::MatteTranslucentMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
+		TextureConstOPtr emitted, TextureConstOPtr bump,
+		TextureConstOPtr refl, TextureConstOPtr trans) :
 			Material(frontTransp, backTransp, emitted, bump),
 			Kr(refl), Kt(trans) {
 }
@@ -184,30 +184,30 @@ void MatteTranslucentMaterial::Pdf(const HitPoint &hitPoint,
 		*reversePdfW = fabsf((hitPoint.fromLight ? localLightDir.z : localEyeDir.z) * (weight * INV_PI));
 }
 
-void MatteTranslucentMaterial::AddReferencedTextures(std::unordered_set<TextureConstPtr>  &referencedTexs) const {
+void MatteTranslucentMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kr->AddReferencedTextures(referencedTexs);
 	Kt->AddReferencedTextures(referencedTexs);
 }
 
-void MatteTranslucentMaterial::UpdateTextureReferences(TextureConstPtr oldTex, TextureConstPtr newTex) {
+void MatteTranslucentMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Kr == oldTex)
-		Kr = newTex;
-	if (Kt == oldTex)
-		Kt = newTex;
+	if (Kr == &oldTex)
+		Kr.reset(&newTex);
+	if (Kt == &oldTex)
+		Kt.reset(&newTex);
 }
 
-Properties MatteTranslucentMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr MatteTranslucentMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("mattetranslucent"));
-	props.Set(Property("scene.materials." + name + ".kr")(Kr->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("mattetranslucent"));
+	props->Set(Property("scene.materials." + name + ".kr")(Kr->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".kt")(Kt->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }

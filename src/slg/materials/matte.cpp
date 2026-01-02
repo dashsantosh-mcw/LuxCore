@@ -26,9 +26,9 @@ using namespace slg;
 // Matte material
 //------------------------------------------------------------------------------
 
-MatteMaterial::MatteMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
-		TextureConstPtr emitted, TextureConstPtr bump,
-		TextureConstPtr col) : Material(frontTransp, backTransp, emitted, bump), Kd(col) {
+MatteMaterial::MatteMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
+		TextureConstOPtr emitted, TextureConstOPtr bump,
+		TextureConstOPtr col) : Material(frontTransp, backTransp, emitted, bump), Kd(col) {
 }
 
 Spectrum MatteMaterial::Albedo(const HitPoint &hitPoint) const {
@@ -80,26 +80,26 @@ void MatteMaterial::Pdf(const HitPoint &hitPoint,
 		*reversePdfW = fabsf((hitPoint.fromLight ? localLightDir.z : localEyeDir.z) * INV_PI);
 }
 
-void MatteMaterial::AddReferencedTextures(std::unordered_set<TextureConstPtr>  &referencedTexs) const {
+void MatteMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Kd->AddReferencedTextures(referencedTexs);
 }
 
-void MatteMaterial::UpdateTextureReferences(TextureConstPtr oldTex, TextureConstPtr newTex) {
+void MatteMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Kd == oldTex)
-		Kd = newTex;
+	if (Kd == &oldTex)
+		Kd.reset(&newTex);
 }
 
-Properties MatteMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr MatteMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("matte"));
-	props.Set(Property("scene.materials." + name + ".kd")(Kd->GetSDLValue()));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("matte"));
+	props->Set(Property("scene.materials." + name + ".kd")(Kd->GetSDLValue()));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }

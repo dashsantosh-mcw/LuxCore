@@ -42,9 +42,13 @@ static string GetFileNameExt(const string &fileName) {
 	return boost::algorithm::to_lower_copy(std::filesystem::path(fileName).extension().string());
 }
 
-static void BatchRendering(RenderConfigPtr config, RenderStatePtr startState, FilmPtr startFilm,
-		const bool showDevicesStats) {
-	auto session = RenderSession::Create(config, &startState, &startFilm);
+static void BatchRendering(
+	const RenderConfigPtr & config,
+	RenderStatePtr startState,
+	Film& startFilm,
+	const bool showDevicesStats
+) {
+	auto session = RenderSession::Create(config, startState, startFilm);
 
 	const unsigned int haltTime = config->GetProperty("batch.halttime").Get<unsigned int>();
 	const unsigned int haltSpp = config->GetProperty("batch.haltspp").Get<unsigned int>(0);
@@ -52,7 +56,7 @@ static void BatchRendering(RenderConfigPtr config, RenderStatePtr startState, Fi
 	// Start the rendering
 	session->Start();
 
-	const Properties &stats = session->GetStats();
+	const Properties &stats = *session->GetStats();
 	while (!session->HasDone()) {
 		std::this_thread::sleep_for(1000ms);
 		session->UpdateStats();
@@ -104,7 +108,7 @@ static void BatchRendering(RenderConfigPtr config, RenderStatePtr startState, Fi
 	const string renderEngine = config->GetProperty("renderengine.type").Get<string>();
 	if (renderEngine != "FILESAVER") {
 		// Save the rendered image
-		session->GetFilm()->SaveOutputs();
+		session->GetFilm().SaveOutputs();
 	}
 
 	session.reset();
@@ -190,8 +194,8 @@ int main(int argc, char *argv[]) {
 		std::unique_ptr<Scene> scene;
 		RenderConfigPtr config;
 		RenderStatePtr startRenderState;
-		FilmPtr startFilm;
-		
+		FilmUPtr startFilm;
+
 		if (configFileName.compare("") != 0) {
 			// Clear the file name resolver list
 			luxcore::ClearFileNameResolverPaths();
@@ -201,13 +205,13 @@ int main(int argc, char *argv[]) {
 			std::filesystem::path path(configFileName);
 			luxcore::AddFileNameResolverPath(path.parent_path().generic_string());
 		}
-		
+
 		const string configFileNameExt = GetFileNameExt(configFileName);
 		if (configFileNameExt == ".lxs") {
 			// It is a LuxRender SDL file
 			LC_LOG("Parsing LuxRender SDL file...");
-			auto renderConfigProps = std::make_shared<Properties>();
-			auto sceneProps = std::make_shared<Properties>();
+			auto renderConfigProps = std::make_unique<Properties>();
+			auto sceneProps = std::make_unique<Properties>();
 			luxcore::ParseLXS(configFileName, renderConfigProps, sceneProps);
 
 			// For debugging
@@ -219,21 +223,21 @@ int main(int argc, char *argv[]) {
 			scene = luxcore::Scene::Create();
 			scene->Parse(sceneProps);
 			renderConfigProps->Set(cmdLineProp);
-			config = RenderConfig::Create(renderConfigProps, std::move(scene));
+			config = RenderConfig::Create(std::move(renderConfigProps), std::move(scene));
 		} else if (configFileNameExt == ".cfg") {
 			// It is a LuxCore SDL file
-			auto props = std::make_shared<Properties>(configFileName);
+			auto props = std::make_unique<Properties>(std::move(configFileName));
 			props->Set(cmdLineProp);
-			config = RenderConfig::Create(props);
+			config = RenderConfig::Create(std::move(props));
 		} else if (configFileNameExt == ".bcf") {
 			// It is a LuxCore RenderConfig binary archive
 			config = RenderConfig::Create(configFileName);
-			auto props = std::make_shared<Properties>(cmdLineProp);
+			auto props = std::make_unique<Properties>(std::move(cmdLineProp));
 			config->Parse(props);
 		} else if (configFileNameExt == ".rsm") {
 			// It is a rendering resume file
 			config = RenderConfig::Create(configFileName, startRenderState, startFilm);
-			auto props = std::make_shared<Properties>(cmdLineProp);
+			auto props = std::make_unique<Properties>(std::move(cmdLineProp));
 			config->Parse(props);
 		} else
 			throw runtime_error("Unknown file extension: " + configFileName);
@@ -249,12 +253,12 @@ int main(int argc, char *argv[]) {
 		const bool fileSaverRenderEngine = (config->GetProperty("renderengine.type").Get<string>() == "FILESAVER");
 		if (!fileSaverRenderEngine) {
 			// Force the film update at 2.5secs (mostly used by PathOCL)
-			auto props = std::make_shared<Properties>();
+			auto props = std::make_unique<Properties>();
 			props->Set(Property("screen.refresh.interval")(2500));
 			config->Parse(props);
 		}
-		
-		BatchRendering(config, startRenderState, startFilm, showDevicesStats);
+
+		BatchRendering(config, startRenderState, *startFilm, showDevicesStats);
 
 
 		LC_LOG("Done.");

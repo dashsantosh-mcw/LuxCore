@@ -24,10 +24,10 @@ using namespace std;
 using namespace luxrays;
 using namespace slg;
 
-ExtTriangleMeshPtr Shape::Refine(SceneConstRef scene) {
+ExtTriangleMeshUPtr Shape::Refine(SceneConstRef scene) {
 	if (refined)
 		throw runtime_error("Called Shape::Refine() on an already refined shape");
-	
+
 	auto mesh = RefineImpl(scene);
 	refined = true;
 

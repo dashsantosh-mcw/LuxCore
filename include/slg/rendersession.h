@@ -34,8 +34,8 @@ class RenderSession {
 public:
 	RenderSession(
 		RenderConfigRef cfg,
-		RenderStatePtr startState = nullptr,
-		FilmPtr startFilm = nullptr
+		RenderStateSPtr startState = nullptr,
+		std::experimental::observer_ptr<Film> startFilm = nullptr
 	);
 	~RenderSession();
 
@@ -57,15 +57,15 @@ public:
 
 	void CheckPeriodicSave(const bool force = false);
 
-	RenderStatePtr GetRenderState();
+	RenderStateSPtr GetRenderState();
 
-	void Parse(luxrays::PropertiesConstPtr props);
+	void Parse(luxrays::PropertiesPtr props);
 
 	RenderConfigRef renderConfig;
 	RenderEngineUPtr renderEngine;
 
 	mutable std::mutex filmMutex;
-	FilmPtr film;
+	FilmUPtr film;  // Render session owns the film
 
 protected:
 	bool HasPeriodicFilmOutputsSave();

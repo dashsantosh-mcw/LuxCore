@@ -18,8 +18,10 @@
 
 #include <OpenImageIO/imagebuf.h>
 #include <OpenImageIO/imagebufalgo.h>
+#include <memory>
 
 #include "luxrays/core/intersectiondevice.h"
+#include "luxrays/utils/properties.h"
 #include "luxrays/utils/utils.h"
 #include "slg/slg.h"
 #include "slg/usings.h"
@@ -55,8 +57,8 @@ extern string currentFile;
 extern unsigned int lineNum;
 
 extern Properties overwriteProps;
-extern PropertiesPtr renderConfigProps;
-extern PropertiesPtr sceneProps;
+extern Properties * renderConfigProps;
+extern Properties * sceneProps;
 
 } }
 
@@ -71,8 +73,8 @@ void luxcore::ParseLXS(
 	static std::mutex parseLXSMutex;
 	std::unique_lock<std::mutex> lock(parseLXSMutex);
 
-	luxcore::parselxs::renderConfigProps = renderConfigProps;
-	luxcore::parselxs::sceneProps = sceneProps;
+	luxcore::parselxs::renderConfigProps = renderConfigProps.get();
+	luxcore::parselxs::sceneProps = sceneProps.get();
 	luxcore::parselxs::ResetParser();
 
 	bool parseSuccess = false;
@@ -133,10 +135,11 @@ void luxcore::MakeTx(const string &srcFileName, const string &dstFileName) {
 // GetPlatformDesc
 //------------------------------------------------------------------------------
 
-Properties luxcore::GetPlatformDesc() {
+PropertiesUPtr luxcore::GetPlatformDesc() {
 	API_BEGIN_NOARGS();
 
-	Properties props;
+	auto propsPtr = std::make_unique<Properties>();
+	PropertiesRef props = *propsPtr;;
 
 	static const string luxCoreVersion(LUXCORE_VERSION);
 	props << Property("version.number")(luxCoreVersion);
@@ -172,21 +175,23 @@ Properties luxcore::GetPlatformDesc() {
 
 	API_RETURN("{}", ToArgString(props));
 
-	return props;
+	return propsPtr;
 }
 
 //------------------------------------------------------------------------------
 // GetOpenCLDeviceDescs
 //------------------------------------------------------------------------------
 
-Properties luxcore::GetOpenCLDeviceDescs() {
+PropertiesUPtr luxcore::GetOpenCLDeviceDescs() {
 	API_BEGIN_NOARGS();
 
-	Properties props;
+	PropertiesUPtr propsPtr = std::make_unique<Properties>();
+	PropertiesRef props = *propsPtr;
 
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 	Context ctx;
-	vector<DeviceDescription *> deviceDescriptions = ctx.GetAvailableDeviceDescriptions();
+	std::vector<DeviceDescription *> deviceDescriptions =
+		ctx.GetAvailableDeviceDescriptions();
 
 	// Select only OpenCL devices
 	DeviceDescription::Filter((DeviceType)(DEVICE_TYPE_OPENCL_ALL | DEVICE_TYPE_CUDA_ALL), deviceDescriptions);
@@ -229,7 +234,7 @@ Properties luxcore::GetOpenCLDeviceDescs() {
 #if !defined(LUXRAYS_DISABLE_CUDA)
 		if (desc->GetType() & DEVICE_TYPE_CUDA_ALL) {
 			const CUDADeviceDescription *cudaDesc = (CUDADeviceDescription *)desc;
-			
+
 			props <<
 					Property(prefix + ".cuda.compute.major")(cudaDesc->GetCUDAComputeCapabilityMajor()) <<
 					Property(prefix + ".cuda.compute.minor")(cudaDesc->GetCUDAComputeCapabilityMinor());
@@ -237,10 +242,10 @@ Properties luxcore::GetOpenCLDeviceDescs() {
 #endif
 	}
 #endif
-	
+
 	API_RETURN("{}", ToArgString(props));
 
-	return props;
+	return propsPtr;
 }
 
 //------------------------------------------------------------------------------
@@ -266,7 +271,7 @@ void luxcore::AddFileNameResolverPath(const std::string &path) {
 vector<string> luxcore::GetFileNameResolverPaths() {
 	API_BEGIN_NOARGS();
 
-	const vector<string> &result = slg::SLG_FileNameResolver.GetPaths();
+	const std::vector<string> &result = slg::SLG_FileNameResolver.GetPaths();
 	
 	API_RETURN("{}", ToArgString(result));
 
@@ -277,23 +282,23 @@ vector<string> luxcore::GetFileNameResolverPaths() {
 // Film
 //------------------------------------------------------------------------------
 
-std::shared_ptr<Film> Film::Create(const std::string &fileName) {
+std::unique_ptr<Film> Film::Create(const std::string &fileName) {
 	API_BEGIN("{}", ToArgString(fileName));
 
-	auto result = std::make_shared<luxcore::detail::FilmImplStandalone>(fileName);
+	auto result = std::make_unique<luxcore::detail::FilmImplStandalone>(fileName);
 
 	API_RETURN("{}", (void *)result.get());
 
 	return result;
 }
 
-std::shared_ptr<Film> Film::Create(
-		luxrays::PropertiesConstPtr props,
+std::unique_ptr<Film> Film::Create(
+		luxrays::PropertiesPtr props,
 		const bool hasPixelNormalizedChannel,
 		const bool hasScreenNormalizedChannel) {
 	API_BEGIN("{}, {}, {}", ToArgString(props), hasPixelNormalizedChannel, hasScreenNormalizedChannel);
 
-	auto result = std::make_shared<luxcore::detail::FilmImplStandalone>(
+	auto result = std::make_unique<luxcore::detail::FilmImplStandalone>(
 		props, hasPixelNormalizedChannel, hasScreenNormalizedChannel
 	);
 
@@ -379,11 +384,11 @@ Camera::~Camera() {
 //------------------------------------------------------------------------------
 
 std::unique_ptr<Scene> Scene::Create(
-		luxrays::PropertiesConstPtr resizePolicyProps
+		luxrays::PropertiesPtr resizePolicyProps
 ) {
 	API_BEGIN("{}", (void *)resizePolicyProps.get());
 
-	auto result = luxcore::detail::SceneImpl::Create(resizePolicyProps);
+	auto result = luxcore::detail::SceneImpl::Create(std::ref(resizePolicyProps));
 
 	API_RETURN("{}", (void *)result.get());
 
@@ -391,12 +396,14 @@ std::unique_ptr<Scene> Scene::Create(
 }
 
 std::unique_ptr<Scene> Scene::Create(
-	luxrays::PropertiesConstPtr props,
-	luxrays::PropertiesConstPtr resizePolicyProps
+	luxrays::PropertiesPtr props,
+	luxrays::PropertiesPtr resizePolicyProps
 ) {
 	API_BEGIN("{}, {}", ToArgString(props), (void *)resizePolicyProps.get());
 
-	auto result = luxcore::detail::SceneImpl::Create(props, resizePolicyProps);
+	auto result = luxcore::detail::SceneImpl::Create(
+		std::ref(props), std::ref(resizePolicyProps)
+	);
 
 	API_RETURN("{}", (void *)result.get());
 
@@ -405,11 +412,13 @@ std::unique_ptr<Scene> Scene::Create(
 
 std::unique_ptr<Scene> Scene::Create(
 	const string &fileName,
-	luxrays::PropertiesConstPtr resizePolicyProps
+	luxrays::PropertiesPtr resizePolicyProps
 ) {
 	API_BEGIN("{}, {}", ToArgString(fileName), (void *)resizePolicyProps.get());
 
-	auto result = luxcore::detail::SceneImpl::Create(fileName, resizePolicyProps);
+	auto result = luxcore::detail::SceneImpl::Create(
+		fileName, std::ref(resizePolicyProps)
+	);
 
 	API_RETURN("{}", (void *)result.get());
 
@@ -485,24 +494,26 @@ unsigned int *Scene::AllocTrianglesBuffer(const unsigned int meshTriCount) {
 //------------------------------------------------------------------------------
 
 std::unique_ptr<RenderConfig> RenderConfig::Create(
-	PropertiesConstPtr props,
-	std::shared_ptr<luxcore::Scene> scn  // We don't take ownership of the input scene
+	PropertiesUPtr&& props,
+	const std::unique_ptr<luxcore::Scene>& scn  // We don't take ownership of the input scene
 ) {
 	API_BEGIN("{}, {}", ToArgString(props), (void *)scn.get());
 
-	auto scnImpl = static_pointer_cast<luxcore::detail::SceneImpl>(scn);
+	SceneImpl& scnImpl = dynamic_cast<luxcore::detail::SceneImpl&>(*scn);
 
-	auto result = luxcore::detail::RenderConfigImpl::Create(props, scnImpl);
+	auto result = luxcore::detail::RenderConfigImpl::Create<
+		luxrays::PropertiesUPtr, SceneImpl&
+	>(std::move(props), scnImpl);
 
 	API_RETURN("{}", (void *)result.get());
 
 	return result;
 }
 
-std::unique_ptr<RenderConfig> RenderConfig::Create(PropertiesConstPtr props) {
+std::unique_ptr<RenderConfig> RenderConfig::Create(PropertiesUPtr&& props) {
 	API_BEGIN("{}", ToArgString(props));
 
-	auto result = luxcore::detail::RenderConfigImpl::Create(props);
+	auto result = luxcore::detail::RenderConfigImpl::Create(std::ref(props));
 
 	API_RETURN("{}", (void *)result.get());
 
@@ -522,30 +533,30 @@ std::unique_ptr<RenderConfig> RenderConfig::Create(const std::string &fileName) 
 std::unique_ptr<RenderConfig> RenderConfig::Create(
 	const std::string &fileName,
 	std::shared_ptr<RenderState>& startState,  // In/out
-	std::shared_ptr<Film>& startFilm  // In/out
+	luxcore::FilmUPtr& startFilm  // In/out
 ) {
 	API_BEGIN("{}, {}, {}", ToArgString(fileName), (void *)startState.get(), (void *)startFilm.get());
 
 	std::shared_ptr<luxcore::detail::RenderStateImpl> ss;
-	std::shared_ptr<luxcore::detail::FilmImpl> sf;
+	std::unique_ptr<luxcore::detail::FilmImpl> sf;
 	auto rcfg = luxcore::detail::RenderConfigImpl::Create<
 		const std::string &,
 		std::shared_ptr<RenderStateImpl>& ,  // Out
-		std::shared_ptr<FilmImpl>& // Out
+		FilmImplUPtr& // Out
 	>(fileName, ss, sf);
 
 	startState = static_pointer_cast<luxcore::RenderState>(ss);
-	startFilm = static_pointer_cast<luxcore::Film>(sf);
+	startFilm = std::move(sf);
 
 	API_RETURN("{}", (void *)rcfg.get());
 
 	return rcfg;
 }
 
-const Properties &RenderConfig::GetDefaultProperties() {
+PropertiesPtr RenderConfig::GetDefaultProperties() {
 	API_BEGIN_NOARGS();
 
-	const Properties &result = luxcore::detail::RenderConfigImpl::GetDefaultProperties();
+	auto& result = luxcore::detail::RenderConfigImpl::GetDefaultProperties();
 
 	API_RETURN("{}", ToArgString(result));
 
@@ -575,26 +586,46 @@ RenderState::~RenderState() {
 // RenderSession
 //------------------------------------------------------------------------------
 
-RenderSessionUPtr RenderSession::Create(
-	RenderConfigPtr config,
-	std::shared_ptr<RenderState> * startState,
-	std::shared_ptr<Film> * startFilm
-) {
-	API_BEGIN("{}, {}, {}", (void *)config.get(), (void *)startState->get(), (void *)startFilm->get());
+RenderSessionPtr RenderSession::Create(const RenderConfigPtr & config) {
+	API_BEGIN("{}", (void *) &config);
 
-	auto configImpl = static_pointer_cast<RenderConfigImpl>(config);
+	auto& configImpl = static_cast<RenderConfigImpl &>(*config);
+
+	auto result = RenderSessionImpl::Create(std::ref(configImpl));
+
+	API_RETURN("{}", ToArgString(result));
+
+	return std::move(result);
+}
+RenderSessionPtr RenderSession::Create(
+	const RenderConfigPtr & config,
+	std::shared_ptr<RenderState>& startState,
+	FilmRef startFilm
+) {
+	API_BEGIN(
+		"{}, {}, {}",
+		(void *) &config,
+		(void *)startState.get(),
+		(void *)&startFilm
+	);
+
+	auto& configImpl = static_cast<RenderConfigImpl &>(*config);
 
 	auto startStateImpl = startState ?
-		static_pointer_cast<luxcore::detail::RenderStateImpl>(*startState) :
-		nullptr;
-	auto startFilmImpl = startFilm ?
-		static_pointer_cast<luxcore::detail::FilmImplStandalone>(*startFilm) :
+		static_pointer_cast<luxcore::detail::RenderStateImpl>(startState) :
 		nullptr;
 
+	using FIS = luxcore::detail::FilmImplStandalone;
+	FIS& startFilmImpl = dynamic_cast<FIS&>(startFilm);
+
+	//auto startFilmImpl = startFilm ?
+		//std::experimental::observer_ptr<FIS>{static_cast<FIS&>(*startFilm)}:
+		//nullptr;
+
 	auto result = RenderSessionImpl::Create(
-		configImpl,
+		std::ref(configImpl),
 		startStateImpl,
-		startFilmImpl
+		std::ref(startFilmImpl)
 	);
 
 	API_RETURN("{}", ToArgString(result));
@@ -602,16 +633,18 @@ RenderSessionUPtr RenderSession::Create(
 	return result;
 }
 
-RenderSessionUPtr RenderSession::Create(
-		RenderConfigPtr config,
-		const std::string &startStateFileName,
-		const std::string &startFilmFileName
+RenderSessionPtr RenderSession::Create(
+	const RenderConfigPtr & config,
+	const std::string &startStateFileName,
+	const std::string &startFilmFileName
 ) {
-	API_BEGIN("{}, {}, {}", (void*)config.get(), ToArgString(startStateFileName), ToArgString(startFilmFileName));
+	API_BEGIN("{}, {}, {}", (void*)&config, ToArgString(startStateFileName), ToArgString(startFilmFileName));
 
-	auto configImpl = static_pointer_cast<luxcore::detail::RenderConfigImpl>(config);
+	auto& configImpl = dynamic_cast<luxcore::detail::RenderConfigImpl&>(*config);
 
-	auto result = RenderSessionImpl::Create(configImpl, startStateFileName, startFilmFileName);
+	auto result = RenderSessionImpl::Create(
+		std::ref(configImpl), startStateFileName, startFilmFileName
+	);
 
 	API_RETURN("{}", ToArgString(result));
 

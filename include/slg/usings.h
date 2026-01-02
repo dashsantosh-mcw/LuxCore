@@ -16,117 +16,55 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
-// This file is intended to gather all usings (pointers, refs etc.) for
-// slg classes
+// This file is intended to gather all convenient usings (pointers, refs etc.)
+// for slg classes
 
 #pragma once
 
 #include <memory>
+#include "luxrays/usings.h"
+#include "slg/editaction.h"
+
+// Tip:You'll find DECLARE_SUBTYPES definition in luxrays/usings.h
+
 
 namespace slg {
 
-class Camera;
-using CameraPtr = std::shared_ptr<Camera>;
-using CameraConstPtr = std::shared_ptr<const Camera>;
-using CameraRef = Camera&;
-
-class Scene;
-using SceneConstPtr = std::shared_ptr<const Scene>;
-using SceneConstWPtr = std::weak_ptr<const Scene>;
-using ScenePtr = std::shared_ptr<Scene>;
-using SceneConstRef = const Scene&;
-
-class SceneObject;
-using SceneObjectRef = SceneObject&;
-using SceneObjectPtr = std::shared_ptr<SceneObject>;
-using SceneObjectConstPtr = std::shared_ptr<const SceneObject>;
-
-class Shape;
-using ShapeConstPtr = std::shared_ptr<const Shape>;
-using ShapePtr = std::shared_ptr<Shape>;
-
-class Film;
-using FilmPtr = std::shared_ptr<Film>;
-using FilmConstPtr = std::shared_ptr<const Film>;
-using FilmConstRef = const Film&;
-using FilmRef = Film&;
-
-class ImageMap;
-using ImageMapConstPtr = std::shared_ptr<const ImageMap>;
-using ImageMapPtr = std::shared_ptr<ImageMap>;
-
-class LightSource;
-using LightSourceConstPtr = std::shared_ptr<const LightSource>;
-using LightSourcePtr = std::shared_ptr<LightSource>;
-
-class EnvLightSource;
-using EnvLightSourceConstPtr = std::shared_ptr<const EnvLightSource>;
-using EnvLightSourcePtr = std::shared_ptr<EnvLightSource>;
-
-class LightStrategy;
-using LightStrategyConstPtr = std::shared_ptr<const LightStrategy>;
-using LightStrategyPtr = std::shared_ptr<LightStrategy>;
-
-class TriangleLight;
-using TriangleLightConstPtr = std::shared_ptr<const TriangleLight>;
-using TriangleLightPtr = std::shared_ptr<TriangleLight>;
-
-class Material;
-using MaterialRef = Material&;
-using MaterialPtr = std::shared_ptr<Material>;
-using MaterialConstPtr = std::shared_ptr<const Material>;
-
-class RenderConfig;
-using RenderConfigConstPtr = std::shared_ptr<const RenderConfig>;
-using RenderConfigPtr = std::shared_ptr<RenderConfig>;
-using RenderConfigUPtr = std::unique_ptr<RenderConfig>;
-using RenderConfigConstUPtr = std::unique_ptr<const RenderConfig>;
-using RenderConfigRef = RenderConfig &;
-using RenderConfigConstRef = const RenderConfig &;
-
-class RenderSession;
-using RenderSessionConstPtr = std::shared_ptr<const RenderSession>;
-using RenderSessionPtr = std::shared_ptr<RenderSession>;
-using RenderSessionRef = RenderSession &;
-using RenderSessionConstRef = const RenderSession &;
-
-class RenderState;
-using RenderStateConstPtr = std::shared_ptr<const RenderState>;
-using RenderStatePtr = std::shared_ptr<RenderState>;
-
-class RenderEngine;
-using RenderEngineConstPtr = std::shared_ptr<const RenderEngine>;
-using RenderEnginePtr = std::shared_ptr<RenderEngine>;
-
-class RenderEngine;
-using RenderEngineConstPtr = std::shared_ptr<const RenderEngine>;
-using RenderEnginePtr = std::shared_ptr<RenderEngine>;
-using RenderEngineUPtr = std::unique_ptr<RenderEngine>;
-
-class Texture;
-using TexturePtr = std::shared_ptr<Texture>;
-using TextureConstPtr = std::shared_ptr<const Texture>;
-using TextureRef = Texture&;
-
-class FresnelTexture;
-using FresnelTextureConstPtr = std::shared_ptr<const FresnelTexture>;
-
-class TextureMapping2D;
-using TextureMapping2DPtr = std::shared_ptr<TextureMapping2D>;
-using TextureMapping2DConstPtr = std::shared_ptr<const TextureMapping2D>;
-
-class TextureMapping3D;
-using TextureMapping3DPtr = std::shared_ptr<TextureMapping3D>;
-using TextureMapping3DConstPtr = std::shared_ptr<const TextureMapping3D>;
-
-class Volume;
-using VolumePtr = std::shared_ptr<Volume>;
-using VolumeConstPtr = std::shared_ptr<const Volume>;
-using VolumeRef = Volume&;
-using VolumeConstRef = const Volume&;
-
-class Sampler;
-using SamplerUPtr = std::unique_ptr<Sampler>;
+DECLARE_SUBTYPES(Camera);
+DECLARE_SUBTYPES(Scene);
+DECLARE_SUBTYPES(SceneObject);
+DECLARE_SUBTYPES(TextureDefinitions);
+DECLARE_SUBTYPES(MaterialDefinitions);
+DECLARE_SUBTYPES(SceneObjectDefinitions);
+DECLARE_SUBTYPES(LightSourceDefinitions);
+DECLARE_SUBTYPES(Shape);
+DECLARE_SUBTYPES(Film);
+DECLARE_SUBTYPES(EditActionList);
+DECLARE_SUBTYPES(ImageMap);
+DECLARE_SUBTYPES(ImageMapStorage);
+DECLARE_SUBTYPES(ImageMapCache);
+DECLARE_SUBTYPES(LightSource);
+DECLARE_SUBTYPES(TriangleLight);
+DECLARE_SUBTYPES(EnvLightSource);
+DECLARE_SUBTYPES(LightStrategy);
+DECLARE_SUBTYPES(Material);
+DECLARE_SUBTYPES(RenderConfig);
+DECLARE_SUBTYPES(RenderSession);
+DECLARE_SUBTYPES(RenderState);
+DECLARE_SUBTYPES(RenderEngine);
+DECLARE_SUBTYPES(Texture);
+DECLARE_SUBTYPES(FresnelTexture);
+DECLARE_SUBTYPES(ImageMapTexture);
+DECLARE_SUBTYPES(TextureMapping2D);
+DECLARE_SUBTYPES(TextureMapping3D);
+DECLARE_SUBTYPES(Volume);
+DECLARE_SUBTYPES(Sampler);
+DECLARE_SUBTYPES(SamplerSharedData);
+DECLARE_SUBTYPES(SobolSamplerSharedData);
+DECLARE_SUBTYPES(Filter);
+DECLARE_SUBTYPES(FilmSampleSplatter);
+DECLARE_SUBTYPES(CPURenderThread);
+DECLARE_SUBTYPES(LightStrategyLogPower);
 
 }  // namespace slg
 

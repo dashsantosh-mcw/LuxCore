@@ -19,9 +19,11 @@
 #ifndef _LUXCOREIMPL_H
 #define	_LUXCOREIMPL_H
 
+#include "luxrays/utils/serializationutils.h"
 #include <format>
 
 #include <luxcore/luxcore.h>
+#include <memory>
 #include <slg/usings.h>
 #include <slg/renderconfig.h>
 #include <slg/rendersession.h>
@@ -40,15 +42,16 @@ using RenderSessionImplRef = RenderSessionImpl &;
 using RenderSessionImplConstRef = const RenderSessionImpl &;
 
 class RenderConfigImpl;
-using RenderConfigImplPtr = std::shared_ptr<RenderConfigImpl>;
 using RenderConfigImplUPtr = std::unique_ptr<RenderConfigImpl>;
+using RenderConfigImplRef = RenderConfigImpl &;
+using RenderConfigImplConstRef = const RenderConfigImpl &;
 
 class RenderStateImpl;
 using RenderStateImplPtr = std::shared_ptr<RenderStateImpl>;
 
 class SceneImpl;
 using SceneImplConstRef = const SceneImpl &;
-using SceneImplPtr = std::shared_ptr<SceneImpl>;
+using SceneImplRef = SceneImpl &;
 using SceneImplUPtr = std::unique_ptr<SceneImpl>;
 
 class CameraImpl;
@@ -56,20 +59,25 @@ using CameraImplPtr = std::shared_ptr<CameraImpl>;
 using CameraImplUPtr = std::unique_ptr<CameraImpl>;
 
 class FilmImpl;
-using FilmImplPtr = std::shared_ptr<FilmImpl>;
+using FilmImplUPtr = std::unique_ptr<FilmImpl>;
+using FilmImplPtr = const std::unique_ptr<FilmImpl> &;
+using FilmImplRef = FilmImpl&;
+
 
 class FilmImplStandalone;
-using FilmImplStandalonePtr = std::shared_ptr<FilmImplStandalone>;
+using FilmImplStandaloneUPtr = std::unique_ptr<FilmImplStandalone>;
 
 // Disambiguation: there are luxcore::Film and slg:Film...
 using LuxFilm = luxcore::Film;
-using LuxFilmPtr = std::shared_ptr<luxcore::Film>;
 using LuxFilmRef = luxcore::Film &;
-using LuxFilmConstPtr = std::shared_ptr<const luxcore::Film>;
+using LuxFilmUPtr = std::unique_ptr<luxcore::Film>;
+using LuxFilmPtr = const std::unique_ptr<luxcore::Film> &;
+using LuxFilmConstRef = const luxcore::Film &;
 
 // Disambiguation: there are luxcore::Camera and slg:Camera...
 using LuxCamera = luxcore::Camera;
 using LuxCameraConstRef = const luxcore::Camera &;
+using LuxCameraRef = luxcore::Camera &;
 
 
 //------------------------------------------------------------------------------
@@ -80,36 +88,38 @@ class FilmImpl : public luxcore::Film {
 public:
 
 	// Standalone film
-	static std::shared_ptr<FilmImpl> Create(slg::FilmPtr film);
-	static std::shared_ptr<FilmImpl> Create(const std::string &fileName);
-	static std::shared_ptr<FilmImpl> Create(
-		luxrays::PropertiesConstPtr props,
+	static FilmImplUPtr Create(slg::FilmUPtr&& film);
+	static FilmImplUPtr Create(const std::string &fileName);
+	static FilmImplUPtr Create(
+		luxrays::PropertiesPtr props,
 		const bool hasPixelNormalizedChannel,
 		const bool hasScreenNormalizedChannel
 	);
 
 	// Session film
-	static std::shared_ptr<FilmImpl> Create(RenderSessionImplRef session);
+	static FilmImplUPtr Create(RenderSessionImplRef session);
+
+	virtual ~FilmImpl() = default;
 
 	unsigned int GetWidth() const;
 	unsigned int GetHeight() const;
-	luxrays::Properties GetStats() const;
+	luxrays::PropertiesUPtr GetStats() const;
 	float GetFilmY(const unsigned int imagePipelineIndex = 0) const;
 
 	void Clear();
-	void AddFilm(LuxFilmConstPtr film);
+	void AddFilm(LuxFilmConstRef film) override;
 	void AddFilm(
-		LuxFilmConstPtr film,
+		LuxFilmConstRef film,
 		const unsigned int srcOffsetX, const unsigned int srcOffsetY,
 		const unsigned int srcWidth, const unsigned int srcHeight,
 		const unsigned int dstOffsetX, const unsigned int dstOffsetY
-	);
+	) override;
 
 	virtual void SaveOutputs() const = 0;
 	void SaveOutput(
 		const std::string &fileName,
 		const FilmOutputType type,
-		luxrays::PropertiesConstPtr props
+		luxrays::PropertiesPtr props
 	) const;
 	virtual void SaveFilm(const std::string &fileName) const = 0;
 
@@ -141,7 +151,7 @@ public:
 	virtual unsigned int *UpdateChannelUInt(const FilmChannelType type,
 			const unsigned int index, const bool executeImagePipeline);
 
-	virtual void Parse(luxrays::PropertiesConstPtr props) = 0;
+	virtual void Parse(luxrays::PropertiesPtr props) = 0;
 
 	virtual void DeleteAllImagePipelines() = 0;
 
@@ -158,22 +168,22 @@ protected:
 	FilmImpl() {}
 
 private:
-	virtual slg::FilmPtr GetSLGFilm() const = 0;
+	virtual slg::FilmRef GetSLGFilm() const = 0;
 };
 
 
 // FilmImplStandalone is created from another Film
 class FilmImplStandalone : public FilmImpl {
 public:
-	FilmImplStandalone(slg::FilmPtr film);
 	FilmImplStandalone(const std::string &fileName);
 	FilmImplStandalone(
-		luxrays::PropertiesConstPtr props,
+		luxrays::PropertiesPtr props,
 		const bool hasPixelNormalizedChannel,
 		const bool hasScreenNormalizedChannel
 	);
+	FilmImplStandalone() = default;
+	virtual ~FilmImplStandalone() = default;
 
-	FilmImplStandalone() = delete;
 
 	virtual void SaveOutputs() const override;
 	virtual void SaveFilm(const std::string &fileName) const override;
@@ -192,7 +202,7 @@ public:
 		const unsigned int index, const bool executeImagePipeline) override;
 
 
-	virtual void Parse(luxrays::PropertiesConstPtr props) override;
+	virtual void Parse(luxrays::PropertiesPtr props) override;
 
 	virtual void DeleteAllImagePipelines() override;
 
@@ -202,12 +212,14 @@ public:
 	virtual bool HasDoneAsyncExecuteImagePipeline() override;
 
 	virtual void ApplyOIDN(const u_int index) override;
+	virtual slg::FilmRef GetSLGFilm() const override;
 
-	slg::FilmPtr standAloneFilm;
+	friend class FilmImpl;
+	friend class RenderSessionImpl;
 
 private:
+	slg::FilmUPtr standAloneFilm;
 
-	virtual slg::FilmPtr GetSLGFilm() const override;
 };
 
 
@@ -215,6 +227,7 @@ private:
 class FilmImplSession : public FilmImpl {
 public:
 	FilmImplSession(RenderSessionImplRef session);
+	virtual ~FilmImplSession() = default;
 
 	FilmImplSession() = delete;
 
@@ -235,7 +248,7 @@ public:
 		const unsigned int index, const bool executeImagePipeline) override;
 
 
-	virtual void Parse(luxrays::PropertiesConstPtr props) override;
+	virtual void Parse(luxrays::PropertiesPtr props) override;
 
 	virtual void DeleteAllImagePipelines() override;
 
@@ -250,7 +263,7 @@ public:
 
 private:
 
-	virtual slg::FilmPtr GetSLGFilm() const override;
+	virtual slg::FilmRef GetSLGFilm() const override;
 };
 
 
@@ -261,27 +274,28 @@ private:
 
 class CameraImpl : public luxcore::Camera {
 public:
-	CameraImpl(SceneImplConstRef scene);
+	CameraImpl(SceneImplRef scene);
 	~CameraImpl();
 
 	const CameraType GetType() const;
 
-	void Translate(const float x, const float y, const float z) const;
-	void TranslateLeft(const float t) const;
-	void TranslateRight(const float t) const;
-	void TranslateForward(const float t) const;
-	void TranslateBackward(const float t) const;
+	void Translate(const float x, const float y, const float z);
+	void TranslateLeft(const float t);
+	void TranslateRight(const float t);
+	void TranslateForward(const float t);
+	void TranslateBackward(const float t);
 
-	void Rotate(const float angle, const float x, const float y, const float z) const;
-	void RotateLeft(const float angle) const;
-	void RotateRight(const float angle) const;
-	void RotateUp(const float angle) const;
-	void RotateDown(const float angle) const;
+	void Rotate(const float angle, const float x, const float y, const float z);
+	void RotateLeft(const float angle);
+	void RotateRight(const float angle);
+	void RotateUp(const float angle);
+	void RotateDown(const float angle);
 
 	friend class SceneImpl;
 
 private:
-	SceneImplConstRef scene;
+	// Back link
+	SceneImplRef scene;
 };
 
 //------------------------------------------------------------------------------
@@ -293,27 +307,29 @@ class SceneImpl : public luxcore::Scene {
 	struct Private {};
 
 public:
+	// Factory
 	template<typename... Args>
 	static SceneImplUPtr Create(Args... args) {
 		return std::make_unique<SceneImpl>(Private(), std::forward<Args>(args)...);
 	}
 
 	// Constructors are private - please use factory
-	SceneImpl(Private, slg::ScenePtr scn);
-	SceneImpl(Private, luxrays::PropertiesConstPtr resizePolicyProps = nullptr);
+	SceneImpl(Private, slg::SceneRef scn);  // Non owning constructor
+	SceneImpl(Private, luxrays::PropertiesPtr resizePolicyProps = nullptr);
 	SceneImpl(
 		Private,
-		luxrays::PropertiesConstPtr props,
-		luxrays::PropertiesConstPtr resizePolicyProps
+		luxrays::PropertiesPtr props,
+		luxrays::PropertiesPtr resizePolicyProps
 	);
 	SceneImpl(
 		Private,
-		const std::string &fileName,
-		luxrays::PropertiesConstPtr resizePolicyProps = nullptr
+		const std::string fileName,
+		luxrays::PropertiesPtr resizePolicyProps = nullptr
 	);
 
 	void GetBBox(float min[3], float max[3]) const;
 	LuxCameraConstRef GetCamera() const;
+	LuxCameraRef GetCamera();
 
 	bool IsImageMapDefined(const std::string &imgMapName) const;
 
@@ -356,7 +372,7 @@ public:
 	const unsigned int GetLightCount() const;
 	const unsigned int GetObjectCount() const;
 
-	void Parse(luxrays::PropertiesConstPtr props);
+	void Parse(luxrays::PropertiesPtr props);
 
 	void DuplicateObject(
 		const std::string &srcObjName, const std::string &dstObjName,
@@ -410,26 +426,38 @@ public:
 			const unsigned int width, const unsigned int height,
 			ChannelSelectionType selectionType, WrapType wrapType);
 
-	luxrays::PropertiesConstPtr ToProperties() const;
-	void Save(const std::string &fileName) const;
+	luxrays::PropertiesPtr ToProperties() const;
+	void Save(const std::string &fileName);
 
 	// Note: this method is not part of LuxCore API and it is used only internally
-	void DefineMesh(std::shared_ptr<luxrays::ExtTriangleMesh> mesh);
+	void DefineMesh(luxrays::ExtTriangleMeshUPtr&& mesh);
 
 	static luxrays::Point *AllocVerticesBuffer(const unsigned int meshVertCount);
 	static luxrays::Triangle *AllocTrianglesBuffer(const unsigned int meshTriCount);
 
-	friend class CameraImpl;
+
+	//friend class CameraImpl;
 	friend class RenderConfigImpl;
 	friend class RenderSessionImpl;
 
+	slg::SceneConstRef GetSlgScene() const { return sceneRef; }
+	slg::SceneRef GetSlgScene() { return sceneRef; }
+
 private:
 
-	mutable luxrays::PropertiesPtr scenePropertiesCache;
+	mutable luxrays::PropertiesUPtr scenePropertiesCache;
 
-	slg::ScenePtr scene;
+	// WARNING: KEEP FOLLOWING DECLARATIONS IN PRESENT ORDER
+	// Order matters for initialization
+
+	// Internal objects (owned)
 	CameraImplUPtr camera;
-	bool allocatedScene;
+	slg::SceneUPtr internalScene;
+
+	// Reference to the working scene. Depending on object construction, it can
+	// be an external scene, or the internal scene below
+	std::reference_wrapper<slg::Scene> sceneRef;
+
 };
 
 //------------------------------------------------------------------------------
@@ -449,33 +477,33 @@ public:
 		);
 	}
 
-	// Constructors
-	RenderConfigImpl(Private, luxrays::PropertiesConstPtr props);
-	RenderConfigImpl(
+	// Constructors (private, please use factory instead)
+	RenderConfigImpl(  // Non owning constructor (scene is external)
 		Private,
-		luxrays::PropertiesConstPtr props,
-		SceneImplPtr scene
+		luxrays::PropertiesPtr props,
+		SceneImpl& scene
 	);
-	RenderConfigImpl(Private, const std::string &fileName);
+	RenderConfigImpl(Private, luxrays::PropertiesPtr props);
+	RenderConfigImpl(Private, const std::string fileName);
 	RenderConfigImpl(
 		Private,
-		const std::string &fileName,
+		const std::string fileName,
 		std::shared_ptr<RenderStateImpl>& startState,  // Out
-		std::shared_ptr<FilmImpl>& startFilm  // Out
+		std::unique_ptr<FilmImpl>& startFilm  // Out
 	);
 
 	virtual ~RenderConfigImpl() = default;
 
-	const luxrays::Properties &GetProperties() const;
+	luxrays::PropertiesPtr GetProperties() const;
 	const luxrays::Property GetProperty(const std::string &name) const;
-	const luxrays::Properties &ToProperties() const;
+	luxrays::PropertiesPtr ToProperties() const;
 
 	const Scene& GetScene() const override;
 	Scene& GetScene() override;
 
 	bool HasCachedKernels() const;
 
-	void Parse(luxrays::PropertiesConstPtr props);
+	void Parse(luxrays::PropertiesPtr props);
 
 	void Delete(const std::string &prefix);
 
@@ -488,18 +516,37 @@ public:
 	void Export(const std::string &dirName) const;
 	void ExportGLTF(const std::string &fileName) const;
 
-	static const luxrays::Properties &GetDefaultProperties();
+	static luxrays::PropertiesPtr GetDefaultProperties();
+
+	template<typename T> T ReadFromSIF() const;
 
 	friend class RenderSessionImpl;
 
 
 private:
+	// Input file for serialization (optional and mutable)
+	mutable std::optional<luxrays::SerializationInputFile> sif;
+
+	// CAVEAT: member order matters, for correct initialization.
+
 	// The underlying slg object
+	//
+	// Warning: keep this declaration **before** internalScene declaration.
+	// This of first importance for correct initialization order. See here:
+	// https://en.cppreference.com/w/cpp/language/initializer_list.html#Initialization_order
 	std::unique_ptr<slg::RenderConfig> renderConfig;
 
-	// The (optional) scene
-	SceneImplPtr scene;
-	bool allocatedScene;
+	// The (optional) internal scene.
+	//
+	// Warning: keep this declaration **before** sceneRef declaration.
+	// This of first importance for correct initialization order. See here:
+	// https://en.cppreference.com/w/cpp/language/initializer_list.html#Initialization_order
+	SceneImplUPtr internalScene;
+
+	// The working scene. Can bind to internal or external scene depending on
+	// construction
+	SceneImplRef sceneRef;
+
 };
 
 
@@ -546,18 +593,22 @@ public:
 	// Please use factory function
 	RenderSessionImpl(
 		Private priv,
-		RenderConfigImplPtr config,
-		std::shared_ptr<RenderStateImpl> startState = nullptr,
-		std::shared_ptr<FilmImplStandalone> startFilm = nullptr
+		RenderConfigImplRef config
 	);
 	RenderSessionImpl(
 		Private priv,
-		RenderConfigImplPtr config,
+		RenderConfigImplRef config,  // Back link, not owned
+		std::shared_ptr<RenderStateImpl>& startState,
+		FilmImplStandalone& startFilm
+	);
+	RenderSessionImpl(
+		Private priv,
+		RenderConfigImplRef config,  // Back link, not owned
 		const std::string &startStateFileName,
 		const std::string &startFilmFileName
 	);
 
-	RenderConfig& GetRenderConfig() override;
+	RenderConfigImplRef GetRenderConfig() override;
 	std::shared_ptr<RenderState> GetRenderState() override;
 
 	void Start() override;
@@ -576,12 +627,13 @@ public:
 	void WaitForDone() const override;
 	void WaitNewFrame() override;
 
-	LuxFilmPtr GetFilm() override;
+	LuxFilmRef GetFilm() override;
+	FilmImplPtr GetFilmPtr();
 
 	void UpdateStats() override;
-	const luxrays::Properties &GetStats() const override;
+	const luxrays::PropertiesUPtr &GetStats() const override;
 
-	void Parse(luxrays::PropertiesConstPtr props) override;
+	void Parse(luxrays::PropertiesPtr props) override;
 
 	void SaveResumeFile(const std::string &fileName) override;
 
@@ -593,16 +645,14 @@ public:
 	friend class FilmImpl;
 
 private:
-	// RenderSessionImpl is created by RenderConfigImpl
-	// It should be a reference, but it can't, due to serialization
-	// So we use a raw pointer...
-	std::weak_ptr<RenderConfigImpl> renderConfig;  // Back link, not owned
+	// Back link, not owned
+	RenderConfigImplRef renderConfig;
 
 	// RenderSessionImpl creates and owns a slg::RenderSession and a FilmImpl
 	// RenderSession must not be shared
 	std::unique_ptr<slg::RenderSession> renderSession;
-	std::shared_ptr<FilmImpl> film;
-	luxrays::Properties stats;
+	FilmImplUPtr film;
+	luxrays::PropertiesUPtr stats;
 
 	void InitFilm();
 

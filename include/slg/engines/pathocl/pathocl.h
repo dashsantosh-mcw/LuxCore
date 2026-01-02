@@ -19,6 +19,7 @@
 #ifndef _SLG_PATHOCL_H
 #define	_SLG_PATHOCL_H
 
+#include <functional>
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
 #include "slg/engines/pathoclbase/pathoclbase.h"
@@ -58,15 +59,17 @@ public:
 
 	virtual void Start();
 
+	FilmRef GetThreadFilm();
+
 	friend class PathOCLRenderEngine;
 
 protected:
 	virtual void StartRenderThread();
 	virtual void RenderThreadImpl(std::stop_token stop_token);
-	
-	// Only the first thread allocate a film. It is than used by all
+
+	// Only the first thread allocate a film. It is then used by all
 	// other threads too.
-	FilmPtr threadFilm;
+	FilmUPtr threadFilm;
 };
 
 //------------------------------------------------------------------------------
@@ -75,13 +78,13 @@ protected:
 
 class PathOCLRenderEngine : public PathOCLBaseRenderEngine {
 public:
-	PathOCLRenderEngine(RenderConfigConstRef cfg);
+	PathOCLRenderEngine(RenderConfigRef cfg);
 	virtual ~PathOCLRenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
 	virtual std::string GetTag() const { return GetObjectTag(); }
 
-	virtual RenderStatePtr GetRenderState();
+	virtual RenderStateSPtr GetRenderState();
 
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
@@ -89,14 +92,14 @@ public:
 
 	static RenderEngineType GetObjectType() { return PATHOCL; }
 	static std::string GetObjectTag() { return "PATHOCL"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(RenderConfigConstRef rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class PathOCLOpenCLRenderThread;
 	friend class PathOCLNativeRenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual PathOCLBaseOCLRenderThread *CreateOCLThread(const u_int index,
 			luxrays::HardwareIntersectionDevice *device);
@@ -113,8 +116,8 @@ protected:
 
 	u_int GetTotalEyeSPP() const;
 
-	FilmSampleSplatter *lightSampleSplatter;
-	std::unique_ptr<SamplerSharedData> eyeSamplerSharedData;
+	FilmSampleSplatterUPtr lightSampleSplatter;
+	std::shared_ptr<SamplerSharedData> eyeSamplerSharedData;
 
 	bool hasStartFilm, allRenderingThreadsStarted;
 };

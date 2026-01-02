@@ -29,9 +29,9 @@ namespace slg {
 
 class MatteMaterial : public Material {
 public:
-	MatteMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
-			TextureConstPtr emitted, TextureConstPtr bump,
-			TextureConstPtr col);
+	MatteMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
+			TextureConstOPtr emitted, TextureConstOPtr bump,
+			TextureConstOPtr col);
 
 	virtual MaterialType GetType() const { return MATTE; }
 	virtual BSDFEvent GetEventTypes() const { return DIFFUSE | REFLECT; };
@@ -50,15 +50,15 @@ public:
 		const luxrays::Vector &localLightDir, const luxrays::Vector &localEyeDir,
 		float *directPdfW, float *reversePdfW) const;
 
-	virtual void AddReferencedTextures(std::unordered_set<TextureConstPtr>  &referencedTexs) const;
-	virtual void UpdateTextureReferences(TextureConstPtr oldTex, TextureConstPtr newTex);
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const;
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex);
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
-	TextureConstPtr GetKd() const { return Kd; }
+	TextureConstOPtr GetKd() const { return Kd; }
 
 private:
-	TextureConstPtr Kd;
+	TextureConstOPtr Kd;
 };
 
 }

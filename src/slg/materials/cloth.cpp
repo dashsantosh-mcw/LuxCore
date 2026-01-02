@@ -27,10 +27,10 @@ using namespace slg;
 // Cloth material
 //------------------------------------------------------------------------------
 
-ClothMaterial::ClothMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
-		TextureConstPtr emitted, TextureConstPtr bump,
-		const slg::ocl::ClothPreset preset, TextureConstPtr weft_kd, TextureConstPtr weft_ks,
-		TextureConstPtr warp_kd, TextureConstPtr warp_ks, const float repeat_u, const float repeat_v) :
+ClothMaterial::ClothMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
+		TextureConstOPtr emitted, TextureConstOPtr bump,
+		const slg::ocl::ClothPreset preset, TextureConstOPtr weft_kd, TextureConstOPtr weft_ks,
+		TextureConstOPtr warp_kd, TextureConstOPtr warp_ks, const float repeat_u, const float repeat_v) :
 		    Material(frontTransp, backTransp, emitted, bump), Preset(preset), Weft_Kd(weft_kd), Weft_Ks(weft_ks),
             Warp_Kd(warp_kd), Warp_Ks(warp_ks), Repeat_U(repeat_u), Repeat_V(repeat_v) {
 	SetPreset();
@@ -540,7 +540,7 @@ Spectrum ClothMaterial::Albedo(const HitPoint &hitPoint) const {
 	const UV hitPountUV = hitPoint.GetUV(0);
 	const slg::ocl::Yarn *yarn = GetYarn(hitPountUV.u, hitPountUV.v, &uv, &umax, &scale);
 	
-	TextureConstPtr kd = yarn->yarn_type == slg::ocl::WARP ? Warp_Kd :  Weft_Kd;
+	TextureConstOPtr kd = yarn->yarn_type == slg::ocl::WARP ? Warp_Kd :  Weft_Kd;
 
 	return kd->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f);
 }
@@ -563,8 +563,8 @@ Spectrum ClothMaterial::Evaluate(const HitPoint &hitPoint,
 	
 	scale = scale * EvalSpecular(yarn, uv, umax, localLightDir, localEyeDir);
 	
-	TextureConstPtr ks = yarn->yarn_type == slg::ocl::WARP ? Warp_Ks :  Weft_Ks;
-	TextureConstPtr kd = yarn->yarn_type == slg::ocl::WARP ? Warp_Kd :  Weft_Kd;
+	TextureConstOPtr ks = yarn->yarn_type == slg::ocl::WARP ? Warp_Ks :  Weft_Ks;
+	TextureConstOPtr kd = yarn->yarn_type == slg::ocl::WARP ? Warp_Kd :  Weft_Kd;
 
 	return (kd->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f) + ks->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f) * scale) * INV_PI * fabsf(localLightDir.z);
 }
@@ -592,8 +592,8 @@ Spectrum ClothMaterial::Sample(const HitPoint &hitPoint,
 	else
 	    scale = scale * EvalSpecular(yarn, uv, umax, *localSampledDir, localFixedDir);
 
-	TextureConstPtr ks = (yarn->yarn_type == slg::ocl::WARP ? Warp_Ks :  Weft_Ks);
-	TextureConstPtr kd = (yarn->yarn_type == slg::ocl::WARP ? Warp_Kd :  Weft_Kd);
+	TextureConstOPtr ks = (yarn->yarn_type == slg::ocl::WARP ? Warp_Ks :  Weft_Ks);
+	TextureConstOPtr kd = (yarn->yarn_type == slg::ocl::WARP ? Warp_Kd :  Weft_Kd);
 	
 	return kd->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f) + ks->GetSpectrumValue(hitPoint).Clamp(0.f, 1.f) * scale;
 }
@@ -608,7 +608,7 @@ void ClothMaterial::Pdf(const HitPoint &hitPoint,
 		*reversePdfW = fabsf((hitPoint.fromLight ? localLightDir.z : localEyeDir.z) * INV_PI);
 }
 
-void ClothMaterial::AddReferencedTextures(std::unordered_set<TextureConstPtr>  &referencedTexs) const {
+void ClothMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	Warp_Ks->AddReferencedTextures(referencedTexs);
@@ -617,56 +617,56 @@ void ClothMaterial::AddReferencedTextures(std::unordered_set<TextureConstPtr>  &
 	Warp_Kd->AddReferencedTextures(referencedTexs);
 }
 
-void ClothMaterial::UpdateTextureReferences(TextureConstPtr oldTex, TextureConstPtr newTex) {
+void ClothMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Weft_Kd == oldTex)
-		Weft_Kd = newTex;
-	if (Weft_Ks == oldTex)
-		Weft_Ks = newTex;
-	if (Warp_Kd == oldTex)
-		Warp_Kd = newTex;
-	if (Warp_Ks == oldTex)
-		Warp_Ks = newTex;
+	if (Weft_Kd == &oldTex)
+		Weft_Kd.reset(&newTex);
+	if (Weft_Ks == &oldTex)
+		Weft_Ks.reset(&newTex);
+	if (Warp_Kd == &oldTex)
+		Warp_Kd.reset(&newTex);
+	if (Warp_Ks == &oldTex)
+		Warp_Ks.reset(&newTex);
 }
 
-Properties ClothMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr ClothMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const std::string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("cloth"));
+	props->Set(Property("scene.materials." + name + ".type")("cloth"));
 	
 	switch (Preset) {
 	  case slg::ocl::DENIM:
-		props.Set(Property("scene.materials." + name + ".preset")("denim"));
+		props->Set(Property("scene.materials." + name + ".preset")("denim"));
 		break;
 	  case slg::ocl::SILKCHARMEUSE:
-		props.Set(Property("scene.materials." + name + ".preset")("silk_charmeuse"));
+		props->Set(Property("scene.materials." + name + ".preset")("silk_charmeuse"));
 		break;
 	  case slg::ocl::SILKSHANTUNG:
-		props.Set(Property("scene.materials." + name + ".preset")("silk_shantung"));
+		props->Set(Property("scene.materials." + name + ".preset")("silk_shantung"));
 		break;
 	  case slg::ocl::COTTONTWILL:
-		props.Set(Property("scene.materials." + name + ".preset")("cotton_twill"));
+		props->Set(Property("scene.materials." + name + ".preset")("cotton_twill"));
 		break;
 	  case slg::ocl::WOOLGABARDINE:
-		props.Set(Property("scene.materials." + name + ".preset")("wool_gabardine"));
+		props->Set(Property("scene.materials." + name + ".preset")("wool_gabardine"));
 		break;
 	  case slg::ocl::POLYESTER:
-		props.Set(Property("scene.materials." + name + ".preset")("polyester_lining_cloth"));
+		props->Set(Property("scene.materials." + name + ".preset")("polyester_lining_cloth"));
 		break;
 	  default:
           throw runtime_error("Unknown preset in ClothMaterial::ToProperties(const ImageMapCache &imgMapCache): " + ToString(Preset));
 	    break;
 	}
 
-	props.Set(Property("scene.materials." + name + ".weft_kd")(Weft_Kd->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".weft_ks")(Weft_Ks->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".warp_kd")(Warp_Kd->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".warp_ks")(Warp_Ks->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".repeat_u")(Repeat_U));
-	props.Set(Property("scene.materials." + name + ".repeat_v")(Repeat_V));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".weft_kd")(Weft_Kd->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".weft_ks")(Weft_Ks->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".warp_kd")(Warp_Kd->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".warp_ks")(Warp_Ks->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".repeat_u")(Repeat_U));
+	props->Set(Property("scene.materials." + name + ".repeat_v")(Repeat_V));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }

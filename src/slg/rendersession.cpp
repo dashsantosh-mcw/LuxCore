@@ -37,8 +37,8 @@ void slg::NullDebugHandler(const char *msg) {
 
 RenderSession::RenderSession(
 	RenderConfigRef rcfg,
-	RenderStatePtr startState,
-	FilmPtr startFilm
+	RenderStateSPtr startState,
+	std::experimental::observer_ptr<Film> startFilm
 ) : renderConfig(rcfg) {
 	SDL_LOG("Creating session");
 
@@ -82,7 +82,7 @@ void RenderSession::Start() {
 		film = renderConfig.AllocFilm();
 	}
 
-	renderEngine->Start(film, &filmMutex);
+	renderEngine->Start(*film, &filmMutex);
 }
 
 void RenderSession::Stop() {
@@ -98,7 +98,7 @@ void RenderSession::BeginSceneEdit() {
 
 void RenderSession::EndSceneEdit() {
 	// Make a copy of the edit actions
-	const EditActionList editActions = renderConfig.scene->editActions;
+	const EditActionList& editActions = renderConfig.GetScene().GetEditActions();
 
 	if ((renderEngine->GetType() != RTPATHOCL) &&
 			(renderEngine->GetType() != RTPATHCPU)) {
@@ -198,11 +198,11 @@ void RenderSession::SaveFilm(const string &fileName) {
 	if (renderConfig.GetProperty("film.safesave").Get<bool>()) {
 		SafeSave safeSave(fileName);
 
-		Film::SaveSerialized(safeSave.GetSaveFileName(), film);
+		Film::SaveSerialized(safeSave.GetSaveFileName(), *film);
 
 		safeSave.Process();
 	} else
-		Film::SaveSerialized(fileName, film);
+		Film::SaveSerialized(fileName, *film);
 }
 
 void RenderSession::SaveFilmOutputs() {
@@ -216,7 +216,7 @@ void RenderSession::SaveFilmOutputs() {
 	film->Output();
 }
 
-RenderStatePtr RenderSession::GetRenderState() {
+RenderStateSPtr RenderSession::GetRenderState() {
 	// Check if we are in the right state
 	if (!IsInPause())
 		throw runtime_error("A rendering state can be retrieved only while the rendering session is paused");
@@ -224,7 +224,7 @@ RenderStatePtr RenderSession::GetRenderState() {
 	return renderEngine->GetRenderState();
 }
 
-void RenderSession::Parse(luxrays::PropertiesConstPtr props) {
+void RenderSession::Parse(luxrays::PropertiesPtr props) {
 	assert (renderEngine->IsStarted());
 
 	if ((props->IsDefined("film.width") && (props->Get("film.width").Get<u_int>() != film->GetWidth())) ||
@@ -240,9 +240,9 @@ void RenderSession::Parse(luxrays::PropertiesConstPtr props) {
 		film = renderConfig.AllocFilm();
 
 		// I have to update the camera
-		renderConfig.scene->PreprocessCamera(film->GetWidth(), film->GetHeight(), film->GetSubRegion());
+		renderConfig.GetScene().PreprocessCamera(film->GetWidth(), film->GetHeight(), film->GetSubRegion());
 
-		renderEngine->EndFilmEdit(film, &filmMutex);
+		renderEngine->EndFilmEdit(*film, &filmMutex);
 	} else {
 		std::unique_lock<std::mutex> lock(filmMutex);
 		film->Parse(props);

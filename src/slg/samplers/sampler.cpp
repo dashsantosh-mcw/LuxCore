@@ -31,7 +31,7 @@ using namespace slg;
 //------------------------------------------------------------------------------
 
 std::unique_ptr<SamplerSharedData> SamplerSharedData::FromProperties(
-	const Properties &cfg, RandomGenerator *rndGen, FilmPtr film
+	const Properties &cfg, const RandomGeneratorUPtr & rndGen, std::experimental::observer_ptr<Film> film
 ) {
 	const string type = cfg.Get(Property("sampler.type")(SobolSampler::GetObjectTag())).Get<string>();
 
@@ -51,34 +51,37 @@ void Sampler::RequestSamples(const SampleType smplType, const u_int size) {
 	requestedSamples = size;
 }
 
-Properties Sampler::ToProperties() const {
-	return Properties() <<
-			Property("sampler.type")(SamplerType2String(GetType())) <<
+PropertiesUPtr Sampler::ToProperties() const {
+	PropertiesUPtr props = std::make_unique<Properties>();
+	*props <<
+				Property("sampler.type")(SamplerType2String(GetType())) <<
 			Property("sampler.imagesamples.enable")(imageSamplesEnable);
+	return props;
 }
 
 //------------------------------------------------------------------------------
 // Static methods used by SamplerRegistry
 //------------------------------------------------------------------------------
 
-Properties Sampler::ToProperties(const Properties &cfg) {
+PropertiesUPtr Sampler::ToProperties(const Properties &cfg) {
 	const string type = cfg.Get(Property("sampler.type")(SobolSampler::GetObjectTag())).Get<string>();
 
 	SamplerRegistry::ToProperties func;
 
 	if (SamplerRegistry::STATICTABLE_NAME(ToProperties).Get(type, func)) {
-		return func(cfg) <<
-				cfg.Get(GetDefaultProps().Get("sampler.imagesamples.enable"));
+		auto res = func(cfg);
+		*res << cfg.Get(GetDefaultProps()->Get("sampler.imagesamples.enable"));
+		return res;
 	} else
 		throw runtime_error("Unknown sampler type in Sampler::ToProperties(): " + type);
 }
 
 SamplerUPtr Sampler::FromProperties(
 	const Properties &cfg,
-	RandomGenerator *rndGen,
-	FilmPtr film,
-	const FilmSampleSplatter *flmSplatter,
-	SamplerSharedData& sharedData
+	const std::unique_ptr<RandomGenerator> & rndGen,
+	std::experimental::observer_ptr<Film> film,
+	const FilmSampleSplatterUPtr& flmSplatter,
+	SamplerSharedDataSPtr sharedData
 ) {
 	const string type = cfg.Get(Property("sampler.type")(SobolSampler::GetObjectTag())).Get<string>();
 
@@ -125,8 +128,9 @@ string Sampler::SamplerType2String(const SamplerType type) {
 		throw runtime_error("Unknown sampler type in Sampler::SamplerType2String(): " + ToString(type));
 }
 
-const Properties &Sampler::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr Sampler::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			Property("sampler.imagesamples.enable")(true);
 
 	return props;

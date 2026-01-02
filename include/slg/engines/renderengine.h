@@ -21,7 +21,9 @@
 
 #include <deque>
 #include <boost/heap/priority_queue.hpp>
+#include <functional>
 
+#include "luxrays/core/randomgen.h"
 #include "luxrays/utils/utils.h"
 #include "luxrays/core/context.h"
 #include "luxrays/usings.h"
@@ -32,6 +34,7 @@
 #include "slg/editaction.h"
 #include "slg/film/film.h"
 #include "slg/bsdf/bsdf.h"
+#include "slg/usings.h"
 #include "slg/utils/varianceclamping.h"
 
 namespace slg {
@@ -57,11 +60,11 @@ typedef enum {
 
 class RenderEngine {
 public:
-	RenderEngine(RenderConfigConstRef cfg);
+	RenderEngine(RenderConfigRef cfg);  // Nota: cfg must be modifiable!
 	virtual ~RenderEngine();
 
 	bool IsStarted() const { return started; }
-	virtual void Start(FilmPtr film, std::mutex *flmMutex);
+	virtual void Start(FilmRef film, std::mutex *flmMutex);
 	virtual void Stop();
 
 	bool IsInSceneEdit() const { return editMode; }
@@ -69,7 +72,7 @@ public:
 	virtual void EndSceneEdit(const EditActionList &editActions);
 
 	virtual void BeginFilmEdit();
-	virtual void EndFilmEdit(FilmPtr film, std::mutex *flmMutex);
+	virtual void EndFilmEdit(FilmRef film, std::mutex *flmMutex);
 
 	bool IsInPause() const { return pauseMode; }
 	virtual void Pause();
@@ -87,10 +90,12 @@ public:
 	void SetSeed(const unsigned long seed);
 	void GenerateNewSeedBase();
 
-	virtual RenderStatePtr GetRenderState() {
-		throw std::runtime_error("RenderEngine::GetRenderState() not implemented for render engine: " + GetTag());
+	virtual RenderStateSPtr GetRenderState() {
+		throw std::runtime_error(
+			"RenderEngine::GetRenderState() not implemented for render engine: " + GetTag()
+		);
 	}
-	virtual void SetRenderState(RenderStatePtr state, FilmPtr startFilm);
+	virtual void SetRenderState(RenderStateSPtr state, std::experimental::observer_ptr<Film> startFilm);
 
 	virtual bool IsMaterialCompiled(const MaterialType type) const {
 		return true;
@@ -104,33 +109,40 @@ public:
 		return ctx->GetAvailableDeviceDescriptions();
 	}
 
+	FilmRef GetFilm() {
+		return *film;
+	}
+	FilmConstRef GetFilm() const {
+		return *film;
+	}
+
 	//--------------------------------------------------------------------------
 	// Statistics related methods
 	//--------------------------------------------------------------------------
 
 	u_int GetPass() const {
-		return static_cast<u_int>(film->GetTotalSampleCount() / (film->GetWidth() * film->GetHeight()));
+		return static_cast<u_int>(GetFilm().GetTotalSampleCount() / (GetFilm().GetWidth() * GetFilm().GetHeight()));
 	}
 	u_int GetEyePass() const {
-		return static_cast<u_int>(film->GetTotalEyeSampleCount() / (film->GetWidth() * film->GetHeight()));
+		return static_cast<u_int>(GetFilm().GetTotalEyeSampleCount() / (GetFilm().GetWidth() * GetFilm().GetHeight()));
 	}
 	u_int GetLightPass() const {
-		return static_cast<u_int>(film->GetTotalLightSampleCount() / (film->GetWidth() * film->GetHeight()));
+		return static_cast<u_int>(GetFilm().GetTotalLightSampleCount() / (GetFilm().GetWidth() * GetFilm().GetHeight()));
 	}
 
-	double GetTotalSampleCount() const { return film->GetTotalSampleCount(); }
-	double GetTotalEyeSampleCount() const { return film->GetTotalEyeSampleCount(); }
-	double GetTotalLightSampleCount() const { return film->GetTotalLightSampleCount(); }
+	double GetTotalSampleCount() const { return GetFilm().GetTotalSampleCount(); }
+	double GetTotalEyeSampleCount() const { return GetFilm().GetTotalEyeSampleCount(); }
+	double GetTotalLightSampleCount() const { return GetFilm().GetTotalLightSampleCount(); }
 
-	double GetTotalSamplesSec() const { return film->GetAvgSampleSec(); }
-	double GetTotalEyeSamplesSec() const { return film->GetAvgEyeSampleSec(); }
-	double GetTotalLightSamplesSec() const { return film->GetAvgLightSampleSec(); }
+	double GetTotalSamplesSec() const { return GetFilm().GetAvgSampleSec(); }
+	double GetTotalEyeSamplesSec() const { return GetFilm().GetAvgEyeSampleSec(); }
+	double GetTotalLightSamplesSec() const { return GetFilm().GetAvgLightSampleSec(); }
 
 	double GetTotalRaysSec() const {
-		const double t = film->GetTotalTime();
+		const double t = GetFilm().GetTotalTime();
 		return (t == 0.0) ? 0.0 : (raysCount / t);
 	}
-	double GetRenderingTime() const { return film->GetTotalTime(); }
+	double GetRenderingTime() const { return GetFilm().GetTotalTime(); }
 
 	//--------------------------------------------------------------------------
 
@@ -142,16 +154,16 @@ public:
 	}
 
 	// Transform the current object in Properties
-	virtual luxrays::Properties ToProperties() const;
+	virtual luxrays::PropertiesUPtr ToProperties() const;
 	
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
 	//--------------------------------------------------------------------------
 
 	// This method is not used at the moment
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 	// Allocate a Object based on the cfg definition
-	static RenderEngineUPtr FromProperties(RenderConfigConstRef rcfg);
+	static RenderEngineUPtr FromProperties(RenderConfigRef rcfg);
 	// This method is not used at the moment
 	static std::string FromPropertiesOCL(const luxrays::Properties &cfg);
 
@@ -159,7 +171,7 @@ public:
 	static std::string RenderEngineType2String(const RenderEngineType type);
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual bool IsRTMode() const { return false; }
 	virtual void InitFilm() = 0;
@@ -177,23 +189,34 @@ protected:
 	std::vector<luxrays::DeviceDescription *> selectedDeviceDescs;
 	std::vector<luxrays::IntersectionDevice *> intersectionDevices;
 
-	RenderConfigConstRef renderConfig;
-	Filter *pixelFilter;
-	FilmPtr film;
+	RenderConfigRef renderConfig;
+	std::experimental::observer_ptr<Film> film;
 	std::mutex *filmMutex;
 
 	// bootStrapSeed is the "father" of all other seeds. Using the same seed should leads
 	// to the same rendering (in a single thread case). seedBase is generated from
 	// bootStrapSeed.
 	u_int bootStrapSeed, seedBase;
-	luxrays::RandomGenerator seedBaseGenerator;
+	luxrays::RandomGeneratorUPtr seedBaseGenerator;
 
 	double raysCount;
 
-	RenderStatePtr startRenderState;
-	FilmPtr startFilm;
+	RenderStateSPtr startRenderState;
+	std::experimental::observer_ptr<Film> startFilm;
 
 	bool started, editMode, pauseMode;
+
+	FilterPtr GetPixelFilter() const { return pixelFilter; }
+
+	FilmSampleSplatterPtr GetSampleSplatter() const;
+	void SetSampleSplatter(FilmSampleSplatterUPtr&&);
+	void SetSampleSplatter(FilterPtr);
+	void ResetSampleSplatter();
+
+private:
+	// Owned properties
+	FilterUPtr pixelFilter;
+	FilmSampleSplatterUPtr sampleSplatter;
 };
 
 }

@@ -15,6 +15,9 @@
  * See the License for the specific language governing permissions and   *
  * limitations under the License.                      *
  ***************************************************************************/
+#include "luxrays/utils/properties.h"
+#include <pybind11/detail/common.h>
+#include <pybind11/detail/using_smart_holder.h>
 #define PYBIND11_DETAILED_ERROR_MESSAGES
 
 #ifdef WIN32
@@ -48,8 +51,10 @@ using namespace luxcore;
 using namespace luxcore::detail;
 namespace py = pybind11;
 
-using PropertyPtr = std::shared_ptr<luxrays::Property>;
-using SceneImplPtr = std::shared_ptr<luxcore::detail::SceneImpl>;
+using PropertyUPtr = std::unique_ptr<luxrays::Property>;
+using PropertyPtr = const std::unique_ptr<luxrays::Property> &;
+using SceneImplPtr = std::unique_ptr<luxcore::detail::SceneImpl>;
+using PropertiesUPtr = std::unique_ptr<luxrays::Properties>;
 
 
 namespace luxcore {
@@ -139,10 +144,10 @@ static py::list GetOpenCLDeviceList() {
 }
 
 static void LuxCore_KernelCacheFill1() {
-  KernelCacheFill(luxrays::Properties());
+  KernelCacheFill(std::make_unique<Properties>());
 }
 
-static void LuxCore_KernelCacheFill2(const luxrays::Properties &config) {
+static void LuxCore_KernelCacheFill2(PropertiesPtr config) {
   KernelCacheFill(config);
 }
 
@@ -408,7 +413,7 @@ static py::list Property_GetBlob(PropertyPtr prop) {
   return Property_GetBlobByIndex(prop, 0);
 }
 
-static luxrays::Property &Property_Add(PropertyPtr prop, const py::list &l) {
+static PropertyPtr Property_Add(PropertyPtr prop, const py::list &l) {
   const py::ssize_t size = len(l);
   for (py::ssize_t i = 0; i < size; ++i) {
     const std::string objType = py::cast<std::string>((l[i].attr("__class__")).attr("__name__"));
@@ -452,10 +457,10 @@ static luxrays::Property &Property_Add(PropertyPtr prop, const py::list &l) {
       throw std::runtime_error("Unsupported data type included in Property.Add() method list: " + objType);
   }
 
-  return *prop;
+  return prop;
 }
 
-static luxrays::Property &Property_AddAllBool(PropertyPtr prop,
+static PropertyPtr Property_AddAllBool(PropertyPtr prop,
     const py::object &obj) {
   std::vector<bool> v;
   GetArray<bool>(obj, v);
@@ -463,10 +468,10 @@ static luxrays::Property &Property_AddAllBool(PropertyPtr prop,
   for (auto e : v)
     prop->Add<bool>(e);
 
-  return *prop;
+  return prop;
 }
 
-static luxrays::Property &Property_AddAllInt(PropertyPtr prop,
+static PropertyPtr Property_AddAllInt(PropertyPtr prop,
     const py::object &obj) {
   std::vector<long long> v;
   GetArray<long long>(obj, v);
@@ -474,10 +479,10 @@ static luxrays::Property &Property_AddAllInt(PropertyPtr prop,
   for (auto e : v)
     prop->Add<long long>(e);
 
-  return *prop;
+  return prop;
 }
 
-static luxrays::Property &Property_AddAllUnsignedLongLong(PropertyPtr prop,
+static PropertyPtr Property_AddAllUnsignedLongLong(PropertyPtr prop,
     const py::object &obj) {
   std::vector<unsigned long long> v;
   GetArray<unsigned long long>(obj, v);
@@ -485,10 +490,10 @@ static luxrays::Property &Property_AddAllUnsignedLongLong(PropertyPtr prop,
   for (auto e : v)
     prop->Add<unsigned long long>(e);
 
-  return *prop;
+  return prop;
 }
 
-static luxrays::Property &Property_AddAllFloat(PropertyPtr prop,
+static PropertyPtr Property_AddAllFloat(PropertyPtr prop,
     const py::object &obj) {
   std::vector<float> v;
   GetArray<float>(obj, v);
@@ -496,10 +501,10 @@ static luxrays::Property &Property_AddAllFloat(PropertyPtr prop,
   for (auto e : v)
     prop->Add<float>(e);
 
-  return *prop;
+  return prop;
 }
 
-static luxrays::Property &Property_AddAllBoolStride(PropertyPtr prop,
+static PropertyPtr Property_AddAllBoolStride(PropertyPtr prop,
     const py::object &obj, const size_t width, const size_t stride) {
   std::vector<bool> v;
   GetArray<bool>(obj, v, width, stride);
@@ -507,10 +512,10 @@ static luxrays::Property &Property_AddAllBoolStride(PropertyPtr prop,
   for (auto e : v)
     prop->Add<bool>(e);
 
-  return *prop;
+  return prop;
 }
 
-static luxrays::Property &Property_AddAllIntStride(PropertyPtr prop,
+static PropertyPtr Property_AddAllIntStride(PropertyPtr prop,
     const py::object &obj, const size_t width, const size_t stride) {
   std::vector<long long> v;
   GetArray<long long>(obj, v, width, stride);
@@ -518,10 +523,10 @@ static luxrays::Property &Property_AddAllIntStride(PropertyPtr prop,
   for (auto e : v)
     prop->Add<long long>(e);
 
-  return *prop;
+  return prop;
 }
 
-static luxrays::Property &Property_AddAllUnsignedLongLongStride(PropertyPtr prop,
+static PropertyPtr Property_AddAllUnsignedLongLongStride(PropertyPtr prop,
     const py::object &obj, const size_t width, const size_t stride) {
   std::vector<unsigned long long> v;
   GetArray<unsigned long long>(obj, v, width, stride);
@@ -529,10 +534,10 @@ static luxrays::Property &Property_AddAllUnsignedLongLongStride(PropertyPtr prop
   for (auto e : v)
     prop->Add<unsigned long long>(e);
 
-  return *prop;
+  return prop;
 }
 
-static luxrays::Property &Property_AddAllFloatStride(PropertyPtr prop,
+static PropertyPtr Property_AddAllFloatStride(PropertyPtr prop,
     const py::object &obj, const size_t width, const size_t stride) {
   std::vector<float> v;
   GetArray<float>(obj, v, width, stride);
@@ -540,10 +545,10 @@ static luxrays::Property &Property_AddAllFloatStride(PropertyPtr prop,
   for (auto e : v)
     prop->Add<float>(e);
 
-  return *prop;
+  return prop;
 }
 
-static luxrays::Property &Property_Set(PropertyPtr prop, const size_t i,
+static PropertyPtr Property_Set(PropertyPtr prop, const size_t i,
     const py::object &obj) {
   const std::string objType = py::cast<std::string>((obj.attr("__class__")).attr("__name__"));
 
@@ -580,25 +585,25 @@ static luxrays::Property &Property_Set(PropertyPtr prop, const size_t i,
 
       PyBuffer_Release(&view);
     } else
-      throw std::runtime_error("Unable to get a data view in Property.Set() method: " + objType);
+      throw std::runtime_error("Unable to get a data view in Property->Set() method: " + objType);
   } else
-    throw std::runtime_error("Unsupported data type used for Property.Set() method: " + objType);
+    throw std::runtime_error("Unsupported data type used for Property->Set() method: " + objType);
 
-  return *prop;
+  return prop;
 }
 
-static luxrays::Property &Property_Set(PropertyPtr prop, const py::list &l) {
+static PropertyPtr Property_Set(PropertyPtr prop, const py::list &l) {
   const py::ssize_t size = len(l);
   for (py::ssize_t i = 0; i < size; ++i) {
     const py::object obj = l[i];
     Property_Set(prop, i, obj);
   }
 
-  return *prop;
+  return prop;
 }
 
-static PropertyPtr Property_InitWithList(const py::str &name, const py::list &l) {
-  PropertyPtr prop = std::make_shared<luxrays::Property>(py::cast<std::string>(name));
+static PropertyUPtr Property_InitWithList(const py::str &name, const py::list &l) {
+  auto prop = std::make_unique<luxrays::Property>(py::cast<std::string>(name));
 
   Property_Add(prop, l);
 
@@ -609,10 +614,10 @@ static PropertyPtr Property_InitWithList(const py::str &name, const py::list &l)
 // Glue for Properties class
 //------------------------------------------------------------------------------
 
-static py::list Properties_GetAllNamesRE(luxrays::PropertiesConstPtr props, const std::string &pattern) {
+static py::list Properties_GetAllNamesRE(luxrays::PropertiesPtr props, const std::string &pattern) {
   py::list l;
-  const std::vector<std::string> &keys = props->GetAllNamesRE(pattern);
-  for(const std::string &key: keys) {
+  const std::vector<std::string> keys = props->GetAllNamesRE(pattern);
+  for(const std::string key: keys) {
     l.append(key);
   }
 
@@ -621,8 +626,8 @@ static py::list Properties_GetAllNamesRE(luxrays::PropertiesConstPtr props, cons
 
 static py::list Properties_GetAllNames1(luxrays::PropertiesPtr props) {
   py::list l;
-  const std::vector<std::string> &keys = props->GetAllNames();
-  for(const std::string &key: keys) {
+  const std::vector<std::string> keys = props->GetAllNames();
+  for(const std::string key: keys) {
     l.append(key);
   }
 
@@ -632,17 +637,17 @@ static py::list Properties_GetAllNames1(luxrays::PropertiesPtr props) {
 static py::list Properties_GetAllNames2(luxrays::PropertiesPtr props, const std::string &prefix) {
   py::list l;
   const std::vector<std::string> keys = props->GetAllNames(prefix);
-  for(const std::string &key: keys) {
+  for(const std::string key: keys) {
     l.append(key);
   }
 
   return l;
 }
 
-static py::list Properties_GetAllUniqueSubNames(luxrays::PropertiesPtr props, const std::string &prefix) {
+static py::list Properties_GetAllUniqueSubNames(luxrays::PropertiesPtr props, const std::string prefix) {
   py::list l;
   const std::vector<std::string> keys = props->GetAllUniqueSubNames(prefix);
-  for(const std::string &key: keys) {
+  for(const auto key: keys) {
     l.append(key);
   }
 
@@ -717,15 +722,20 @@ typedef struct {
 // File GetOutput() related functions
 //------------------------------------------------------------------------------
 
-static void Film_GetOutputFloat1(std::shared_ptr<luxcore::detail::FilmImpl> film, const Film::FilmOutputType type,
-    py::object &obj, const size_t index, const bool executeImagePipeline) {
-  const size_t outputSize = film->GetOutputSize(type) * sizeof(float);
+static void Film_GetOutputFloat1(
+	luxcore::detail::FilmImpl& film,
+	const Film::FilmOutputType type,
+    py::object &obj,
+	const size_t index,
+	const bool executeImagePipeline
+) {
+  const size_t outputSize = film.GetOutputSize(type) * sizeof(float);
 
   if (PyObject_CheckBuffer(obj.ptr())) {
     Py_buffer view;
     if (!PyObject_GetBuffer(obj.ptr(), &view, PyBUF_SIMPLE)) {
       if ((size_t)view.len >= outputSize) {
-        if(!film->HasOutput(type)) {
+        if(!film.HasOutput(type)) {
           const std::string errorMsg = "Film Output not available: " + luxrays::ToString(type);
           PyBuffer_Release(&view);
           throw std::runtime_error(errorMsg);
@@ -733,7 +743,7 @@ static void Film_GetOutputFloat1(std::shared_ptr<luxcore::detail::FilmImpl> film
 
         float *buffer = (float *)view.buf;
 
-        film->GetOutput<float>(type, buffer, index, executeImagePipeline);
+        film.GetOutput<float>(type, buffer, index, executeImagePipeline);
 
         PyBuffer_Release(&view);
       } else {
@@ -761,11 +771,11 @@ static void Film_GetOutputFloat1(std::shared_ptr<luxcore::detail::FilmImpl> film
       if (bglBuffer->type == 0x1406) {
         if (bglBuffer->ndimensions == 1) {
           if (bglBuffer->dimensions[0] * sizeof(float) >= outputSize) {
-            if(!film->HasOutput(type)) {
+            if(!film.HasOutput(type)) {
               throw std::runtime_error("Film Output not available: " + luxrays::ToString(type));
             }
 
-            film->GetOutput<float>(type, bglBuffer->buf.asfloat, index, executeImagePipeline);
+            film.GetOutput<float>(type, bglBuffer->buf.asfloat, index, executeImagePipeline);
           } else
             throw std::runtime_error("Not enough space in the Blender bgl.Buffer of Film.GetOutputFloat() method: " +
                 luxrays::ToString(bglBuffer->dimensions[0] * sizeof(float)) + " instead of " + luxrays::ToString(outputSize));
@@ -780,21 +790,25 @@ static void Film_GetOutputFloat1(std::shared_ptr<luxcore::detail::FilmImpl> film
   }
 }
 
-static void Film_GetOutputFloat2(std::shared_ptr<luxcore::detail::FilmImpl> film, const Film::FilmOutputType type,
-    py::object &obj) {
+static void Film_GetOutputFloat2(
+	FilmImpl & film,
+	const Film::FilmOutputType type,
+    py::object &obj
+) {
   Film_GetOutputFloat1(film, type, obj, 0, true);
 }
 
 static void Film_GetOutputFloat3(
-    std::shared_ptr<luxcore::detail::FilmImpl> film,
+    FilmImpl & film,
     const Film::FilmOutputType type,
     py::object &obj,
-    const size_t index) {
+    const size_t index
+) {
   Film_GetOutputFloat1(film, type, obj, index, true);
 }
 
 static void Film_GetOutputUInt1(
-    std::shared_ptr<luxcore::detail::FilmImpl> film,
+    FilmImpl & film,
     const Film::FilmOutputType type,
     py::object &obj,
     const size_t index,
@@ -802,8 +816,8 @@ static void Film_GetOutputUInt1(
   if (PyObject_CheckBuffer(obj.ptr())) {
     Py_buffer view;
     if (!PyObject_GetBuffer(obj.ptr(), &view, PyBUF_SIMPLE)) {
-      if ((size_t)view.len >= film->GetOutputSize(type) * sizeof(u_int)) {
-        if(!film->HasOutput(type)) {
+      if ((size_t)view.len >= film.GetOutputSize(type) * sizeof(u_int)) {
+        if(!film.HasOutput(type)) {
           const std::string errorMsg = "Film Output not available: " + luxrays::ToString(type);
           PyBuffer_Release(&view);
           throw std::runtime_error(errorMsg);
@@ -811,12 +825,12 @@ static void Film_GetOutputUInt1(
 
         u_int *buffer = (u_int *)view.buf;
 
-        film->GetOutput<unsigned int>(type, buffer, index, executeImagePipeline);
+        film.GetOutput<unsigned int>(type, buffer, index, executeImagePipeline);
 
         PyBuffer_Release(&view);
       } else {
         const std::string errorMsg = "Not enough space in the buffer of Film.GetOutputUInt() method: " +
-            luxrays::ToString(view.len) + " instead of " + luxrays::ToString(film->GetOutputSize(type) * sizeof(u_int));
+            luxrays::ToString(view.len) + " instead of " + luxrays::ToString(film.GetOutputSize(type) * sizeof(u_int));
         PyBuffer_Release(&view);
 
         throw std::runtime_error(errorMsg);
@@ -831,12 +845,12 @@ static void Film_GetOutputUInt1(
   }
 }
 
-static void Film_GetOutputUInt2(std::shared_ptr<luxcore::detail::FilmImpl> film, const Film::FilmOutputType type,
+static void Film_GetOutputUInt2(FilmImpl & film, const Film::FilmOutputType type,
     py::object &obj) {
   Film_GetOutputUInt1(film, type, obj, 0, true);
 }
 
-static void Film_GetOutputUInt3(std::shared_ptr<luxcore::detail::FilmImpl> film, const Film::FilmOutputType type,
+static void Film_GetOutputUInt3(FilmImpl & film, const Film::FilmOutputType type,
     py::object &obj, const size_t index) {
   Film_GetOutputUInt1(film, type, obj, index, true);
 }
@@ -846,18 +860,18 @@ static void Film_GetOutputUInt3(std::shared_ptr<luxcore::detail::FilmImpl> film,
 //------------------------------------------------------------------------------
 
 static void Film_UpdateOutputFloat1(
-    std::shared_ptr<luxcore::detail::FilmImpl> film,
+    FilmImpl & film,
     const Film::FilmOutputType type,
     py::object &obj,
     const size_t index,
     const bool executeImagePipeline) {
-  const size_t outputSize = film->GetOutputSize(type) * sizeof(float);
+  const size_t outputSize = film.GetOutputSize(type) * sizeof(float);
 
   if (PyObject_CheckBuffer(obj.ptr())) {
     Py_buffer view;
     if (!PyObject_GetBuffer(obj.ptr(), &view, PyBUF_SIMPLE)) {
       if ((size_t)view.len >= outputSize) {
-        if(!film->HasOutput(type)) {
+        if(!film.HasOutput(type)) {
           const std::string errorMsg = "Film Output not available: " + luxrays::ToString(type);
           PyBuffer_Release(&view);
           throw std::runtime_error(errorMsg);
@@ -865,7 +879,7 @@ static void Film_UpdateOutputFloat1(
 
         float *buffer = (float *)view.buf;
 
-        film->UpdateOutput<float>(type, buffer, index, executeImagePipeline);
+        film.UpdateOutput<float>(type, buffer, index, executeImagePipeline);
 
         PyBuffer_Release(&view);
       } else {
@@ -893,11 +907,11 @@ static void Film_UpdateOutputFloat1(
       if (bglBuffer->type == 0x1406) {
         if (bglBuffer->ndimensions == 1) {
           if (bglBuffer->dimensions[0] * sizeof(float) >= outputSize) {
-            if(!film->HasOutput(type)) {
+            if(!film.HasOutput(type)) {
               throw std::runtime_error("Film Output not available: " + luxrays::ToString(type));
             }
 
-            film->UpdateOutput<float>(type, bglBuffer->buf.asfloat, index, executeImagePipeline);
+            film.UpdateOutput<float>(type, bglBuffer->buf.asfloat, index, executeImagePipeline);
           } else
             throw std::runtime_error("Not enough space in the Blender bgl.Buffer of Film.UpdateOutputFloat() method: " +
                 luxrays::ToString(bglBuffer->dimensions[0] * sizeof(float)) + " instead of " + luxrays::ToString(outputSize));
@@ -912,57 +926,65 @@ static void Film_UpdateOutputFloat1(
   }
 }
 
-static void Film_UpdateOutputFloat2(std::shared_ptr<luxcore::detail::FilmImpl> film, const Film::FilmOutputType type,
+static void Film_UpdateOutputFloat2(FilmImpl & film, const Film::FilmOutputType type,
     py::object &obj) {
   Film_UpdateOutputFloat1(film, type, obj, 0, false);
 }
 
-static void Film_UpdateOutputFloat3(std::shared_ptr<luxcore::detail::FilmImpl> film, const Film::FilmOutputType type,
+static void Film_UpdateOutputFloat3(FilmImpl & film, const Film::FilmOutputType type,
     py::object &obj, const size_t index) {
   Film_UpdateOutputFloat1(film, type, obj, index, false);
 }
 
-static void Film_UpdateOutputUInt1(std::shared_ptr<luxcore::detail::FilmImpl> film, const Film::FilmOutputType type,
+static void Film_UpdateOutputUInt1(FilmImpl & film, const Film::FilmOutputType type,
     py::object &obj, const size_t index, const bool executeImagePipeline) {
   throw std::runtime_error("Film Output not available: " + luxrays::ToString(type));
 }
 
-static void Film_UpdateOutputUInt2(std::shared_ptr<luxcore::detail::FilmImpl> film, const Film::FilmOutputType type,
+static void Film_UpdateOutputUInt2(FilmImpl & film, const Film::FilmOutputType type,
     py::object &obj) {
   Film_UpdateOutputUInt1(film, type, obj, 0, false);
 }
 
-static void Film_UpdateOutputUInt3(std::shared_ptr<luxcore::detail::FilmImpl> film, const Film::FilmOutputType type,
+static void Film_UpdateOutputUInt3(FilmImpl & film, const Film::FilmOutputType type,
     py::object &obj, const size_t index) {
   Film_UpdateOutputUInt1(film, type, obj, index, false);
 }
 
 //------------------------------------------------------------------------------
 
-static void Film_AddFilm1(std::shared_ptr<luxcore::detail::FilmImpl> film, std::shared_ptr<luxcore::detail::FilmImpl> srcFilm) {
-  film->AddFilm(srcFilm);
+static void Film_AddFilm1(
+	std::unique_ptr<luxcore::detail::FilmImpl> film,
+	std::unique_ptr<luxcore::detail::FilmImpl> srcFilm
+) {
+  film->AddFilm(*srcFilm);
 }
 
-static void Film_AddFilm2(std::shared_ptr<luxcore::detail::FilmImpl> film, std::shared_ptr<luxcore::detail::FilmImpl> srcFilm,
+static void Film_AddFilm2(
+	std::unique_ptr<luxcore::detail::FilmImpl> film,
+	std::unique_ptr<luxcore::detail::FilmImpl> srcFilm,
     const size_t srcOffsetX, const size_t srcOffsetY,
     const size_t srcWidth, const size_t srcHeight,
-    const size_t dstOffsetX, const size_t dstOffsetY) {
-  film->AddFilm(srcFilm, srcOffsetX,  srcOffsetY, srcWidth,  srcHeight, dstOffsetX,  dstOffsetY);
+    const size_t dstOffsetX, const size_t dstOffsetY
+) {
+	film->AddFilm(
+		*srcFilm, srcOffsetX, srcOffsetY, srcWidth,  srcHeight, dstOffsetX,  dstOffsetY
+	);
 }
 
-static float Film_GetFilmY1(std::shared_ptr<luxcore::detail::FilmImpl> film) {
-  return film->GetFilmY();
+static float Film_GetFilmY1(FilmImpl & film) {
+  return film.GetFilmY();
 }
 
-static float Film_GetFilmY2(std::shared_ptr<luxcore::detail::FilmImpl> film, const size_t imagePipelineIndex) {
-  return film->GetFilmY(imagePipelineIndex);
+static float Film_GetFilmY2(FilmImpl & film, const size_t imagePipelineIndex) {
+  return film.GetFilmY(imagePipelineIndex);
 }
 
 static void Film_ApplyOIDN(
-	std::shared_ptr<luxcore::detail::FilmImpl> film,
+	FilmImpl & film,
 	const size_t imagePipelineIndex
 ) {
-	film->ApplyOIDN(imagePipelineIndex);
+	film.ApplyOIDN(imagePipelineIndex);
 }
 
 //------------------------------------------------------------------------------
@@ -981,13 +1003,19 @@ static void Camera_Rotate(luxcore::detail::CameraImpl *camera, const float angle
 // Glue for Scene class
 //------------------------------------------------------------------------------
 
-static luxcore::detail::CameraImpl &Scene_GetCamera(SceneImplPtr scene) {
-  return (luxcore::detail::CameraImpl &)scene->GetCamera();
+static luxcore::detail::CameraImpl & Scene_GetCamera(const SceneImplPtr & scene) {
+  return dynamic_cast<luxcore::detail::CameraImpl &>(scene->GetCamera());
 }
 
-static void Scene_DefineImageMap(SceneImplPtr scene, const std::string &imgMapName,
-    py::object &obj, const float gamma,
-    const size_t channels, const size_t width, const size_t height) {
+static void Scene_DefineImageMap(
+	const SceneImplPtr & scene,
+	const std::string &imgMapName,
+    py::object &obj,
+	const float gamma,
+    const size_t channels,
+	const size_t width,
+	const size_t height
+) {
   if (PyObject_CheckBuffer(obj.ptr())) {
     Py_buffer view;
     if (!PyObject_GetBuffer(obj.ptr(), &view, PyBUF_SIMPLE)) {
@@ -1014,7 +1042,9 @@ static void Scene_DefineImageMap(SceneImplPtr scene, const std::string &imgMapNa
   }
 }
 
-static void Scene_DefineMesh1(SceneImplPtr scene, const std::string &meshName,
+static void Scene_DefineMesh1(
+	const SceneImplPtr & scene,
+	const std::string &meshName,
     const py::object &p, const py::object &vi,
     const py::object &n, const py::object &uv,
     const py::object &cols, const py::object &alphas,
@@ -1154,34 +1184,39 @@ static void Scene_DefineMesh1(SceneImplPtr scene, const std::string &meshName,
     }
   }
 
-  auto mesh = std::make_shared<luxrays::ExtTriangleMesh>(plyNbVerts, plyNbTris, points, tris, normals, uvs, colors, as);
+	auto mesh = std::make_unique<luxrays::ExtTriangleMesh>(
+		plyNbVerts, plyNbTris, points, tris, normals, uvs, colors, as
+	);
 
-  // Apply the transformation if required
-  if (!transformation.is_none()) {
-    float mat[16];
-    GetMatrix4x4(transformation, mat);
-    mesh->ApplyTransform(luxrays::Transform(luxrays::Matrix4x4(mat).Transpose()));
-  }
+	// Apply the transformation if required
+	if (!transformation.is_none()) {
+	float mat[16];
+	GetMatrix4x4(transformation, mat);
+	mesh->ApplyTransform(luxrays::Transform(luxrays::Matrix4x4(mat).Transpose()));
+	}
 
-  mesh->SetName(meshName);
-  scene->DefineMesh(mesh);
+	mesh->SetName(meshName);
+	scene->DefineMesh(std::move(mesh));
 }
 
-static void Scene_DefineMesh2(SceneImplPtr scene, const std::string &meshName,
+static void Scene_DefineMesh2(
+	const SceneImplPtr & scene,
+	const std::string &meshName,
     const py::object &p, const py::object &vi,
     const py::object &n, const py::object &uv,
-    const py::object &cols, const py::object &alphas) {
+    const py::object &cols, const py::object &alphas
+) {
   Scene_DefineMesh1(scene, meshName, p, vi, n, uv, cols, alphas, py::none());
 }
 
-static void Scene_DefineMeshExt1(SceneImplPtr scene, const std::string &meshName,
+static void Scene_DefineMeshExt1(
+	const SceneImplPtr & scene,
+	const std::string &meshName,
     const py::object &p, const py::object &vi,
     const py::object &n, const py::object &uv,
     const py::object &cols, const py::object &alphas,
-    const py::object &transformation) {
-  // NOTE: I would like to use boost::scoped_array but
-  // some guy has decided that boost::scoped_array must not have
-  // a release() method for some ideological reason...
+    const py::object &transformation
+) {
 
   // Translate all vertices
   long plyNbVerts;
@@ -1355,20 +1390,24 @@ static void Scene_DefineMeshExt1(SceneImplPtr scene, const std::string &meshName
     }
   }
 
-  auto mesh = std::make_shared<luxrays::ExtTriangleMesh>(plyNbVerts, plyNbTris, points, tris, normals, &uvs, &colors, &as);
+	auto mesh = std::make_unique<luxrays::ExtTriangleMesh>(
+		plyNbVerts, plyNbTris, points, tris, normals, &uvs, &colors, &as
+	);
 
-  // Apply the transformation if required
-  if (!transformation.is_none()) {
-    float mat[16];
-    GetMatrix4x4(transformation, mat);
-    mesh->ApplyTransform(luxrays::Transform(luxrays::Matrix4x4(mat).Transpose()));
-  }
+	// Apply the transformation if required
+	if (!transformation.is_none()) {
+		float mat[16];
+		GetMatrix4x4(transformation, mat);
+		mesh->ApplyTransform(luxrays::Transform(luxrays::Matrix4x4(mat).Transpose()));
+	}
 
   mesh->SetName(meshName);
-  scene->DefineMesh(mesh);
+  scene->DefineMesh(std::move(mesh));
 }
 
-static void Scene_DefineMeshExt2(SceneImplPtr scene, const std::string &meshName,
+static void Scene_DefineMeshExt2(
+	const SceneImplPtr & scene,
+	const std::string &meshName,
     const py::object &p, const py::object &vi,
     const py::object &n, const py::object &uv,
     const py::object &cols, const py::object &alphas) {
@@ -1458,7 +1497,7 @@ using py_float_array= py::array_t<float, py::array::c_style>;
 
 // Define Mesh from Numpy arrays
 static void Scene_DefineMeshExt3(
-	SceneImplPtr scene,
+	const SceneImplPtr & scene,
 	const std::string &meshName,
     const py_float_array p,
 	const py::array_t<triangle_underlying_type, py::array::c_style > tri,
@@ -1556,7 +1595,7 @@ static void Scene_DefineMeshExt3(
 	}
 
 	// Create Mesh
-	auto newMesh =  std::make_shared<luxrays::ExtTriangleMesh>(
+	auto newMesh = std::make_unique<luxrays::ExtTriangleMesh>(
 		u_int(numPoints),
 		u_int(numTriangles),
 		points.release(),
@@ -1576,11 +1615,11 @@ static void Scene_DefineMeshExt3(
 
 
 	// Insert mesh into the scene
-	scene->DefineMesh(newMesh);
+	scene->DefineMesh(std::move(newMesh));
 
 }
 
-static void Scene_SetMeshVertexAOV(SceneImplPtr scene, const std::string &meshName,
+static void Scene_SetMeshVertexAOV(const SceneImplPtr & scene, const std::string &meshName,
     const size_t index, const py::object &data) {
   std::vector<float> v;
   GetArray<float>(data, v);
@@ -1592,7 +1631,7 @@ static void Scene_SetMeshVertexAOV(SceneImplPtr scene, const std::string &meshNa
 }
 
 static void Scene_SetMeshTriangleAOV(
-    SceneImplPtr scene,
+    const SceneImplPtr & scene,
     const std::string &meshName,
     const size_t index,
     const py::object &data) {
@@ -1606,7 +1645,7 @@ static void Scene_SetMeshTriangleAOV(
 }
 
 static void Scene_SetMeshAppliedTransformation(
-    SceneImplPtr scene,
+    const SceneImplPtr & scene,
     const std::string &meshName,
     const py::object &transformation) {
   float mat[16];
@@ -1615,7 +1654,7 @@ static void Scene_SetMeshAppliedTransformation(
 }
 
 static void Scene_DefineStrands(
-    SceneImplPtr scene,
+    const SceneImplPtr & scene,
     const std::string &shapeName,
     const py::int_ strandsCount,
     const py::int_ pointsCount,
@@ -1806,7 +1845,7 @@ static void Scene_DefineStrands(
       useCameraPosition);
 }
 
-static void Scene_DuplicateObject(SceneImplPtr scene,
+static void Scene_DuplicateObject(const SceneImplPtr & scene,
     const std::string &srcObjName,
     const std::string &dstObjName,
     const py::object &transformation,
@@ -1817,7 +1856,7 @@ static void Scene_DuplicateObject(SceneImplPtr scene,
   scene->DuplicateObject(srcObjName, dstObjName, mat, objectID);
 }
 
-static void Scene_DuplicateObjectMulti(SceneImplPtr scene,
+static void Scene_DuplicateObjectMulti(const SceneImplPtr & scene,
     const std::string &srcObjName,
     const std::string &dstObjNamePrefix,
     const unsigned int count,
@@ -1876,7 +1915,7 @@ static void Scene_DuplicateObjectMulti(SceneImplPtr scene,
   PyBuffer_Release(&objectIDsView);
 }
 
-static void Scene_DuplicateMotionObject(SceneImplPtr scene,
+static void Scene_DuplicateMotionObject(const SceneImplPtr & scene,
     const std::string &srcObjName,
     const std::string &dstObjName,
     const size_t steps,
@@ -1911,7 +1950,7 @@ static void Scene_DuplicateMotionObject(SceneImplPtr scene,
     throw std::runtime_error("None times and/or transformations in Scene.DuplicateObject(): " + srcObjName);
 }
 
-static void Scene_DuplicateMotionObjectMulti(SceneImplPtr scene,
+static void Scene_DuplicateMotionObjectMulti(const SceneImplPtr & scene,
     const std::string &srcObjName,
     const std::string &dstObjName,
     const unsigned int count,
@@ -1999,7 +2038,7 @@ static void Scene_DuplicateMotionObjectMulti(SceneImplPtr scene,
     PyBuffer_Release(&objectIDsView);
 }
 
-static void Scene_DeleteObjects(SceneImplPtr scene,
+static void Scene_DeleteObjects(const SceneImplPtr & scene,
     const py::list &l) {
   const py::ssize_t size = len(l);
   std::vector<std::string> names;
@@ -2016,7 +2055,7 @@ static void Scene_DeleteObjects(SceneImplPtr scene,
   scene->DeleteObjects(names);
 }
 
-static void Scene_DeleteLights(SceneImplPtr scene,
+static void Scene_DeleteLights(const SceneImplPtr & scene,
     const py::list &l) {
   const py::ssize_t size = len(l);
   std::vector<std::string> names;
@@ -2033,12 +2072,13 @@ static void Scene_DeleteLights(SceneImplPtr scene,
   scene->DeleteLights(names);
 }
 
-static void Scene_UpdateObjectTransformation(SceneImplPtr scene,
+static void Scene_UpdateObjectTransformation(const SceneImplPtr & scene,
     const std::string &objName,
-    const py::object &transformation) {
-  float mat[16];
-  GetMatrix4x4(transformation, mat);
-  scene->UpdateObjectTransformation(objName, mat);
+    const py::object &transformation
+) {
+	float mat[16];
+	GetMatrix4x4(transformation, mat);
+	scene->UpdateObjectTransformation(objName, mat);
 }
 
 //------------------------------------------------------------------------------
@@ -2048,15 +2088,15 @@ static void Scene_UpdateObjectTransformation(SceneImplPtr scene,
 static py::tuple RenderConfig_LoadResumeFile(const py::str &fileNameStr) {
   const std::string fileName = py::cast<std::string>(fileNameStr);
   RenderStateImplPtr startState;
-  FilmImplPtr startFilm;
+  FilmImplUPtr startFilm;
   auto config = RenderConfigImpl::Create<
-	  const std::string&, RenderStateImplPtr&, FilmImplPtr&
+	  const std::string&, RenderStateImplPtr&, FilmImplUPtr&
   >(fileName, startState, startFilm);
 
   return py::make_tuple(config, startState, startFilm);
 }
 
-static std::shared_ptr<luxcore::detail::RenderConfigImpl>
+static std::unique_ptr<luxcore::detail::RenderConfigImpl>
 RenderConfig_LoadFile(const py::str &fileNameStr) {
   const std::string fileName = py::cast<std::string>(fileNameStr);
   auto config = RenderConfigImpl::Create(fileName);
@@ -2084,21 +2124,23 @@ static py::tuple RenderConfig_GetFilmSize(luxcore::detail::RenderConfigImpl *ren
 //------------------------------------------------------------------------------
 
 static RenderConfigImpl& RenderSession_GetRenderConfig(
-	std::shared_ptr<luxcore::detail::RenderSessionImpl> renderSession
+	const std::unique_ptr<luxcore::detail::RenderSessionImpl> & renderSession
 ) {
   return static_cast<luxcore::detail::RenderConfigImpl&>(
 		  renderSession->GetRenderConfig()
 	);
 }
 
-luxcore::detail::FilmImplPtr
-RenderSession_GetFilm(std::shared_ptr<luxcore::detail::RenderSessionImpl> renderSession) {
-  return static_pointer_cast<luxcore::detail::FilmImpl>(renderSession->GetFilm());
-}
+//luxcore::detail::FilmImplRef
+//RenderSession_GetFilm(
+	//const std::unique_ptr<luxcore::detail::RenderSessionImpl> & renderSession
+//) {
+  //return static_cast<luxcore::detail::FilmImpl&>(renderSession->GetFilm());
+//}
 
 static std::shared_ptr<luxcore::detail::RenderStateImpl>
 RenderSession_GetRenderState(
-	std::shared_ptr<luxcore::detail::RenderSessionImpl> renderSession
+	const std::unique_ptr<luxcore::detail::RenderSessionImpl> & renderSession
 ) {
   return static_pointer_cast<luxcore::detail::RenderStateImpl>(renderSession->GetRenderState());
 }
@@ -2232,19 +2274,46 @@ PYBIND11_MODULE(pyluxcore, m) {
   //--------------------------------------------------------------------------
 
   py::class_<luxrays::Property, py::smart_holder>(m, "Property")
-    .def(py::init<std::string>())
-    .def(py::init<std::string, bool>())
-    .def(py::init<std::string, long long>())
-    .def(py::init<std::string, double>())
-    .def(py::init<std::string, std::string>())
-    //.def("__init__", make_constructor(Property_InitWithList))
+    .def(
+		py::init(
+			[](std::string name) -> std::unique_ptr<luxrays::Property>
+			{ return std::make_unique<luxrays::Property>(name); }
+		)
+	)
+    .def(
+		py::init(
+			[](std::string name, bool val) -> std::unique_ptr<luxrays::Property>
+			{ return std::make_unique<luxrays::Property>(name, val); }
+		)
+	)
+    .def(
+		py::init(
+			[](std::string name, long long val) -> std::unique_ptr<luxrays::Property>
+			{ return std::make_unique<luxrays::Property>(name, val); }
+		)
+	)
+    .def(
+		py::init(
+			[](std::string name, double val) -> std::unique_ptr<luxrays::Property>
+			{ return std::make_unique<luxrays::Property>(name, val); }
+		)
+	)
+    .def(
+		py::init(
+			[](std::string name, std::string val) -> std::unique_ptr<luxrays::Property>
+			{ return std::make_unique<luxrays::Property>(name, val); }
+		)
+	)
+
+    //.def(py::init<std::string, bool>())
+    //.def(py::init<std::string, long long>())
+    //.def(py::init<std::string, double>())
+    //.def(py::init<std::string, std::string>())
     .def(py::init(&Property_InitWithList))
 
-    //.def("GetName", &luxrays::Property::GetName, py::return_value_policy<copy_const_reference>())
     .def("GetName", &luxrays::Property::GetName, py::return_value_policy::copy)
     .def("GetSize", &luxrays::Property::GetSize)
-    //.def("Clear", &luxrays::Property::Clear, py::py::return_value_policy::move)
-    .def("Clear", &luxrays::Property::Clear, py::return_value_policy::move)
+    .def("Clear", &luxrays::Property::Clear)
 
     .def("Get", &Property_Get)
 
@@ -2274,21 +2343,20 @@ PYBIND11_MODULE(pyluxcore, m) {
     .def("GetValuesString", &luxrays::Property::GetValuesString)
     .def("ToString", &luxrays::Property::ToString)
 
-    .def("Add", &Property_Add, py::return_value_policy::move)
-    .def("AddAllBool", &Property_AddAllBool, py::return_value_policy::move)
-    .def("AddAllInt", &Property_AddAllInt, py::return_value_policy::move)
-    .def("AddUnsignedLongLong", &Property_AddAllUnsignedLongLong, py::return_value_policy::move)
-    .def("AddAllFloat", &Property_AddAllFloat, py::return_value_policy::move)
-    .def("AddAllBool", &Property_AddAllBoolStride, py::return_value_policy::move)
-    .def("AddAllInt", &Property_AddAllIntStride, py::return_value_policy::move)
-    .def("AddUnsignedLongLong", &Property_AddAllUnsignedLongLongStride, py::return_value_policy::move)
-    .def("AddAllFloat", &Property_AddAllFloatStride, py::return_value_policy::move)
-    .def<luxrays::Property &(*)(PropertyPtr , const py::list &)>
-      ("Set", &Property_Set, py::return_value_policy::move)
-    .def<luxrays::Property &(*)(PropertyPtr , const size_t, const py::object &)>
-      ("Set", &Property_Set, py::return_value_policy::move)
+    .def("Add", &Property_Add)
+    .def("AddAllBool", &Property_AddAllBool)
+    .def("AddAllInt", &Property_AddAllInt)
+    .def("AddUnsignedLongLong", &Property_AddAllUnsignedLongLong)
+    .def("AddAllFloat", &Property_AddAllFloat)
+    .def("AddAllBool", &Property_AddAllBoolStride)
+    .def("AddAllInt", &Property_AddAllIntStride)
+    .def("AddUnsignedLongLong", &Property_AddAllUnsignedLongLongStride)
+    .def("AddAllFloat", &Property_AddAllFloatStride)
+    .def<PropertyPtr (*)(PropertyPtr , const py::list &)>
+      ("Set", &Property_Set)
+    .def<PropertyPtr (*)(PropertyPtr , const size_t, const py::object &)>
+      ("Set", &Property_Set)
 
-    //.def(self_ns::str(self))  TODO
     .def("__str__", &luxrays::Property::ToString)
   ;
 
@@ -2297,32 +2365,51 @@ PYBIND11_MODULE(pyluxcore, m) {
   //--------------------------------------------------------------------------
 
   py::class_<luxrays::Properties, py::smart_holder>(m, "Properties")
-    .def(py::init<>())
-    .def(py::init<std::string>())
-    .def(py::init<luxrays::Properties>(), py::keep_alive<1,2>())
+    .def(
+		py::init(
+			[]() -> std::unique_ptr<luxrays::Properties>
+			{ return std::make_unique<luxrays::Properties>(); }
+		)
+	)
+    .def(
+		py::init(
+			[](std::string s) -> std::unique_ptr<luxrays::Properties>
+			{ return std::make_unique<luxrays::Properties>(s); }
+		)
+	)
+    .def(
+		py::init(
+			[](const luxrays::Properties& p) -> std::unique_ptr<luxrays::Properties>
+			{ return p.Clone(); }
+		),
+		py::keep_alive<1,2>()
+	)
 
     // Required because Properties::Set is overloaded
-    .def<luxrays::Properties &(luxrays::Properties::*)(const luxrays::Property &)>
-      ("Set", &luxrays::Properties::Set, py::return_value_policy::reference_internal)
-    .def<luxrays::Properties &(luxrays::Properties::*)(const luxrays::Properties &)>
-      ("Set", &luxrays::Properties::Set, py::return_value_policy::reference_internal)
-    .def<luxrays::Properties &(luxrays::Properties::*)(const luxrays::Properties &, const std::string &)>
-      ("Set", &luxrays::Properties::Set, py::return_value_policy::reference_internal)
-    .def("SetFromFile", &luxrays::Properties::SetFromFile, py::return_value_policy::reference_internal)
-    .def("SetFromString", &luxrays::Properties::SetFromString, py::return_value_policy::reference_internal)
+	.def<luxrays::Properties &(luxrays::Properties::*)(PropertyPtr)>
+      ("Set", &luxrays::Properties::Set)
 
-    .def("Clear", &luxrays::Properties::Clear, py::return_value_policy::reference_internal)
+    .def<luxrays::Properties &(luxrays::Properties::*)(const luxrays::Properties &)>
+      ("Set", &luxrays::Properties::Set)
+
+    .def<luxrays::Properties &(luxrays::Properties::*)(const luxrays::Properties &, const std::string &)>
+      ("Set", &luxrays::Properties::Set)
+
+    .def("SetFromFile", &luxrays::Properties::SetFromFile)
+    .def("SetFromString", &luxrays::Properties::SetFromString)
+
+    .def("Clear", &luxrays::Properties::Clear)
     .def("GetAllNamesRE", &Properties_GetAllNamesRE)
     .def("GetAllNames", &Properties_GetAllNames1)
     .def("GetAllNames", &Properties_GetAllNames2)
     .def("GetAllUniqueSubNames", &Properties_GetAllUniqueSubNames)
     .def("HaveNames", &luxrays::Properties::HaveNames)
     .def("HaveNamesRE", &luxrays::Properties::HaveNamesRE)
-    .def("GetAllProperties", &luxrays::Properties::GetAllProperties, py::return_value_policy::reference_internal)
+    .def("GetAllProperties", &luxrays::Properties::GetAllProperties)
 
-    .def<const luxrays::Property &(luxrays::Properties::*)(const std::string &) const>
-      ("Get", &luxrays::Properties::Get, py::return_value_policy::reference_internal)
-    .def("Get", &Properties_GetWithDefaultValues, py::return_value_policy::reference_internal)
+    .def<const luxrays::Property & (luxrays::Properties::*)(const std::string &) const>
+      ("Get", &luxrays::Properties::Get)
+    .def("Get", &Properties_GetWithDefaultValues)
 
     .def("GetSize", &luxrays::Properties::GetSize)
 
@@ -2394,16 +2481,28 @@ PYBIND11_MODULE(pyluxcore, m) {
     })
   ;
 
-  //py::class_<luxcore::detail::FilmImpl, std::shared_ptr<luxcore::detail::FilmImpl>>(m, "Film")
+  //py::class_<luxcore::detail::FilmImpl, FilmImpl &>(m, "Film")
   py::class_<luxcore::detail::FilmImpl, py::smart_holder>(m, "Film")
-    .def(py::init([](std::string s){ return luxcore::detail::FilmImpl::Create(s); }
-	))
-    .def(py::init([](
-		luxrays::PropertiesPtr props,
-		bool hasPixelNormalizedChannel,
-		bool hasScreenNormalizedChannel
-	) { return luxcore::detail::FilmImpl::Create(props, hasPixelNormalizedChannel, hasScreenNormalizedChannel); }
-	))
+    .def(
+		py::init(
+			[](std::string s) -> FilmImplUPtr {
+				return luxcore::detail::FilmImpl::Create(s);
+			}
+		)
+	)
+    .def(
+		py::init(
+			[] (
+				luxrays::PropertiesPtr props,
+				bool hasPixelNormalizedChannel,
+				bool hasScreenNormalizedChannel
+			) -> FilmImplUPtr {
+				return luxcore::detail::FilmImpl::Create(
+					props, hasPixelNormalizedChannel, hasScreenNormalizedChannel
+				);
+			}
+		)
+	)
     //.def(py::init<std::string>([](std::string s){ return luxcore::detail::FilmImpl::Create(s);})
     //.def(py::init<luxrays::Properties, bool, bool>())
     .def("GetWidth", &luxcore::detail::FilmImpl::GetWidth)
@@ -2464,28 +2563,27 @@ PYBIND11_MODULE(pyluxcore, m) {
   // Scene class
   //--------------------------------------------------------------------------
 
-  //py::class_<luxcore::detail::SceneImpl, std::shared_ptr<luxcore::detail::SceneImpl>>(m, "Scene")
   using luxcore::detail::SceneImpl;
   py::class_<SceneImpl, py::smart_holder>(m, "Scene")
 	.def(
-		py::init(&SceneImpl::Create<slg::ScenePtr>),
+		py::init(&SceneImpl::Create<slg::SceneRef>),
 		py::keep_alive<1, 2>()
 	)
     .def(
-		py::init(&SceneImpl::Create<luxrays::PropertiesConstPtr, luxrays::PropertiesConstPtr>),
+		py::init(&SceneImpl::Create<luxrays::PropertiesPtr, luxrays::PropertiesPtr>),
 		py::keep_alive<1, 2>(),
 		py::keep_alive<1, 3>()
 	)
     .def(
-		py::init(&SceneImpl::Create<luxrays::PropertiesConstPtr>),
+		py::init(&SceneImpl::Create<luxrays::PropertiesPtr>),
 		py::keep_alive<1, 2>()
 	)
     .def(
 		py::init(&SceneImpl::Create<std::string>),
 		py::keep_alive<1, 2>()
 	)
-    .def("ToProperties", &luxcore::detail::SceneImpl::ToProperties, py::return_value_policy::reference_internal)
-    .def("GetCamera", &Scene_GetCamera, py::return_value_policy::reference_internal)
+    .def("ToProperties", &luxcore::detail::SceneImpl::ToProperties)
+    .def("GetCamera", &Scene_GetCamera)
     .def("GetLightCount", &luxcore::detail::SceneImpl::GetLightCount)
     .def("GetObjectCount", &luxcore::detail::SceneImpl::GetObjectCount)
     .def("DefineImageMap", &Scene_DefineImageMap)
@@ -2541,11 +2639,11 @@ PYBIND11_MODULE(pyluxcore, m) {
 
   py::class_<luxcore::detail::RenderConfigImpl, py::smart_holder>(m, "RenderConfig")
     .def(
-		py::init(&RenderConfigImpl::Create<luxrays::PropertiesConstPtr>),
+		py::init(&RenderConfigImpl::Create<luxrays::PropertiesPtr>),
 		py::keep_alive<1, 2>()
 	)
     .def(
-		py::init(&RenderConfigImpl::Create<luxrays::PropertiesPtr, SceneImplPtr>),
+		py::init(&RenderConfigImpl::Create<luxrays::PropertiesPtr, SceneImpl&>),
 		py::keep_alive<1, 2>(),
 		py::keep_alive<1, 3>()
 	)
@@ -2555,9 +2653,9 @@ PYBIND11_MODULE(pyluxcore, m) {
 			//, py::return_value_policy::move)
     //.def("__init__", make_constructor(RenderConfig_LoadFile))
     //.def(py::init(&RenderConfig_LoadFile)) TODO
-    .def("GetProperties", &luxcore::detail::RenderConfigImpl::GetProperties, py::return_value_policy::reference_internal)
-    .def("GetProperty", &luxcore::detail::RenderConfigImpl::GetProperty, py::return_value_policy::reference_internal)
-    .def("GetScene", &RenderConfig_GetScene, py::return_value_policy::reference_internal)
+    .def("GetProperties", &luxcore::detail::RenderConfigImpl::GetProperties)
+    .def("GetProperty", &luxcore::detail::RenderConfigImpl::GetProperty)
+    .def("GetScene", &RenderConfig_GetScene)
     .def("HasCachedKernels", &luxcore::detail::RenderConfigImpl::HasCachedKernels)
     .def("Parse", &luxcore::detail::RenderConfigImpl::Parse)
     .def("Delete", &luxcore::detail::RenderConfigImpl::Delete)
@@ -2565,7 +2663,7 @@ PYBIND11_MODULE(pyluxcore, m) {
     .def("Save", &luxcore::detail::RenderConfigImpl::Save)
     .def("Export", &luxcore::detail::RenderConfigImpl::Export)
     .def_static("LoadResumeFile", &RenderConfig_LoadResumeFile)
-    .def_static("GetDefaultProperties", &luxcore::detail::RenderConfigImpl::GetDefaultProperties, py::return_value_policy::reference_internal)
+    .def_static("GetDefaultProperties", &luxcore::detail::RenderConfigImpl::GetDefaultProperties)
   ;
 
   //--------------------------------------------------------------------------
@@ -2582,24 +2680,24 @@ PYBIND11_MODULE(pyluxcore, m) {
 
   py::class_<luxcore::detail::RenderSessionImpl, py::smart_holder>(m, "RenderSession")
 	.def(
-		py::init<>(&RenderSessionImpl::Create<RenderConfigImplPtr>),
+		py::init<>(&RenderSessionImpl::Create<RenderConfigImplRef>),
 		py::keep_alive<1, 2>()
 	)
 
 	.def(
 		py::init<>(&RenderSessionImpl::Create
-			<RenderConfigImplPtr, std::string&, std::string&>
+			<RenderConfigImplRef, std::string&, std::string&>
 		),
 		py::keep_alive<1, 2>()
 	)
 
 	.def(
 		py::init<>(&RenderSessionImpl::Create
-			<RenderConfigImplPtr, RenderStateImplPtr&, FilmImplStandalonePtr&>
+			<RenderConfigImpl&, RenderStateImplPtr&, FilmImplStandalone& >
 		),
 		py::keep_alive<1, 2>()
 	)
-    .def("GetRenderConfig", &RenderSession_GetRenderConfig, py::return_value_policy::reference_internal)
+    .def("GetRenderConfig", &RenderSession_GetRenderConfig)
     .def("Start", &luxcore::detail::RenderSessionImpl::Start)
     .def("Stop", &luxcore::detail::RenderSessionImpl::Stop)
     .def("IsStarted", &luxcore::detail::RenderSessionImpl::IsStarted)
@@ -2609,14 +2707,14 @@ PYBIND11_MODULE(pyluxcore, m) {
     .def("Pause", &luxcore::detail::RenderSessionImpl::Pause)
     .def("Resume", &luxcore::detail::RenderSessionImpl::Resume)
     .def("IsInPause", &luxcore::detail::RenderSessionImpl::IsInPause)
-    .def("GetFilm", &RenderSession_GetFilm, py::return_value_policy::reference_internal)
+    .def("GetFilm", &luxcore::detail::RenderSessionImpl::GetFilmPtr)
     .def("UpdateStats", &luxcore::detail::RenderSessionImpl::UpdateStats)
-    .def("GetStats", &luxcore::detail::RenderSessionImpl::GetStats, py::return_value_policy::reference_internal)
+    .def("GetStats", &luxcore::detail::RenderSessionImpl::GetStats)
     .def("WaitNewFrame", &luxcore::detail::RenderSessionImpl::WaitNewFrame)
     .def("WaitForDone", &luxcore::detail::RenderSessionImpl::WaitForDone)
     .def("HasDone", &luxcore::detail::RenderSessionImpl::HasDone)
     .def("Parse", &luxcore::detail::RenderSessionImpl::Parse)
-    .def("GetRenderState", &RenderSession_GetRenderState, py::return_value_policy::reference_internal)
+    .def("GetRenderState", &RenderSession_GetRenderState, py::return_value_policy::take_ownership)
     .def("SaveResumeFile", &luxcore::detail::RenderSessionImpl::SaveResumeFile)
   ;
 

@@ -47,7 +47,7 @@ public:
 
 protected:
 	void RenderFunc(std::stop_token stop_token);
-	virtual luxrays::JThreadPtr AllocRenderThread() {
+	virtual luxrays::JThreadUPtr AllocRenderThread() {
 		auto t = std::make_unique<luxrays::JThread>(
 			std::bind_front(&PathCPURenderThread::RenderFunc, this)
 		);
@@ -58,13 +58,13 @@ protected:
 
 class PathCPURenderEngine : public CPUNoTileRenderEngine {
 public:
-	PathCPURenderEngine(RenderConfigConstRef cfg);
+	PathCPURenderEngine(RenderConfigRef cfg);
 	virtual ~PathCPURenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
 	virtual std::string GetTag() const { return GetObjectTag(); }
 
-	virtual RenderStatePtr GetRenderState();
+	virtual RenderStateSPtr GetRenderState();
 
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
@@ -72,17 +72,17 @@ public:
 
 	static RenderEngineType GetObjectType() { return PATHCPU; }
 	static std::string GetObjectTag() { return "PATHCPU"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(RenderConfigConstRef rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class PathCPURenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
-	CPURenderThread *NewRenderThread(const u_int index,
+	CPURenderThreadUPtr NewRenderThread(const u_int index,
 			luxrays::IntersectionDevice *device) {
-		return new PathCPURenderThread(this, index, device);
+		return std::make_unique<PathCPURenderThread>(this, index, device);
 	}
 
 	virtual void InitFilm();
@@ -90,10 +90,10 @@ protected:
 	virtual void StopLockLess();
 	virtual void EndSceneEditLockLess(const EditActionList &editActions);
 
-	PhotonGICache *photonGICache;
 	PathTracer pathTracer;
-	FilmSampleSplatter *lightSampleSplatter;
-	std::unique_ptr<SamplerSharedData> lightSamplerSharedData;
+	FilmSampleSplatterUPtr lightSampleSplatter;
+	SamplerSharedDataSPtr lightSamplerSharedData;  // Shared data, shared ownership
+	PhotonGICache *photonGICache;
 };
 
 }

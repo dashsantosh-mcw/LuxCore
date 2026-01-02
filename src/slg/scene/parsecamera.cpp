@@ -38,12 +38,12 @@ void Scene::ParseCamera(const Properties &props) {
 	auto newCamera = CreateCamera(props);
 
 	// Use the new camera
-	camera = newCamera;
+	camera = std::move(newCamera);
 
 	editActions.AddAction(CAMERA_EDIT);
 }
 
-CameraPtr Scene::CreateCamera(const Properties &props) {
+CameraUPtr Scene::CreateCamera(const Properties &props) {
 	Point orig, target;
 	Vector up;
 	if (props.IsDefined("scene.camera.lookat")) {
@@ -76,7 +76,7 @@ CameraPtr Scene::CreateCamera(const Properties &props) {
 	SDL_LOG("Camera position: " << orig);
 	SDL_LOG("Camera target: " << target);
 
-	CameraPtr camera;
+	CameraUPtr camera;
 	if ((type == "environment") || (type == "orthographic") || (type == "perspective") || (type == "stereo")) {
 		if (type == "orthographic") {
 			OrthographicCamera *orthoCamera;
@@ -128,8 +128,8 @@ CameraPtr Scene::CreateCamera(const Properties &props) {
 				// Force float storage
 				imgCfg.storageType = ImageMapStorage::FLOAT;
 
-				perspCamera->bokehDistributionImageMap = imgMapCache.GetImageMap(imgMapName, imgCfg, false);
-				
+				perspCamera->bokehDistributionImageMap.reset(&imgMapCache.GetImageMap(imgMapName, imgCfg, false));
+
 				if (perspCamera->bokehDistributionImageMap->GetSpectrumMean() == 0.f)
 					throw runtime_error("Used a black image in camera bokeh distribution: " + imgMapName);
 			}
@@ -205,11 +205,12 @@ CameraPtr Scene::CreateCamera(const Properties &props) {
 
 	camera->autoVolume = props.Get(Property("scene.camera.autovolume.enable")(true)).Get<bool>();
 	if (!camera->autoVolume && props.IsDefined("scene.camera.volume")) {
-		MaterialConstPtr vol = matDefs.GetMaterial(props.Get("scene.camera.volume").Get<string>());
-		if (dynamic_pointer_cast<const Volume>(vol))
-			camera->volume = dynamic_pointer_cast<const Volume>(vol);
-		else
-			throw runtime_error("Camera volume is a material: " + vol->GetName());
+		MaterialConstRef vol = matDefs.GetMaterial(props.Get("scene.camera.volume").Get<string>());
+		try {
+			camera->SetVolume(dynamic_cast<const Volume&>(vol));
+		} catch (std::bad_cast&) {
+			throw runtime_error("Camera volume is a material: " + vol.GetName());
+		}
 	}
 
 	// Check if I have to use a motion system

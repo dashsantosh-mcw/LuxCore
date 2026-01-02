@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <cassert>
 #include "luxrays/utils/thread.h"
 
 #include "slg/slg.h"
@@ -45,7 +46,9 @@ void RTPathCPURenderThread::StartRenderThread() {
 }
 
 void RTPathCPURenderThread::RTRenderFunc(std::stop_token stop_token) {
-	//SLG_LOG("[RTPathCPURenderEngine::" << threadIndex << "] Rendering thread started");
+#ifndef NDEBUG
+	SLG_LOG("[RTPathCPURenderEngine::" << threadIndex << "] Rendering thread started");
+#endif
 
 	//--------------------------------------------------------------------------
 	// Initialization
@@ -57,10 +60,12 @@ void RTPathCPURenderThread::RTRenderFunc(std::stop_token stop_token) {
 	RTPathCPURenderEngine *engine = (RTPathCPURenderEngine *)renderEngine;
 	const PathTracer &pathTracer = engine->pathTracer;
 	// (engine->seedBase + 1) seed is used for sharedRndGen
-	RandomGenerator *rndGen = new RandomGenerator(engine->seedBase + 1 + threadIndex);
+	auto rndGen = std::make_unique<RandomGenerator>(engine->seedBase + 1 + threadIndex);
 	// Setup the sampler
-	auto sampler = engine->renderConfig.AllocSampler(rndGen, engine->film, NULL,
-			engine->samplerSharedData, Properties());
+	auto sampler = engine->renderConfig.AllocSampler(
+		rndGen, engine->GetFilm(), engine->GetSampleSplatter(),
+		engine->samplerSharedData, Properties()
+	);
 	(static_cast<RTPathCPUSampler *>(sampler.get()))->SetRenderEngine(engine);
 	sampler->RequestSamples(PIXEL_NORMALIZED_ONLY, pathTracer.eyeSampleSize);
 
@@ -70,7 +75,7 @@ void RTPathCPURenderThread::RTRenderFunc(std::stop_token stop_token) {
 
 	vector<SampleResult> sampleResults(1);
 	SampleResult &sampleResult = sampleResults[0];
-	PathTracer::InitEyeSampleResults(engine->film, sampleResults);
+	PathTracer::InitEyeSampleResults(engine->GetFilm(), sampleResults);
 
 	VarianceClamping varianceClamping(pathTracer.sqrtVarianceClampMaxValue);
 
@@ -91,15 +96,15 @@ void RTPathCPURenderThread::RTRenderFunc(std::stop_token stop_token) {
 			// Wait for the main thread -> This waits for RTPathCPURenderEngine::ResumeThreads()
 			engine->threadsSyncBarrier->arrive_and_wait();
 
-			(static_cast<RTPathCPUSampler *>(sampler.get()))->Reset(engine->film);
+			(static_cast<RTPathCPUSampler *>(sampler.get()))->Reset(FilmOPtr(&engine->GetFilm()));
 		}
 
-		pathTracer.RenderEyeSample(device, engine->renderConfig.scene,
-				engine->film, *sampler, sampleResults);
+		pathTracer.RenderEyeSample(device, engine->renderConfig.GetScene(),
+				engine->GetFilm(), *sampler, sampleResults);
 
 		// Variance clamping
 		if (varianceClamping.hasClamping())
-			varianceClamping.Clamp(*(engine->film), sampleResult);
+			varianceClamping.Clamp(engine->GetFilm(), sampleResult);
 
 		sampler->NextSample(sampleResults);
 
@@ -109,10 +114,11 @@ void RTPathCPURenderThread::RTRenderFunc(std::stop_token stop_token) {
 #endif
 	}
 
-	delete rndGen;
 
 	threadDone = true;
 
-	//SLG_LOG("[RTPathCPURenderEngine::" << threadIndex << "] Rendering thread halted");
+#ifndef NDEBUG
+	SLG_LOG("[RTPathCPURenderEngine::" << threadIndex << "] Rendering thread halted");
+#endif
 }
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

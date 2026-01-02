@@ -31,7 +31,7 @@ using namespace std;
 // Note: This is also _not_ initializing volume related information.
 
 void HitPoint::Init(const bool fixedFromLight, const bool throughShadowTransp,
-		SceneConstPtr scene, const u_int meshIndex, const u_int triIndex,
+		SceneConstRef scene, const u_int meshIndex, const u_int triIndex,
 		const Point &pnt, const Vector &dir,
 		const float b1, const float b2,
 		const float passThroughEvnt) {
@@ -43,11 +43,11 @@ void HitPoint::Init(const bool fixedFromLight, const bool throughShadowTransp,
 	fixedDir = dir;
 
 	// Get the scene object
-	SceneObjectConstPtr sceneObject = scene->objDefs.GetSceneObject(meshIndex);
-	objectID = sceneObject->GetID();
+	auto& sceneObject = scene.GetObjects().GetSceneObject(meshIndex);
+	objectID = sceneObject.GetID();
 
 	// Mesh information
-	mesh = sceneObject->GetExtMesh();
+	mesh.reset(&sceneObject.GetExtMesh());
 	triangleIndex = triIndex;
 	triangleBariCoord1 = b1;
 	triangleBariCoord2 = b2;

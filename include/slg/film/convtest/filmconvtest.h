@@ -19,12 +19,15 @@
 #ifndef _SLG_FILMCONVTEST_H
 #define	_SLG_FILMCONVTEST_H
 
+#include "luxrays/usings.h"
 #include "luxrays/utils/properties.h"
 #include "luxrays/utils/serializationutils.h"
-#include "slg/slg.h"
+#include "slg/usings.h"
+#include "slg/film/film.h"
 #include "slg/film/framebuffer.h"
 
 namespace slg {
+
 
 //------------------------------------------------------------------------------
 // FilmConvTest
@@ -34,7 +37,7 @@ namespace slg {
 class FilmConvTest {
 public:
 	FilmConvTest(
-		FilmConstPtr film,
+		std::experimental::observer_ptr<const Film> flm,
 		const float threshold,
 		const u_int warmup,
 		const u_int testStep,
@@ -51,11 +54,13 @@ public:
 	u_int todoPixelsCount;
 	float maxError;
 
+	FilmConstRef GetFilm() const { return *film; }
+
 	friend class boost::serialization::access;
 
 private:
 	// Used by serialization
-	FilmConvTest();
+	FilmConvTest() = default;
 
 	template<class Archive> void serialize(Archive &ar, const u_int version);
 
@@ -65,7 +70,8 @@ private:
 	bool useFilter;
 	u_int imagePipelineIndex;
 
-	FilmConstPtr film;
+	std::experimental::observer_ptr<const Film> film;  // This could be a const ref, but due to
+								   // boost serialization, it isn't...
 
 	GenericFrameBuffer<3, 0, float> *referenceImage;
 	double lastSamplesCount;

@@ -88,8 +88,8 @@ using namespace luxcore;
 
 namespace luxcore { namespace parselxs {
 
-PropertiesPtr renderConfigProps;
-PropertiesPtr sceneProps;
+Properties * renderConfigProps;
+Properties * sceneProps;
 
 Properties overwriteProps;
 Transform worldToCamera;
@@ -703,7 +703,7 @@ static void InitProperties(Properties &props, const u_int count, const ParamList
 			}
 		}
 
-		props.Set(prop);
+		props->Set(prop);
 	}
 }
 

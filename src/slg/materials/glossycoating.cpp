@@ -27,16 +27,21 @@ using namespace slg;
 // GlossyCoating material
 //------------------------------------------------------------------------------
 
-GlossyCoatingMaterial::GlossyCoatingMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
-		TextureConstPtr emitted, TextureConstPtr bump,
-		MaterialConstPtr mB, TextureConstPtr ks, TextureConstPtr u, TextureConstPtr v,
-		TextureConstPtr ka, TextureConstPtr d, TextureConstPtr i, const bool mbounce) :
+GlossyCoatingMaterial::GlossyCoatingMaterial(
+	TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
+	TextureConstOPtr emitted, TextureConstOPtr bump,
+	std::experimental::observer_ptr<const Material> mB,
+	TextureConstOPtr ks, TextureConstOPtr u,
+	TextureConstOPtr v,
+	TextureConstOPtr ka, TextureConstOPtr d,
+	TextureConstOPtr i,
+const bool mbounce) :
 			Material(frontTransp, backTransp, emitted, bump), matBase(mB), Ks(ks), nu(u), nv(v),
 			Ka(ka), depth(d), index(i), multibounce(mbounce) {
 	glossiness = Min(ComputeGlossiness(nu, nv), matBase->GetGlossiness());
 }
 
-VolumeConstPtr GlossyCoatingMaterial::GetInteriorVolume(const HitPoint &hitPoint,
+VolumeConstOPtr GlossyCoatingMaterial::GetInteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (interiorVolume)
 		return interiorVolume;
@@ -44,7 +49,7 @@ VolumeConstPtr GlossyCoatingMaterial::GetInteriorVolume(const HitPoint &hitPoint
 		return matBase->GetInteriorVolume(hitPoint, passThroughEvent);
 }
 
-VolumeConstPtr GlossyCoatingMaterial::GetExteriorVolume(const HitPoint &hitPoint,
+VolumeConstOPtr GlossyCoatingMaterial::GetExteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const {
 	if (exteriorVolume)
 		return exteriorVolume;
@@ -421,30 +426,30 @@ void GlossyCoatingMaterial::Pdf(const HitPoint &hitPoint,
 	}
 }
 
-void GlossyCoatingMaterial::UpdateMaterialReferences(MaterialConstPtr oldMat, MaterialConstPtr newMat) {
+void GlossyCoatingMaterial::UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat) {
 	if (matBase == oldMat)
-		matBase = newMat;
-	
+		matBase.reset(&newMat);
+
 	// Update volumes too
 	Material::UpdateMaterialReferences(oldMat, newMat);
 }
 
-bool GlossyCoatingMaterial::IsReferencing(MaterialConstPtr mat) const {
-	if (mat.get() == this)
+bool GlossyCoatingMaterial::IsReferencing(MaterialConstRef mat) const {
+	if (&mat == this)
 		return true;
 
 	return matBase->IsReferencing(mat);
 }
 
 void GlossyCoatingMaterial::AddReferencedMaterials(
-	std::unordered_set<MaterialConstPtr> &referencedMats
+	std::unordered_set<const Material *> &referencedMats
 ) const {
 	Material::AddReferencedMaterials(referencedMats);
 
 	matBase->AddReferencedMaterials(referencedMats);
 }
 
-void GlossyCoatingMaterial::AddReferencedTextures(std::unordered_set<TextureConstPtr>  &referencedTexs) const {
+void GlossyCoatingMaterial::AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexs) const {
 	Material::AddReferencedTextures(referencedTexs);
 
 	matBase->AddReferencedTextures(referencedTexs);
@@ -456,21 +461,21 @@ void GlossyCoatingMaterial::AddReferencedTextures(std::unordered_set<TextureCons
 	index->AddReferencedTextures(referencedTexs);
 }
 
-void GlossyCoatingMaterial::UpdateTextureReferences(TextureConstPtr oldTex, TextureConstPtr newTex) {
+void GlossyCoatingMaterial::UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {
 	Material::UpdateTextureReferences(oldTex, newTex);
 
-	if (Ks == oldTex)
-		Ks = newTex;
-	if (nu == oldTex)
-		nu = newTex;
-	if (nv == oldTex)
-		nv = newTex;
-	if (Ka == oldTex)
-		Ka = newTex;
-	if (depth == oldTex)
-		depth = newTex;
-	if (index == oldTex)
-		index = newTex;
+	if (Ks == &oldTex)
+		Ks.reset(&newTex);
+	if (nu == &oldTex)
+		nu.reset(&newTex);
+	if (nv == &oldTex)
+		nv.reset(&newTex);
+	if (Ka == &oldTex)
+		Ka.reset(&newTex);
+	if (depth == &oldTex)
+		depth.reset(&newTex);
+	if (index == &oldTex)
+		index.reset(&newTex);
 
 	// Always update glossiness just in case matBase->GetGlossiness() has changed
 	const float coatGlossiness = ComputeGlossiness(nu, nv);
@@ -480,20 +485,20 @@ void GlossyCoatingMaterial::UpdateTextureReferences(TextureConstPtr oldTex, Text
 		glossiness = coatGlossiness;
 }
 
-Properties GlossyCoatingMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
-	Properties props;
+PropertiesUPtr GlossyCoatingMaterial::ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const  {
+	auto props = std::make_unique<Properties>();
 
 	const string name = GetName();
-	props.Set(Property("scene.materials." + name + ".type")("glossycoating"));
-	props.Set(Property("scene.materials." + name + ".base")(matBase->GetName()));
-	props.Set(Property("scene.materials." + name + ".ks")(Ks->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".uroughness")(nu->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".vroughness")(nv->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".ka")(Ka->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".d")(depth->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".index")(index->GetSDLValue()));
-	props.Set(Property("scene.materials." + name + ".multibounce")(multibounce));
-	props.Set(Material::ToProperties(imgMapCache, useRealFileName));
+	props->Set(Property("scene.materials." + name + ".type")("glossycoating"));
+	props->Set(Property("scene.materials." + name + ".base")(matBase->GetName()));
+	props->Set(Property("scene.materials." + name + ".ks")(Ks->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".uroughness")(nu->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".vroughness")(nv->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".ka")(Ka->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".d")(depth->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".index")(index->GetSDLValue()));
+	props->Set(Property("scene.materials." + name + ".multibounce")(multibounce));
+	props->Set(Material::ToProperties(imgMapCache, useRealFileName));
 
 	return props;
 }

@@ -43,18 +43,18 @@ public:
 		u_int x, y;
 	};
 
-	RTPathCPUSamplerSharedData(FilmPtr flm);
+	RTPathCPUSamplerSharedData(std::experimental::observer_ptr<Film> flm);
 	virtual ~RTPathCPUSamplerSharedData() { }
 
 	virtual void Reset();
 
-	void Reset(FilmPtr flm);
+	void Reset(std::experimental::observer_ptr<Film> flm);
 
 	static std::unique_ptr<SamplerSharedData> FromProperties(
 		const luxrays::Properties &cfg,
-		luxrays::RandomGenerator *rndGen, FilmPtr film);
+		const luxrays::RandomGeneratorUPtr &  rndGen, std::experimental::observer_ptr<Film> film);
 
-	FilmPtr engineFilm;
+	std::experimental::observer_ptr<Film> engineFilm;
 	std::atomic<u_int> step;
 	u_int filmSubRegion[4], filmSubRegionWidth, filmSubRegionHeight;
 	std::vector<PixelCoord> pixelRenderSequence;
@@ -69,10 +69,10 @@ class RTPathCPURenderEngine;
 class RTPathCPUSampler : public Sampler {
 public:
 	RTPathCPUSampler(
-		luxrays::RandomGenerator *rnd,
-		FilmPtr flm,
-		const FilmSampleSplatter *flmSplatter,
-		SamplerSharedData& samplerSharedData
+		const luxrays::RandomGeneratorUPtr & rnd,
+		std::experimental::observer_ptr<Film> flm,
+		const FilmSampleSplatterUPtr& flmSplatter,
+		SamplerSharedDataSPtr samplerSharedData
 	);
 	virtual ~RTPathCPUSampler();
 
@@ -83,7 +83,7 @@ public:
 	virtual void NextSample(const std::vector<SampleResult> &sampleResults);
 
 	void SetRenderEngine(RTPathCPURenderEngine *engine);
-	void Reset(FilmPtr flm);
+	void Reset(std::experimental::observer_ptr<Film> flm);
 
 	//--------------------------------------------------------------------------
 	// Static methods used by SamplerRegistry
@@ -91,20 +91,20 @@ public:
 
 	static SamplerType GetObjectType() { return RTPATHCPUSAMPLER; }
 	static std::string GetObjectTag() { return "RTPATHCPUSAMPLER"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
 	static SamplerUPtr FromProperties(
-		const luxrays::Properties &cfg, luxrays::RandomGenerator *rndGen,
-		FilmPtr film, const FilmSampleSplatter *flmSplatter,
-		SamplerSharedData& sharedData);
+		const luxrays::Properties &cfg, const luxrays::RandomGeneratorUPtr & rndGen,
+		std::experimental::observer_ptr<Film> film, const FilmSampleSplatterUPtr& flmSplatter,
+		SamplerSharedDataSPtr sharedData);
 	static slg::ocl::Sampler *FromPropertiesOCL(const luxrays::Properties &cfg);
 	static void AddRequiredChannels(Film::FilmChannels &channels, const luxrays::Properties &cfg);
 
 private:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	void NextPixel();
 
-	RTPathCPUSamplerSharedData& sharedData;
+	std::shared_ptr<RTPathCPUSamplerSharedData> sharedData;
 	RTPathCPURenderEngine *engine;
 
 	u_int myStep, frameHeight;

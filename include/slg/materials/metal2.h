@@ -30,12 +30,12 @@ namespace slg {
 
 class Metal2Material : public Material {
 public:
-	Metal2Material(TextureConstPtr frontTransp, TextureConstPtr backTransp,
-			TextureConstPtr emitted, TextureConstPtr bump,
-			TextureConstPtr nn, TextureConstPtr kk, TextureConstPtr u, TextureConstPtr v);
-	Metal2Material(TextureConstPtr frontTransp, TextureConstPtr backTransp,
-			TextureConstPtr emitted, TextureConstPtr bump,
-			FresnelTextureConstPtr ft, TextureConstPtr u, TextureConstPtr v);
+	Metal2Material(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
+			TextureConstOPtr emitted, TextureConstOPtr bump,
+			TextureConstOPtr nn, TextureConstOPtr kk, TextureConstOPtr u, TextureConstOPtr v);
+	Metal2Material(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
+			TextureConstOPtr emitted, TextureConstOPtr bump,
+			std::experimental::observer_ptr<const FresnelTexture> ft, TextureConstOPtr u, TextureConstOPtr v);
 
 	virtual MaterialType GetType() const { return METAL2; }
 	virtual BSDFEvent GetEventTypes() const { return GLOSSY | REFLECT; };
@@ -53,24 +53,24 @@ public:
 		const luxrays::Vector &localLightDir, const luxrays::Vector &localEyeDir,
 		float *directPdfW, float *reversePdfW) const;
 
-	virtual void AddReferencedTextures(std::unordered_set<TextureConstPtr>  &referencedTexsreferencedTexs) const;
-	virtual void UpdateTextureReferences(TextureConstPtr oldTex, TextureConstPtr newTex);
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexsreferencedTexs) const;
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex);
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
-	FresnelTextureConstPtr GetFresnel() const { return fresnelTex; }
-	TextureConstPtr GetN() const { return n; }
-	TextureConstPtr GetK() const { return k; }
-	TextureConstPtr GetNu() const { return nu; }
-	TextureConstPtr GetNv() const { return nv; }
+	std::experimental::observer_ptr<const FresnelTexture> GetFresnel() const { return fresnelTex; }
+	TextureConstOPtr GetN() const { return n; }
+	TextureConstOPtr GetK() const { return k; }
+	TextureConstOPtr GetNu() const { return nu; }
+	TextureConstOPtr GetNv() const { return nv; }
 	
 private:
-	FresnelTextureConstPtr fresnelTex;
+	std::experimental::observer_ptr<const FresnelTexture> fresnelTex;
 	// For compatibility with the past
-	TextureConstPtr n, k;
+	TextureConstOPtr n, k;
 
-	TextureConstPtr nu;
-	TextureConstPtr nv;
+	TextureConstOPtr nu;
+	TextureConstOPtr nv;
 };
 
 }

@@ -19,6 +19,7 @@
 #ifndef _SLG_TWOSIDEDMAT_H
 #define	_SLG_TWOSIDEDMAT_H
 
+#include "luxrays/usings.h"
 #include "slg/materials/material.h"
 #include "slg/volumes/volume.h"
 
@@ -30,9 +31,9 @@ namespace slg {
 
 class TwoSidedMaterial : public Material {
 public:
-	TwoSidedMaterial(TextureConstPtr frontTransp, TextureConstPtr backTransp,
-			TextureConstPtr emitted, TextureConstPtr bump,
-			MaterialConstPtr frontMat, MaterialConstPtr backMat);
+	TwoSidedMaterial(TextureConstOPtr frontTransp, TextureConstOPtr backTransp,
+			TextureConstOPtr emitted, TextureConstOPtr bump,
+			MaterialConstRef frontMat, MaterialConstRef backMat);
 
 	virtual MaterialType GetType() const { return TWOSIDED; }
 	virtual BSDFEvent GetEventTypes() const { return eventTypes; };
@@ -44,9 +45,9 @@ public:
 		const luxrays::Vector &localFixedDir, const float passThroughEvent,
 		const bool backTracing) const;
 
-	virtual VolumeConstPtr GetInteriorVolume(const HitPoint &hitPoint,
+	virtual VolumeConstOPtr GetInteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const;
-	virtual VolumeConstPtr GetExteriorVolume(const HitPoint &hitPoint,
+	virtual VolumeConstOPtr GetExteriorVolume(const HitPoint &hitPoint,
 		const float passThroughEvent) const;
 
 	virtual float GetEmittedRadianceY(const float oneOverPrimitiveArea) const;
@@ -68,18 +69,18 @@ public:
 		const luxrays::Vector &localLightDir, const luxrays::Vector &localEyeDir,
 		float *directPdfW, float *reversePdfW) const;
 
-	virtual void UpdateMaterialReferences(MaterialConstPtr oldMat, MaterialConstPtr newMat);
-	virtual bool IsReferencing(MaterialConstPtr mat) const;
+	virtual void UpdateMaterialReferences(MaterialConstRef oldMat, MaterialRef newMat);
+	virtual bool IsReferencing(MaterialConstRef mat) const;
 	virtual void AddReferencedMaterials(
-		std::unordered_set<MaterialConstPtr> &referencedMats
+		std::unordered_set<const Material *> &referencedMats
 	) const;
-	virtual void AddReferencedTextures(std::unordered_set<TextureConstPtr>  &referencedTexsreferencedTexs) const;
-	virtual void UpdateTextureReferences(TextureConstPtr oldTex, TextureConstPtr newTex);
+	virtual void AddReferencedTextures(std::unordered_set<const Texture *>  &referencedTexsreferencedTexs) const;
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex);
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
 
-	MaterialConstPtr GetFrontMaterial() const { return frontMat; }
-	MaterialConstPtr GetBackMaterial() const { return backMat; }
+	auto GetFrontMaterial() const { return frontMat; }
+	auto GetBackMaterial() const { return backMat; }
 
 protected:
 	virtual void UpdateAvgPassThroughTransparency();
@@ -92,8 +93,8 @@ private:
 
 	void Preprocess();
 
-	MaterialConstPtr frontMat;
-	MaterialConstPtr backMat;
+	std::experimental::observer_ptr<const Material> frontMat;
+	std::experimental::observer_ptr<const Material> backMat;
 
 	// Cached values for performance with very large material node trees
 	BSDFEvent eventTypes;

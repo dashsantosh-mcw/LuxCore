@@ -18,6 +18,7 @@
 
 #include "slg/slg.h"
 #include "slg/samplers/rtpathcpusampler.h"
+#include <memory>
 #include "slg/engines/rtpathcpu/rtpathcpu.h"
 
 using namespace std;
@@ -28,7 +29,7 @@ using namespace slg;
 // RTPathCPURenderEngine
 //------------------------------------------------------------------------------
 
-RTPathCPURenderEngine::RTPathCPURenderEngine(RenderConfigConstRef rcfg) :
+RTPathCPURenderEngine::RTPathCPURenderEngine(RenderConfigRef rcfg) :
 		PathCPURenderEngine(rcfg) {
 	threadsSyncBarrier = new std::barrier(renderThreads.size() + 1, completion_t());
 }
@@ -38,9 +39,9 @@ RTPathCPURenderEngine::~RTPathCPURenderEngine() {
 }
 
 void RTPathCPURenderEngine::StartLockLess() {
-	auto cfg = renderConfig.cfg;
-	zoomFactor = (u_int)Max(1, cfg->Get(GetDefaultProps().Get("rtpathcpu.zoomphase.size")).Get<int>());
-	zoomWeight = Max(0.0001, cfg->Get(GetDefaultProps().Get("rtpathcpu.zoomphase.weight")).Get<double>());
+	auto& cfg = renderConfig.GetConfig();
+	zoomFactor = (u_int)Max(1, cfg.Get(GetDefaultProps()->Get("rtpathcpu.zoomphase.size")).Get<int>());
+	zoomWeight = Max(0.0001, cfg.Get(GetDefaultProps()->Get("rtpathcpu.zoomphase.weight")).Get<double>());
 
 	threadsPauseMode = false;
 	firstFrameDone = false;
@@ -100,7 +101,7 @@ void RTPathCPURenderEngine::BeginSceneEditLockLess() {
 }
 
 void RTPathCPURenderEngine::EndSceneEditLockLess(const EditActionList &editActions) {
-	film->Reset();
+	GetFilm().Reset();
 	samplerSharedData->Reset();
 
 	// Check if the threads were already suspended for pause
@@ -120,13 +121,15 @@ void RTPathCPURenderEngine::BeginFilmEdit() {
 }
 
 // A fast path for film resize
-void RTPathCPURenderEngine::EndFilmEdit(FilmPtr flm, std::mutex *flmMutex) {
+void RTPathCPURenderEngine::EndFilmEdit(FilmRef flm, std::mutex *flmMutex) {
 	// Update the film pointer
-	film = flm;
+	film.reset(&flm);
 	filmMutex = flmMutex;
 	InitFilm();
 
-	((RTPathCPUSamplerSharedData *)samplerSharedData.get())->Reset(film);
+	static_cast<RTPathCPUSamplerSharedData *>(samplerSharedData.get())->Reset(
+		std::experimental::make_observer(&GetFilm())
+	);
 
 	// Check if the threads were already suspended for pause
 	if (!pauseMode)
@@ -137,27 +140,32 @@ void RTPathCPURenderEngine::EndFilmEdit(FilmPtr flm, std::mutex *flmMutex) {
 // Static methods used by RenderEngineRegistry
 //------------------------------------------------------------------------------
 
-Properties RTPathCPURenderEngine::ToProperties(const Properties &cfg) {
-	return PathCPURenderEngine::ToProperties(cfg) <<
-			//------------------------------------------------------------------
+PropertiesUPtr RTPathCPURenderEngine::ToProperties(const Properties &cfg) {
+	PropertiesUPtr props = PathCPURenderEngine::ToProperties(cfg);
+	
+	*props <<
+				//------------------------------------------------------------------
 			// Overwrite some PathCPURenderEngine property
 			//------------------------------------------------------------------
-			cfg.Get(GetDefaultProps().Get("renderengine.type")) <<
-			cfg.Get(GetDefaultProps().Get("path.pathdepth.total")) <<
-			cfg.Get(GetDefaultProps().Get("path.pathdepth.diffuse")) <<
-			cfg.Get(GetDefaultProps().Get("path.pathdepth.glossy")) <<
-			cfg.Get(GetDefaultProps().Get("path.pathdepth.specular")) <<
+			cfg.Get(GetDefaultProps()->Get("renderengine.type")) <<
+			cfg.Get(GetDefaultProps()->Get("path.pathdepth.total")) <<
+			cfg.Get(GetDefaultProps()->Get("path.pathdepth.diffuse")) <<
+			cfg.Get(GetDefaultProps()->Get("path.pathdepth.glossy")) <<
+			cfg.Get(GetDefaultProps()->Get("path.pathdepth.specular")) <<
 			//------------------------------------------------------------------
-			cfg.Get(GetDefaultProps().Get("rtpathcpu.zoomphase.size")) <<
-			cfg.Get(GetDefaultProps().Get("rtpathcpu.zoomphase.weight"));
+			cfg.Get(GetDefaultProps()->Get("rtpathcpu.zoomphase.size")) <<
+			cfg.Get(GetDefaultProps()->Get("rtpathcpu.zoomphase.weight"));
+	
+	return props;
 }
 
-RenderEngine *RTPathCPURenderEngine::FromProperties(RenderConfigConstRef rcfg) {
+RenderEngine *RTPathCPURenderEngine::FromProperties(RenderConfigRef rcfg) {
 	return new RTPathCPURenderEngine(rcfg);
 }
 
-const Properties &RTPathCPURenderEngine::GetDefaultProps() {
-	static Properties props = Properties() <<
+PropertiesUPtr RTPathCPURenderEngine::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			PathCPURenderEngine::GetDefaultProps() <<
 			//------------------------------------------------------------------
 			// Overwrite some PathCPURenderEngine property

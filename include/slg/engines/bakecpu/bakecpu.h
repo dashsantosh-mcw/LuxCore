@@ -69,7 +69,7 @@ protected:
 	void RenderSample(const BakeMapInfo &mapInfo, PathTracerThreadState &state) const;
 	void RenderFunc(std::stop_token stop_token);
 
-	virtual luxrays::JThreadPtr AllocRenderThread() {
+	virtual luxrays::JThreadUPtr AllocRenderThread() {
 		auto t = std::make_unique<luxrays::JThread>(
 			std::bind_front(std::bind_front(&BakeCPURenderThread::RenderFunc, this))
 		);
@@ -80,13 +80,13 @@ protected:
 
 class BakeCPURenderEngine : public CPUNoTileRenderEngine {
 public:
-	BakeCPURenderEngine(RenderConfigConstRef cfg);
+	BakeCPURenderEngine(RenderConfigRef cfg);
 	virtual ~BakeCPURenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
 	virtual std::string GetTag() const { return GetObjectTag(); }
 
-	virtual RenderStatePtr GetRenderState();
+	virtual RenderStateSPtr GetRenderState();
 
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
@@ -94,20 +94,23 @@ public:
 
 	static RenderEngineType GetObjectType() { return BAKECPU; }
 	static std::string GetObjectTag() { return "BAKECPU"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(RenderConfigConstRef rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class BakeCPURenderThread;
     struct completion_t {
         void operator()() noexcept { }
     };
 
-protected:
-	static const luxrays::Properties &GetDefaultProps();
+	FilmRef GetMapFilm() { return *mapFilm; }
+	FilmConstRef GetMapFilm() const { return *mapFilm; }
 
-	CPURenderThread *NewRenderThread(const u_int index,
+protected:
+	static luxrays::PropertiesUPtr GetDefaultProps();
+
+	CPURenderThreadUPtr NewRenderThread(const u_int index,
 			luxrays::IntersectionDevice *device) {
-		return new BakeCPURenderThread(this, index, device);
+		return std::make_unique<BakeCPURenderThread>(this, index, device);
 	}
 
 	virtual void InitFilm();
@@ -123,17 +126,18 @@ protected:
 	std::vector<BakeMapInfo> mapInfos;
 
 	PhotonGICache *photonGICache;
-	FilmSampleSplatter *sampleSplatter;
 	PathTracer pathTracer;
-	std::unique_ptr<SamplerSharedData> lightSamplerSharedData;
+	std::shared_ptr<SamplerSharedData> lightSamplerSharedData;
 
-	FilmPtr mapFilm;
-	std::vector<SceneObjectConstPtr> currentSceneObjsToBake;
+	std::vector<const SceneObject *> currentSceneObjsToBake;
 	std::vector<float> currentSceneObjsToBakeArea;
 	luxrays::Distribution1D *currentSceneObjsDist;
 	std::vector<luxrays::Distribution1D *> currentSceneObjDist;
 
 	std::barrier<completion_t> *threadsSyncBarrier;
+
+private:
+	FilmUPtr mapFilm;  // Owned by this engine
 };
 
 }

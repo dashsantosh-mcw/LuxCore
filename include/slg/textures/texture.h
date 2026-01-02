@@ -19,6 +19,8 @@
 #ifndef _SLG_TEXTURE_H
 #define	_SLG_TEXTURE_H
 
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 #include <limits>
@@ -71,9 +73,7 @@ typedef enum {
 	FRESNELCOLOR_TEX, FRESNELCONST_TEX
 } TextureType;
 
-class Texture :
-	public luxrays::NamedObject,
-	public std::enable_shared_from_this<Texture>
+class Texture : public luxrays::NamedObject
 {
 public:
 	Texture() : NamedObject("texture") { }
@@ -93,18 +93,17 @@ public:
 	virtual luxrays::Normal Bump(const HitPoint &hitPoint, const float sampleDistance) const;
 
 	virtual void AddReferencedTextures(
-		std::unordered_set<std::shared_ptr<const Texture>>  &referencedTexs
+		std::unordered_set<const Texture *>  &referencedTexs
 	) const {
-		referencedTexs.insert(shared_from_this());
+		referencedTexs.insert(this);
 	}
 
-	virtual void AddReferencedImageMaps(std::unordered_set<ImageMapConstPtr > &referencedImgMaps) const {
+	virtual void AddReferencedImageMaps(std::unordered_set<const ImageMap *> &referencedImgMaps) const {
 	}
 
-	virtual void UpdateTextureReferences(std::shared_ptr<const Texture> oldTex, std::shared_ptr<const Texture> newTex) {
-	}
+	virtual void UpdateTextureReferences(TextureConstRef oldTex, TextureRef newTex) {}
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const = 0;
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const = 0;
 };
 
 //------------------------------------------------------------------------------
@@ -122,8 +121,38 @@ inline float Noise(const luxrays::Point &P) {
 	return Noise(P.x, P.y, P.z);
 }
 
-
+inline bool operator==(std::reference_wrapper<slg::Texture> lhs, const slg::Texture* rhs) {
+	return (&lhs.get() == rhs);
 }
+
+template <typename T>
+void updtex(T texture, TextureConstRef oldTex, TextureRef newTex) {}
+
+template<>
+inline void updtex<>(
+	TextureOPtr texture,
+	const TextureConstRef oldTex,
+	TextureRef newTex
+) {
+	if (texture.get() == std::addressof(oldTex)) {
+		texture.reset(std::addressof(newTex));
+	}
+}
+
+template<>
+inline void updtex<>(
+	std::reference_wrapper<Texture> texture,
+	const TextureConstRef oldTex,
+	TextureRef newTex
+) {
+	if (std::addressof(texture.get()) == std::addressof(oldTex)) {
+		texture = std::reference_wrapper(newTex);
+	}
+}
+
+}  // namespace slg
+
+
 
 #endif	/* _SLG_TEXTURE_H */
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

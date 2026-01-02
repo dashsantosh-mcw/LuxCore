@@ -21,8 +21,10 @@
 #include <filesystem>
 #include <boost/algorithm/string/predicate.hpp>
 #include <ImGuiFileDialog.h>
+#include <memory>
 
 #include "luxcoreapp.h"
+#include "luxrays/utils/properties.h"
 
 using namespace std;
 using namespace luxrays;
@@ -192,7 +194,7 @@ void LuxCoreApp::MenuRendering()
       DeleteRendering();
     }
 
-    Properties props;
+    PropertiesPtr props = std::make_unique<Properties>();
     /*props <<
         Property("opencl.devices.select")("100") <<
         Property("scene.epsilon.min")(0.000123f) <<
@@ -211,7 +213,7 @@ void LuxCoreApp::MenuRendering()
 //------------------------------------------------------------------------------
 
 void LuxCoreApp::MenuEngine() {
-  const string currentEngineType = config.lock()->ToProperties().Get("renderengine.type").Get<string>();
+  const string currentEngineType = config->ToProperties()->Get("renderengine.type").Get<string>();
 
   if (isGPURenderingAvailable() && ImGui::MenuItem("PATHOCL", "1", (currentEngineType == "PATHOCL"))) {
     SetRenderingEngineType("PATHOCL");
@@ -260,11 +262,11 @@ void LuxCoreApp::MenuEngine() {
 //------------------------------------------------------------------------------
 
 void LuxCoreApp::MenuSampler() {
-  const string currentSamplerType = config.lock()->ToProperties().Get("sampler.type").Get<string>();
+  const string currentSamplerType = config->ToProperties()->Get("sampler.type").Get<string>();
 
   auto set_sampler = [&](const string name) {
     samplerWindow.Close();
-    auto props = std::make_shared<Properties>();
+    auto props = std::make_unique<Properties>();
     *props << Property("sampler.type")(name);
     RenderConfigParse(props);
   };
@@ -286,9 +288,9 @@ void LuxCoreApp::MenuSampler() {
 
 void LuxCoreApp::MenuCamera() {
   if (session && ImGui::MenuItem("Print properties")) {
-    const luxrays::Properties &cameraProps = session->GetRenderConfig().
+    const auto & cameraProps = session->GetRenderConfig().
         GetScene().ToProperties()->GetAllProperties("scene.camera.");
-    LC_LOG("Current camera properties:" << endl << cameraProps.ToString());
+    LC_LOG("Current camera properties:" << endl << cameraProps->ToString());
   }
 }
 
@@ -301,10 +303,10 @@ void LuxCoreApp::MenuTiles() {
   // Helper
   auto tiles_show = [&](const string elem, const string desc) {
     const string name = string("screen.tiles.") + elem + ".show";
-    bool state = config.lock()->GetProperties().Get(Property(name)(false)).Get<bool>();
+    bool state = config->GetProperties()->Get(Property(name)(false)).Get<bool>();
     auto msg = string("Show ") + desc;
     if (ImGui::MenuItem(msg.c_str(), NULL, state)) {
-      auto props = std::make_shared<Properties>();
+      auto props = std::make_unique<Properties>();
       *props << Property(name)(!state);
       RenderConfigParse(props);
     }
@@ -369,9 +371,9 @@ void LuxCoreApp::MenuFilm() {
   }
   ImGui::Separator();
   if (session && ImGui::MenuItem("Save outputs"))
-    session->GetFilm()->SaveOutputs();
+    session->GetFilm().SaveOutputs();
   if (session && ImGui::MenuItem("Save film"))
-    session->GetFilm()->SaveFilm("film.flm");
+    session->GetFilm().SaveFilm("film.flm");
 }
 
 //------------------------------------------------------------------------------
@@ -379,7 +381,7 @@ void LuxCoreApp::MenuFilm() {
 //------------------------------------------------------------------------------
 
 void LuxCoreApp::MenuImagePipelines() {
-  const unsigned int imagePipelineCount = session->GetFilm()->GetChannelCount(Film::CHANNEL_IMAGEPIPELINE);
+  const unsigned int imagePipelineCount = session->GetFilm().GetChannelCount(Film::CHANNEL_IMAGEPIPELINE);
 
   for (unsigned int i = 0; i < imagePipelineCount; ++i) {
     if (ImGui::MenuItem(string("Pipeline #" + ToString(i)).c_str(), NULL, (i == imagePipelineIndex)))
@@ -451,8 +453,8 @@ void LuxCoreApp::MenuTool() {
 
   if (ImGui::MenuItem("Camera edit", NULL, (currentTool == TOOL_CAMERA_EDIT))) {
     currentTool = TOOL_CAMERA_EDIT;
-    auto props = Properties() << Property("screen.tool.type")("CAMERA_EDIT");
-    auto pprops = std::make_shared<Properties>(props);
+    auto&& props = Properties() << Property("screen.tool.type")("CAMERA_EDIT");
+    auto pprops = std::make_unique<Properties>(std::move(props));
     RenderConfigParse(pprops);
   }
   if (ImGui::MenuItem("Object selection", NULL, (currentTool == TOOL_OBJECT_SELECTION))) {
@@ -462,21 +464,21 @@ void LuxCoreApp::MenuTool() {
     props << Property("screen.tool.type")("OBJECT_SELECTION");
 
     // Check if the session a OBJECT_ID AOV enabled
-    if(!session->GetFilm()->HasOutput(Film::OUTPUT_OBJECT_ID)) {
+    if(!session->GetFilm().HasOutput(Film::OUTPUT_OBJECT_ID)) {
       // Enable OBJECT_ID AOV
       props <<
           Property("film.outputs.LUXCOREUI_OBJECTSELECTION_AOV.type")("OBJECT_ID") <<
           Property("film.outputs.LUXCOREUI_OBJECTSELECTION_AOV.filename")("dummy.png");
     }
 
-    auto pprops = std::make_shared<Properties>(props);
+    auto pprops = std::make_unique<Properties>(std::move(props));
     RenderConfigParse(pprops);
   }
   if (ImGui::MenuItem("Image view", NULL, (currentTool == TOOL_IMAGE_VIEW))) {
     currentTool = TOOL_IMAGE_VIEW;
-    auto props = Properties() << Property("screen.tool.type")("IMAGE_VIEW");
-    auto pprops = std::make_shared<Properties>(props);
-    RenderConfigParse(pprops);
+    auto props = std::make_unique<Properties>();
+    *props << Property("screen.tool.type")("IMAGE_VIEW");
+    RenderConfigParse(props);
   }
   if (ImGui::MenuItem("User importance painting", NULL, (currentTool == TOOL_USER_IMPORTANCE_PAINT))) {
     currentTool = TOOL_USER_IMPORTANCE_PAINT;
@@ -485,14 +487,14 @@ void LuxCoreApp::MenuTool() {
     props << Property("screen.tool.type")("USER_IMPORTANCE_PAINT");
 
     // Check if the session a _USER_IMPORTANCE AOV enabled
-    if(!session->GetFilm()->HasOutput(Film::OUTPUT_USER_IMPORTANCE)) {
+    if(!session->GetFilm().HasOutput(Film::OUTPUT_USER_IMPORTANCE)) {
       // Enable OBJECT_ID AOV
       props <<
           Property("film.outputs.LUXCOREUI_USER_IMPORTANCE_AOV.type")("USER_IMPORTANCE") <<
           Property("film.outputs.LUXCOREUI_USER_IMPORTANCE_AOV.filename")("dummy.png");
     }
 
-    auto pprops = std::make_shared<Properties>(props);
+    auto pprops = std::make_unique<Properties>(std::move(props));
     RenderConfigParse(pprops);
   }
 }
@@ -503,7 +505,7 @@ void LuxCoreApp::MenuTool() {
 
 void LuxCoreApp::MenuWindow() {
   if (session) {
-    const string currentRenderEngineType = config.lock()->ToProperties().Get("renderengine.type").Get<string>();
+    const string currentRenderEngineType = config->ToProperties()->Get("renderengine.type").Get<string>();
 
     if (ImGui::MenuItem("Render Engine editor", NULL, renderEngineWindow.IsOpen()))
       renderEngineWindow.Toggle();
@@ -600,21 +602,21 @@ void LuxCoreApp::MainMenuBar() {
         std::filesystem::create_directories(dir);
 
         // Save the current render engine
-        const string renderEngine = config.lock()->GetProperty("renderengine.type").Get<string>();
+        const string renderEngine = config->GetProperty("renderengine.type").Get<string>();
 
         // Set the render engine to FILESAVER
-        auto props1 = Properties() <<
+        auto props1 = std::make_unique<Properties>();
+         *props1 <<
           Property("renderengine.type")("FILESAVER") <<
           Property("filesaver.format")("TXT") <<
           Property("filesaver.directory")(fileToExport) <<
           Property("filesaver.renderengine.type")(renderEngine);
-        auto pprops1 = std::make_shared<Properties>(props1);
-        RenderConfigParse(pprops1);
+        RenderConfigParse(props1);
 
         // Restore the render engine setting
-        auto props2 = Properties() << Property("renderengine.type")(renderEngine);
-        auto pprops2 = std::make_shared<Properties>(props2);
-        RenderConfigParse(pprops2);
+        auto props2 = std::make_unique<Properties>();
+        *props2 << Property("renderengine.type")(renderEngine);
+        RenderConfigParse(props2);
       }
     }
 
@@ -635,7 +637,7 @@ void LuxCoreApp::MainMenuBar() {
       {
         showExportBinaryFileDialog = false;
         LA_LOG("Export current scene to file in binary format: " << fileToExport);
-        config.lock()->Save(fileToExport);
+        config->Save(fileToExport);
       }
     }
 
@@ -657,7 +659,7 @@ void LuxCoreApp::MainMenuBar() {
       {
         showExportGltfFileDialog = false;
         LA_LOG("Export current scene to file in glTF format: " << fileToExport);
-        config.lock()->ExportGLTF(fileToExport);
+        config->ExportGLTF(fileToExport);
       }
     }
 
@@ -715,7 +717,7 @@ void LuxCoreApp::MainMenuBar() {
 
     // Other Menus - Conditionned by session
     if (session) {
-      const string currentEngineType = config.lock()->ToProperties().Get("renderengine.type").Get<string>();
+      const string currentEngineType = config->ToProperties()->Get("renderengine.type").Get<string>();
 
       if (ImGui::BeginMenu("Engine")) {
         MenuEngine();

@@ -147,9 +147,9 @@ int main(int argc, char *argv[]) {
     }
 
     // Check if we have to parse a LuxCore SDL file or a LuxRender SDL file
-    std::shared_ptr<RenderConfig> config;
+    RenderConfigPtr config;
     std::shared_ptr<RenderState> startRenderState = nullptr;
-    std::shared_ptr<Film> startFilm = nullptr;
+    std::unique_ptr<Film> startFilm = nullptr;
 
     if (configFileName.compare("") != 0) {
       // Clear the file name resolver list
@@ -168,8 +168,8 @@ int main(int argc, char *argv[]) {
     } else if (configFileNameExt == ".lxs") {
       // It is a LuxRender SDL file
       LA_LOG("Parsing LuxRender SDL file...");
-      auto renderConfigProps = std::make_shared<Properties>();
-      auto sceneProps = std::make_shared<Properties>();
+      auto renderConfigProps = std::make_unique<Properties>();
+      auto sceneProps = std::make_unique<Properties>();
       luxcore::ParseLXS(configFileName, renderConfigProps, sceneProps);
 
       // For debugging
@@ -179,21 +179,21 @@ int main(int argc, char *argv[]) {
       auto scene = Scene::Create();
       scene->Parse(sceneProps);
       renderConfigProps->Set(cmdLineProp);
-      config = RenderConfig::Create(renderConfigProps, std::move(scene));
+      config = RenderConfig::Create(std::move(renderConfigProps), std::move(scene));
       config->DeleteSceneOnExit();
     } else if (configFileNameExt == ".cfg") {
       // It is a LuxCore SDL file
-      auto props = std::make_shared<Properties>(configFileName);
+      auto props = std::make_unique<Properties>(std::move(configFileName));
       props->Set(cmdLineProp);
-      config = RenderConfig::Create(props);
+      config = RenderConfig::Create(std::move(props));
     } else if (configFileNameExt == ".bcf") {
       // It is a LuxCore RenderConfig binary archive
-      auto props = std::make_shared<Properties>(cmdLineProp);
+      auto props = std::make_unique<Properties>(std::move(cmdLineProp));
       config = RenderConfig::Create(configFileName);
       config->Parse(props);
     } else if (configFileNameExt == ".rsm") {
       // It is a rendering resume file
-      auto props = std::make_shared<Properties>(cmdLineProp);
+      auto props = std::make_unique<Properties>(std::move(cmdLineProp));
       startRenderState.reset();
       startFilm.reset();
       config = RenderConfig::Create(configFileName, startRenderState, startFilm);
@@ -214,7 +214,7 @@ int main(int argc, char *argv[]) {
     if (config && ((startFilm && !startRenderState) || (!startFilm && startRenderState)))
       throw runtime_error("You have to use both a film and render state to resume the rendering");
 
-    if (config && (config->ToProperties().Get("renderengine.type").Get<string>() == "FILESAVER")) {
+    if (config && (config->ToProperties()->Get("renderengine.type").Get<string>() == "FILESAVER")) {
       auto session = RenderSession::Create(config);
 
       // Save the scene and exit

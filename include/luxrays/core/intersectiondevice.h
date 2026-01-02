@@ -34,7 +34,7 @@ public:
 	// Returns true if it support HardwareDevice ray tracing
 	virtual bool HasHWSupport() const { return false; }
 
-	AcceleratorConstPtr GetAccelerator() const { return accel; }
+	AcceleratorConstSPtr GetAccelerator() const { return accel; }
 
 	//--------------------------------------------------------------------------
 	// Statistics
@@ -76,13 +76,13 @@ protected:
 	IntersectionDevice();
 	virtual ~IntersectionDevice();
 
-	virtual void SetDataSet(DataSetPtr);
+	virtual void SetDataSet(DataSetSPtr);
 	virtual void Start();
 
 	//DataSet *dataSet;
 	//const Accelerator *accel;
-	DataSetPtr dataSet;
-	AcceleratorConstPtr accel;
+	DataSetSPtr dataSet;
+	AcceleratorConstSPtr accel;
 	double statsStartTime;
 	u_longlong statsTotalSerialRayCount, statsTotalDataParallelRayCount;
 };

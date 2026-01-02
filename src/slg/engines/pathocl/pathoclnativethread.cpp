@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <memory>
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
 #include <boost/lexical_cast.hpp>
@@ -46,26 +47,25 @@ using namespace std::literals::chrono_literals;
 //------------------------------------------------------------------------------
 
 PathOCLNativeRenderThread::PathOCLNativeRenderThread(const u_int index,
-		NativeIntersectionDevice *device, PathOCLRenderEngine *re) :
-		PathOCLBaseNativeRenderThread(index, device, re) {
-	threadFilm = NULL;
-}
+	NativeIntersectionDevice *device, PathOCLRenderEngine *re) :
+	PathOCLBaseNativeRenderThread(index, device, re)
+{}
 
 PathOCLNativeRenderThread::~PathOCLNativeRenderThread() {
 }
 
 void PathOCLNativeRenderThread::Start() {
 	if (threadIndex == 0) {
-		// Only the first thread allocate a film. It is than used by all
+		// Only the first thread allocate a film. It is then used by all
 		// other threads too.
 		PathOCLRenderEngine *engine = (PathOCLRenderEngine *)renderEngine;
 
-		const u_int filmWidth = engine->film->GetWidth();
-		const u_int filmHeight = engine->film->GetHeight();
-		const u_int *filmSubRegion = engine->film->GetSubRegion();
+		const u_int filmWidth = engine->GetFilm().GetWidth();
+		const u_int filmHeight = engine->GetFilm().GetHeight();
+		const u_int *filmSubRegion = engine->GetFilm().GetSubRegion();
 
 		threadFilm = Film::Create(filmWidth, filmHeight, filmSubRegion);
-		threadFilm->CopyDynamicSettings(*(engine->film));
+		threadFilm->CopyDynamicSettings(engine->GetFilm());
 		// I'm not removing the pipeline and disabling the film denoiser
 		// in order to support BCD denoiser.
 		threadFilm->SetThreadCount(engine->renderNativeThreads.size());
@@ -84,6 +84,14 @@ void PathOCLNativeRenderThread::StartRenderThread() {
 	PathOCLBaseNativeRenderThread::StartRenderThread();
 }
 
+FilmRef PathOCLNativeRenderThread::GetThreadFilm() {
+	PathOCLRenderEngine * engine = static_cast<PathOCLRenderEngine *>(renderEngine);
+	auto * thread0 = static_cast<PathOCLNativeRenderThread *>(
+		engine->renderNativeThreads[0]
+	);
+	return *thread0->threadFilm;
+}
+
 void PathOCLNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 	//SLG_LOG("[PathOCLRenderEngine::" << threadIndex << "] Rendering thread started");
 
@@ -98,17 +106,21 @@ void PathOCLNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 	SetThreadGroupAffinity(threadIndex);
 
 	// (engine->seedBase + 1) seed is used for sharedRndGen
-	RandomGenerator *rndGen = new RandomGenerator(engine->seedBase + 1 + threadIndex);
+	auto rndGen = std::make_unique<RandomGenerator>(engine->seedBase + 1 + threadIndex);
 
 	// All threads use the film allocated by the first thread
-	FilmPtr film = ((PathOCLNativeRenderThread *)(engine->renderNativeThreads[0]))->threadFilm;
+	FilmRef film = GetThreadFilm();
+	//FilmRef film = ((PathOCLNativeRenderThread *)(engine->renderNativeThreads[0]))->threadFilm;
 	
 	// Setup the sampler(s)
 
 	SamplerUPtr lightSampler;
 
-	auto eyeSampler = engine->renderConfig.AllocSampler(rndGen, film,
-			nullptr, engine->eyeSamplerSharedData, Properties());
+	auto eyeSampler = engine->renderConfig.AllocSampler(
+		rndGen, film,
+		engine->GetSampleSplatter(),
+		engine->eyeSamplerSharedData, Properties()
+	);
 	eyeSampler->SetThreadIndex(threadIndex);
 	eyeSampler->RequestSamples(PIXEL_NORMALIZED_ONLY, pathTracer.eyeSampleSize);
 
@@ -121,8 +133,8 @@ void PathOCLNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 			Property("sampler.imagesamples.enable")(false) <<
 			Property("sampler.metropolis.addonlycaustics")(true);
 
-		lightSampler = Sampler::FromProperties(props, rndGen, film, engine->lightSampleSplatter,
-				*engine->lightSamplerSharedData);
+		lightSampler = Sampler::FromProperties(props, rndGen, std::experimental::make_observer(&film), engine->lightSampleSplatter,
+				engine->lightSamplerSharedData);
 		lightSampler->SetThreadIndex(threadIndex);
 		lightSampler->RequestSamples(SCREEN_NORMALIZED_ONLY, pathTracer.lightSampleSize);
 	}
@@ -132,7 +144,7 @@ void PathOCLNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 	// Setup PathTracer thread state
 	PathTracerThreadState pathTracerThreadState(intersectionDevice,
 			eyeSampler, lightSampler,
-			engine->renderConfig.scene, film,
+			engine->renderConfig.GetScene(), film,
 			&varianceClamping);
 
 	//--------------------------------------------------------------------------
@@ -158,7 +170,7 @@ void PathOCLNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 #endif
 
 		// Check halt conditions
-		if (engine->film->GetConvergence() == 1.f)
+		if (engine->GetFilm().GetConvergence() == 1.f)
 			break;
                 if (stop_token.stop_requested())
                         break;
@@ -168,8 +180,6 @@ void PathOCLNativeRenderThread::RenderThreadImpl(std::stop_token stop_token) {
 		}
 	}
 
-
-	delete rndGen;
 
 	threadDone = true;
 

@@ -45,7 +45,7 @@ public:
 	friend class TilePathCPURenderEngine;
 
 private:
-	virtual luxrays::JThreadPtr AllocRenderThread() {
+	virtual luxrays::JThreadUPtr AllocRenderThread() {
 		auto t = std::make_unique<luxrays::JThread>(
 			std::bind_front(&TilePathCPURenderThread::RenderFunc, this)
 		);
@@ -61,13 +61,13 @@ private:
 
 class TilePathCPURenderEngine : public CPUTileRenderEngine {
 public:
-	TilePathCPURenderEngine(RenderConfigConstRef cfg);
+	TilePathCPURenderEngine(RenderConfigRef cfg);
 	~TilePathCPURenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
 	virtual std::string GetTag() const { return GetObjectTag(); }
 
-	virtual RenderStatePtr GetRenderState();
+	virtual RenderStateSPtr GetRenderState();
 
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
@@ -75,13 +75,13 @@ public:
 
 	static RenderEngineType GetObjectType() { return TILEPATHCPU; }
 	static std::string GetObjectTag() { return "TILEPATHCPU"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(RenderConfigConstRef rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class TilePathCPURenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual void InitFilm();
 	virtual void StartLockLess();
@@ -94,9 +94,9 @@ protected:
 	PathTracer pathTracer;
 
 private:
-	virtual CPURenderThread *NewRenderThread(const u_int index,
+	virtual CPURenderThreadUPtr NewRenderThread(const u_int index,
 			luxrays::IntersectionDevice *device) {
-		return new TilePathCPURenderThread(this, index, device);
+		return std::make_unique<TilePathCPURenderThread>(this, index, device);
 	}
 };
 
