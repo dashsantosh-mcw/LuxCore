@@ -12,6 +12,12 @@ You can find more information about at https://www.luxcorerender.org
 
 ### Building
 
+#### Build documentation
+Complete build documentation can be found in the wiki: https://wiki.luxcorerender.org/Building_LuxCoreRender.
+
+Here is a short extract, please refer to link above for more information.
+
+
 #### Tool requirements
 [Mandatory] First, ensure you have a suitable toolchain:
 - Windows: MSVC >= 194x _latest version_
@@ -67,6 +73,7 @@ Available build types are `Release` and `Debug` (case sensitive). Default is
 - `make config`: configure/reconfigure project
 - `make deps`: update dependencies
 - `make doc`: build Doxygen documentation
+
 
 
 ### LuxCore library
