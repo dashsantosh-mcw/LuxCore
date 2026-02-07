@@ -39,6 +39,7 @@
 #include "luxrays/utils/utils.h"
 #include "slg/core/sphericalfunction/sphericalfunction.h"
 #include "slg/editaction.h"
+#include "slg/imagemap/imagemap.h"
 #include "slg/samplers/sampler.h"
 #include "slg/core/sdl.h"
 #include "slg/scene/scene.h"
@@ -169,20 +170,22 @@ PropertiesUPtr Scene::ToProperties(const bool useRealFileName) const {
 // Methods to build and edit a scene
 //--------------------------------------------------------------------------
 
-void Scene::DefineImageMap(ImageMapUPtr&& im) {
-	imgMapCache.DefineImageMap(std::move(im));
+ImageMapRef Scene::DefineImageMap(ImageMapUPtr&& im) {
+	ImageMapRef ref = imgMapCache.DefineImageMap(std::move(im));
 
 	editActions.AddAction(IMAGEMAPS_EDIT);
+	return ref;
 }
-void Scene::DefineImageMap(const string &name, void *pixels,
+ImageMapRef Scene::DefineImageMap(const string &name, void *pixels,
 		const u_int channels, const u_int width, const u_int height,
 		const ImageMapConfig &cfg) {
 	auto imgMap = ImageMap::AllocImageMap(pixels, channels, width, height, cfg);
 	imgMap->SetName(name);
 
-	DefineImageMap(std::move(imgMap));
+	ImageMapRef ref = DefineImageMap(std::move(imgMap));
 
 	editActions.AddAction(IMAGEMAPS_EDIT);
+	return ref;
 }
 
 bool Scene::IsImageMapDefined(const string &imgMapName) const {

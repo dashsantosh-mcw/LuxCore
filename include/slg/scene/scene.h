@@ -26,6 +26,7 @@
 #include "luxrays/core/exttrianglemesh.h"
 #include "luxrays/core/geometry/bsphere.h"
 #include "luxrays/usings.h"
+#include "slg/imagemap/imagemap.h"
 #include "slg/usings.h"
 #include "slg/utils/pathinfo.h"
 #include "slg/editaction.h"
@@ -119,8 +120,8 @@ public:
 	// Methods to build and edit scene
 	//--------------------------------------------------------------------------
 
-	void DefineImageMap(ImageMapUPtr&& im);
-	void DefineImageMap(const std::string &name, void *pixels,
+	ImageMapRef DefineImageMap(ImageMapUPtr&& im);
+	ImageMapRef DefineImageMap(const std::string &name, void *pixels,
 		const u_int channels, const u_int width, const u_int height,
 		const ImageMapConfig &cfg);
 

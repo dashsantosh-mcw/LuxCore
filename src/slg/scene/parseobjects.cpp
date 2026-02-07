@@ -202,11 +202,11 @@ SceneObjectUPtr Scene::CreateObject(const u_int defaultObjID, const string &objN
 		// Add the image map to the cache
 		const string name ="LUXCORE_BAKEMAP_LIGHTMAP_" + propName;
 		imgMap->SetName(name);
-		imgMapCache.DefineImageMap(std::move(imgMap));
+		auto& ref = imgMapCache.DefineImageMap(std::move(imgMap));
 
 		const u_int uvIndex = Clamp(props.Get(Property(propName + ".bake.lightmap.uvindex")(0)).Get<u_int>(), 0u, EXTMESH_MAX_DATA_COUNT);
 
-		scnObj->SetBakeMap(*imgMap, LIGHTMAP, uvIndex);
+		scnObj->SetBakeMap(ref, LIGHTMAP, uvIndex);
 	}
 
 	return scnObj;
