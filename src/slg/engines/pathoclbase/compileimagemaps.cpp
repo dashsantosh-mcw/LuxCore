@@ -34,7 +34,7 @@ using namespace std;
 using namespace luxrays;
 using namespace slg;
 
-void CompiledScene::AddToImageMapMem(slg::ocl::ImageMap &im, void *data, const size_t dataSize) {
+void CompiledScene::AddToImageMapMem(slg::ocl::ImageMap &im, const void *data, const size_t dataSize) {
 	const size_t memSize = RoundUp(dataSize, sizeof(float));
 
 	if (memSize > maxMemPageSize)

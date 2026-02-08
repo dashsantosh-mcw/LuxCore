@@ -138,7 +138,7 @@ public:
 		wasPhotonGICompiled;
 
 private:
-	void AddToImageMapMem(slg::ocl::ImageMap &im, void *data, const size_t memSize);
+	void AddToImageMapMem(slg::ocl::ImageMap &im, const void *data, const size_t memSize);
 	u_int CompileImageMap(ImageMapConstRef im);
 
 	void CompileCamera();
