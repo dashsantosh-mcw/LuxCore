@@ -80,8 +80,9 @@ void Scene::Init(luxrays::PropertiesPtr resizePolicyProps) {
 	editActions.AddAllAction();
 	if (resizePolicyProps)
 		imgMapCache.SetImageResizePolicy(ImageMapResizePolicy::FromProperties(*resizePolicyProps));
-	// Add random image map to imgMapCache
+	// Add random image map to imgMapCache and specify its resize policy
 	imgMapCache.DefineImageMap(ImageMapTexture::randomImageMap);
+	imgMapCache.resizePolicyToApply.push_back(false);
 
 	enableParsePrint = true;
 }

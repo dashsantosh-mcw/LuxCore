@@ -35,6 +35,8 @@ ImageMapUPtr ImageMapTexture::AllocRandomImageMap(const u_int size) {
 	// Initialize the random image map
 	auto randomImageMap = ImageMap::AllocImageMap(3, size, size, ImageMapConfig());
 
+	randomImageMap->SetName("Random-Image-Map");
+
 
 	RandomGenerator rndGen(123);
 	float *randomMapData = (float *)randomImageMap->GetStorage().GetPixelsData();

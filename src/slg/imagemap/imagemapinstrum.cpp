@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <memory>
 #include <mutex>
 
 #include "luxrays/utils/atomic.h"
@@ -29,9 +30,15 @@ using namespace slg;
 // ImageMap instrumentation
 //------------------------------------------------------------------------------
 
-void ImageMap::SetUpInstrumentation(const u_int originalWidth, const u_int originalHeigth,
-		const ImageMapConfig &imgCfg) {
-	instrumentationInfo = new InstrumentationInfo(originalWidth, originalHeigth, imgCfg);
+void ImageMap::SetUpInstrumentation(
+	const u_int originalWidth,
+	const u_int originalHeigth,
+	const ImageMapConfig &imgCfg)
+{
+
+	instrumentationInfo = std::make_unique<InstrumentationInfo>(
+		originalWidth, originalHeigth, imgCfg
+	);
 }
 
 void ImageMap::EnableInstrumentation() {
@@ -40,11 +47,6 @@ void ImageMap::EnableInstrumentation() {
 
 void ImageMap::DisableInstrumentation() {
 	instrumentationInfo->enabled = false;
-}
-
-void ImageMap::DeleteInstrumentation() {
-	delete instrumentationInfo;
-	instrumentationInfo = nullptr;
 }
 
 //------------------------------------------------------------------------------
@@ -70,22 +72,23 @@ ImageMap::InstrumentationInfo::InstrumentationInfo(const u_int w, const u_int h,
 }
 
 ImageMap::InstrumentationInfo::~InstrumentationInfo() {
-	for (auto k : threadInfo)
-		delete k.second;
 }
 
 void ImageMap::InstrumentationInfo::ThreadSetUp() {
-//	cout << "ImageMap::InstrumentationInfo::ThreadSetUp() [" << this << "]" << endl;
+#ifndef NDEBUG
+	cout << "ImageMap::InstrumentationInfo::ThreadSetUp() [" << this << "]" << endl;
+#endif
 
 	std::unique_lock<std::mutex> lock(classLock);
-	threadInfo[std::this_thread::get_id()] = new ThreadData();
+	threadInfo[std::this_thread::get_id()] = std::make_unique<ThreadData>();
 }
 
 void ImageMap::InstrumentationInfo::ThreadFinalize() {
-//	cout << "ImageMap::InstrumentationInfo::ThreadFinalize() [" << this << "]" << endl;
-	
+#ifndef NDEBUG
+	cout << "ImageMap::InstrumentationInfo::ThreadFinalize() [" << this << "]" << endl;
+#endif	
 	std::unique_lock<std::mutex> lock(classLock);
-	ThreadData *ti = threadInfo[std::this_thread::get_id()];
+	const std::unique_ptr<ThreadData> & ti = threadInfo[std::this_thread::get_id()];
 	if (ti->samplesCount > 0) {
 //		cout << "Min. U distance in pixel: " << (ti->minDistance * originalWidth) << endl;
 //		cout << "Min. V distance in pixel: " << (ti->minDistance * originalHeigth) << endl;
@@ -100,28 +103,34 @@ void ImageMap::InstrumentationInfo::ThreadFinalize() {
 		}
 	}
 
-	delete ti;
 	threadInfo.erase(std::this_thread::get_id());
 }
 
 void ImageMap::InstrumentationInfo::ThreadSetSampleIndex(const InstrumentationSampleIndex index) {
-//	cout << "ImageMap::InstrumentationInfo::ThreadSetSampleIndex(" << index << ") [" << this << "]" << endl;
+#ifndef NDEBUG
+	//cerr << "ImageMap::InstrumentationInfo::ThreadSetSampleIndex(" << index << ") [" << this << "]" << endl;
+#endif
 
-	ThreadData *ti = threadInfo[std::this_thread::get_id()];
+	const std::unique_ptr<ThreadData> & ti = threadInfo[std::this_thread::get_id()];
 	ti->currentSamplesIndex = (u_int)index;
 }
 
 void ImageMap::InstrumentationInfo::ThreadAddSample(const luxrays::UV &uv) {
-//	cout << "ImageMap::InstrumentationInfo::ThreadAddSample(" << uv << ") [" << this << ", " << ti->currentSamplesIndex << "]" << endl;
+	const std::unique_ptr<ThreadData> & ti = threadInfo[std::this_thread::get_id()];
 
-	ThreadData *ti = threadInfo[std::this_thread::get_id()];
+#ifndef NDEBUG
+	//cout << "ImageMap::InstrumentationInfo::ThreadAddSample(" << uv << ") [" << this << ", " << ti->currentSamplesIndex << "]" << endl;
+#endif
+
 	ti->samples[ti->currentSamplesIndex].push_back(uv);
 }
 
 void ImageMap::InstrumentationInfo::ThreadAccumulateSamples() {
-//	cout << "ImageMap::InstrumentationInfo::ThreadAccumulateSamples() [" << this << "]" << endl;
+#ifndef NDEBUG
+	//cout << "ImageMap::InstrumentationInfo::ThreadAccumulateSamples() [" << this << "]" << endl;
+#endif
 
-	ThreadData *ti = threadInfo[std::this_thread::get_id()];
+	const std::unique_ptr<ThreadData> & ti = threadInfo[std::this_thread::get_id()];
 	if ((ti->samples[0].size() > 0) &&
 			(ti->samples[0].size() == ti->samples[1].size()) &&
 			(ti->samples[0].size() == ti->samples[2].size())) {

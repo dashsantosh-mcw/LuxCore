@@ -948,7 +948,12 @@ class ImageMap : public luxrays::NamedObject {
 public:
 	ImageMap(const std::string &fileName, const ImageMapConfig &cfg,
 			const u_int widthHint = 0, const u_int heightHint = 0);
-	ImageMap(ImageMapStorageUPtr&& pixels, const float imageMean, const float imageMeanY);
+	ImageMap(
+		ImageMapStorageUPtr&& pixels,
+		const float imageMean,
+		const float imageMeanY,
+		const ImageMapConfig &cfg
+	);
 	~ImageMap();
 
 	void Reload();
@@ -965,7 +970,6 @@ public:
 		const ImageMapConfig &imgCfg);
 	void EnableInstrumentation();
 	void DisableInstrumentation();
-	void DeleteInstrumentation();
 
 	u_int GetChannelCount() const { return pixelStorage->GetChannelCount(); }
 	u_int GetWidth() const { return pixelStorage->width; }
@@ -1073,7 +1077,7 @@ protected:
 			ar & enabled;
 		}
 
-		std::map<luxrays::JThread::id, ThreadData *> threadInfo;
+		std::map<luxrays::JThread::id, std::unique_ptr<ThreadData> > threadInfo;
 
 		std::mutex classLock;
 	};
@@ -1089,16 +1093,19 @@ protected:
 
 	template<class Archive> void serialize(Archive &ar, const u_int version);
 
+	// Caveat: the order of member declarations matters. Please do not change it
+	//
 	ImageMapStorageUPtr pixelStorage;
 
 	// Cached image information
 	float imageMean, imageMeanY;
 
-	InstrumentationInfo *instrumentationInfo;
+	// Keep trace of ImageMapConfig provided to constructor
+	ImageMapConfig imageMapConfig;
+
+	std::unique_ptr<InstrumentationInfo> instrumentationInfo;
 };
 
-// Singleton for reference pre-assignment
-extern ImageMap NullImageMap;
 
 }  // namespace slg
 

@@ -746,21 +746,39 @@ ImageMap::ImageMap() {
 	instrumentationInfo = nullptr;
 }
 
-ImageMap::ImageMap(const string &fileName, const ImageMapConfig &cfg,
-		const u_int widthHint, const u_int heightHint) : NamedObject(fileName),
-		instrumentationInfo(nullptr) {
+ImageMap::ImageMap(
+	const string &fileName,
+	const ImageMapConfig &cfg,
+	const u_int widthHint,
+	const u_int heightHint
+) :
+	NamedObject(fileName),
+	imageMapConfig(cfg),
+	instrumentationInfo(
+		std::make_unique<InstrumentationInfo>(widthHint, heightHint, cfg)
+	)
+{
 	Init(fileName, cfg, widthHint, heightHint);
 }
 
-ImageMap::ImageMap(ImageMapStorageUPtr&& pixels, const float im, const float imy) {
-	pixelStorage = std::move(pixels);
-	imageMean = im;
-	imageMeanY = imy;
-	instrumentationInfo = nullptr;
-}
+ImageMap::ImageMap(
+	ImageMapStorageUPtr&& pixels,
+	const float im,
+	const float imy,
+	const ImageMapConfig &cfg
+) :
+	pixelStorage(std::move(pixels)),
+	imageMean(im),
+	imageMeanY(imy),
+	imageMapConfig(cfg),
+	instrumentationInfo(
+		std::make_unique<InstrumentationInfo>(
+			pixelStorage->width, pixelStorage->height, cfg
+		)
+	)
+{}
 
 ImageMap::~ImageMap() {
-	delete instrumentationInfo;
 }
 
 void ImageMap::Reload() {
@@ -975,7 +993,7 @@ ImageMapUPtr ImageMap::AllocImageMap(
 		}  // Switch
 	};  // lambda
 
-	return std::make_unique<ImageMap>(std::move(createIMS()), 0.f, 0.f);
+	return std::make_unique<ImageMap>(std::move(createIMS()), 0.f, 0.f, cfg);
 
 }
 
@@ -1011,7 +1029,7 @@ ImageMapUPtr ImageMap::AllocImageMap(
 		}  // Switch
 	};  // lambda
 
-	auto imageMap = std::make_unique<ImageMap>(std::move(createIMS()), 0.f , 0.f);
+	auto imageMap = std::make_unique<ImageMap>(std::move(createIMS()), 0.f , 0.f, cfg);
 
 	memcpy(imageMap->GetStorage().GetPixelsData(), pixels, imageMap->GetStorage().GetMemorySize());
 
@@ -1280,65 +1298,85 @@ string ImageMap::GetFileExtension() const {
 }
 
 void ImageMap::WriteImage(const string &fileName) const {
-	unique_ptr<ImageOutput> out(ImageOutput::create(fileName));
-	if (out) {
-		ImageMapStorage::StorageType storageType = pixelStorage->GetStorageType();
+	std::unique_ptr<ImageOutput> out(ImageOutput::create(fileName));
+	if (!out) throw runtime_error("Failed image save: " + fileName);
 
-		switch (storageType) {
-			case ImageMapStorage::BYTE: {
-				ImageSpec spec(pixelStorage->width, pixelStorage->height, pixelStorage->GetChannelCount(), TypeDesc::UCHAR);
-				out->open(fileName, spec);
-				out->write_image(TypeDesc::UCHAR, pixelStorage->GetPixelsData());
-				out->close();
-				break;
-			}
-			case ImageMapStorage::HALF: {
-				ImageSpec spec(pixelStorage->width, pixelStorage->height, pixelStorage->GetChannelCount(), TypeDesc::HALF);
-				out->open(fileName, spec);
-				out->write_image(TypeDesc::HALF, pixelStorage->GetPixelsData());
-				out->close();
-				break;
-			}
-			case ImageMapStorage::FLOAT: {
-				if (pixelStorage->GetChannelCount() == 1) {
-					// OIIO 1 channel EXR output is apparently not working, I write 3 channels as
-					// temporary workaround
-					const u_int size = pixelStorage->width * pixelStorage->height;
-					const float *srcBuffer = (float *)pixelStorage->GetPixelsData();
-					float *tmpBuffer = new float[size * 3];
+	ImageMapStorage::StorageType storageType = pixelStorage->GetStorageType();
 
-					float *tmpBufferPtr = tmpBuffer;
-					for (u_int i = 0; i < size; ++i) {
-						const float v = srcBuffer[i];
-						*tmpBufferPtr++ = v;
-						*tmpBufferPtr++ = v;
-						*tmpBufferPtr++ = v;
-					}
-
-					ImageSpec spec(pixelStorage->width, pixelStorage->height, 3, TypeDesc::FLOAT);
-					out->open(fileName, spec);
-					out->write_image(TypeDesc::FLOAT, tmpBuffer);
-					out->close();
-
-					delete[] tmpBuffer;
-				} else {
-					ImageSpec spec(pixelStorage->width, pixelStorage->height, pixelStorage->GetChannelCount(), TypeDesc::FLOAT);
-					out->open(fileName, spec);
-					out->write_image(TypeDesc::FLOAT, pixelStorage->GetPixelsData());
-					out->close();
-				}
-				break;
-			}
-			default:
-				throw runtime_error("Unsupported storage type in ImageMap::WriteImage(): " + ToString(storageType));
+	switch (storageType) {
+		case ImageMapStorage::BYTE: {
+			ImageSpec spec(
+				pixelStorage->width,
+				pixelStorage->height,
+				pixelStorage->GetChannelCount(),
+				TypeDesc::UCHAR
+			);
+			out->open(fileName, spec);
+			out->write_image(TypeDesc::UCHAR, pixelStorage->GetPixelsData());
+			out->close();
+			break;
 		}
+		case ImageMapStorage::HALF: {
+			ImageSpec spec(
+				pixelStorage->width,
+				pixelStorage->height,
+				pixelStorage->GetChannelCount(),
+				TypeDesc::HALF
+			);
+			out->open(fileName, spec);
+			out->write_image(TypeDesc::HALF, pixelStorage->GetPixelsData());
+			out->close();
+			break;
+		}
+		case ImageMapStorage::FLOAT: {
+			if (pixelStorage->GetChannelCount() == 1) {
+				// OIIO 1 channel EXR output is apparently not working, I write
+				// 3 channels as temporary workaround
+				const u_int size = pixelStorage->width * pixelStorage->height;
+				const float *srcBuffer = (float *)pixelStorage->GetPixelsData();
+				float *tmpBuffer = new float[size * 3];
 
-	} else
-		throw runtime_error("Failed image save: " + fileName);
+				float *tmpBufferPtr = tmpBuffer;
+				for (u_int i = 0; i < size; ++i) {
+					const float v = srcBuffer[i];
+					*tmpBufferPtr++ = v;
+					*tmpBufferPtr++ = v;
+					*tmpBufferPtr++ = v;
+				}
+
+				ImageSpec spec(
+					pixelStorage->width, pixelStorage->height, 3, TypeDesc::FLOAT
+				);
+				out->open(fileName, spec);
+				out->write_image(TypeDesc::FLOAT, tmpBuffer);
+				out->close();
+
+				delete[] tmpBuffer;
+			} else {
+				ImageSpec spec(
+					pixelStorage->width,
+					pixelStorage->height,
+					pixelStorage->GetChannelCount(),
+					TypeDesc::FLOAT
+				);
+				out->open(fileName, spec);
+				out->write_image(TypeDesc::FLOAT, pixelStorage->GetPixelsData());
+				out->close();
+			}
+			break;
+		}
+		default:
+			throw runtime_error(
+				"Unsupported storage type in ImageMap::WriteImage(): "
+				+ ToString(storageType)
+			);
+	}  // switch(storageType)
 }
 
 ImageMapUPtr ImageMap::Copy() const {
-	return std::make_unique<ImageMap>(pixelStorage->Copy(), imageMean, imageMeanY);
+	return std::make_unique<ImageMap>(
+		pixelStorage->Copy(), imageMean, imageMeanY, imageMapConfig
+	);
 }
 
 ImageMapUPtr ImageMap::Merge(
@@ -1518,7 +1556,12 @@ ImageMapUPtr ImageMap::FromProperties(const Properties &props, const string &pre
 		const Blob &blob = props.Get(Property(prefix + ".blob")).Get<const Blob &>();
 		copy(blob.GetData(), blob.GetData() + blob.GetSize(), (char *)pixelStorage->GetPixelsData());
 
-		im = std::make_unique<ImageMap>(std::move(pixelStorage), 0.f, 0.f);
+		ImageMapConfig imageMapConfig;
+		ImageMapConfig::FromProperties(props, prefix, imageMapConfig);
+
+		im = std::make_unique<ImageMap>(
+			std::move(pixelStorage), 0.f, 0.f, imageMapConfig
+		);
 		im->Preprocess();
 	} else
 		throw runtime_error("Missing data ImageMap::FromProperties()");
@@ -1553,7 +1596,5 @@ PropertiesUPtr ImageMap::ToProperties(const string &prefix, const bool includeBl
 bool operator==(slg::ImageMapConstRef im1, slg::ImageMapConstRef im2) {
 	return &im1 == &im2;
 }
-
-slg::ImageMap NullImageMap();
 
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

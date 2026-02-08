@@ -251,8 +251,10 @@ void ImageMapResizePolicy::RenderFunc(
 	threadsSyncBarrier.arrive_and_wait();
 
 	// Delete thread image maps instrumentation
-	for (auto i : imgMapsIndices)
+	for (auto i : imgMapsIndices) {
+		imc.maps[i]->DisableInstrumentation();
 		imc.maps[i]->instrumentationInfo->ThreadFinalize();
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -260,8 +262,11 @@ void ImageMapResizePolicy::RenderFunc(
 //------------------------------------------------------------------------------
 
 
-void ImageMapResizePolicy::CalcOptimalImageMapSizes(ImageMapCache &imc, SceneConstRef scene,
-		const std::vector<u_int> &imgMapsIndices) {
+void ImageMapResizePolicy::CalcOptimalImageMapSizes(
+	ImageMapCache &imc,
+	SceneConstRef scene,
+	const std::vector<u_int> &imgMapsIndices
+) {
 	// Do a test render to establish the optimal image maps sizes
 	const size_t renderThreadCount = GetHardwareThreadCount();
 	std::vector<luxrays::JThread> renderThreads(renderThreadCount);

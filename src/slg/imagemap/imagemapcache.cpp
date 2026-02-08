@@ -145,22 +145,23 @@ ImageMapRef ImageMapCache::DefineImageMap(ImageMapSPtr im) {
 	auto it = mapByKey.find(key);
 
 	if (it == mapByKey.end()) {
-		// Append to container
+		// New value: append to container
 		auto& imRef = AppendImageMap(im, name, key);
 		return std::ref(imRef);
-	} else {
-		// Overwrite the existing image definition
-		const u_int index = GetImageMapIndex(it->second.get());
-		std::swap(maps[index], im);
-
-		resizePolicyToApply[index] = false;
-
-		// I have to modify mapByName for last or it iterator would be modified
-		// otherwise (it->second would point to the new ImageMap and not to the old one)
-		mapByKey.erase(key);
-		mapByKey.insert(make_pair(key, std::ref(*maps[index])));
-		return std::ref(*maps[index]);
 	}
+
+	// Existing value: overwrite the existing image definition
+	const u_int index = GetImageMapIndex(it->second.get());
+	std::swap(maps[index], im);
+
+	resizePolicyToApply[index] = false;
+
+	// I have to modify mapByName for last or it iterator would be modified
+	// otherwise (it->second would point to the new ImageMap and not to the old one)
+	mapByKey.erase(key);
+	mapByKey.insert(make_pair(key, std::ref(*maps[index])));
+
+	return std::ref(*maps[index]);
 }
 
 void ImageMapCache::DeleteImageMap(ImageMapConstRef im) {

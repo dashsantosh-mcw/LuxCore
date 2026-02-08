@@ -50,15 +50,15 @@ ImageMapUPtr ImageMapResizeMinMemPolicy::ApplyResizePolicy(const std::string &fi
 		SDL_LOG("Scaling probe ImageMap: " << im->GetName() << " [from " << width << "x" << height <<
 				" to " << newWidth << "x" << newHeight <<"]");
 
+		im->SetUpInstrumentation(width, height, imgCfg);
 		im->Resize(newWidth, newHeight);
 		im->Preprocess();
 
-		im->SetUpInstrumentation(width, height, imgCfg);
 
 		toApply = true;
 	} else
 		toApply = false;
-	
+
 	return im;
 }
 
@@ -72,9 +72,9 @@ void ImageMapResizeMinMemPolicy::Preprocess(ImageMapCache &imc, SceneConstRef sc
 		return;
 
 	SDL_LOG("Applying resize policy " << ImageMapResizePolicyType2String(GetType()) << "...");
-	
+
 	const double startTime = WallClockTime();
-	
+
 	// Build the list of image maps to check
 	vector<u_int> imgMapsIndices;
 	for (u_int i = 0; i < imc.resizePolicyToApply.size(); ++i) {
@@ -83,7 +83,7 @@ void ImageMapResizeMinMemPolicy::Preprocess(ImageMapCache &imc, SceneConstRef sc
 			imgMapsIndices.push_back(i);
 		}
 	}
-	
+
 	SDL_LOG("Image maps to process:  " << imgMapsIndices.size());
 
 	// Enable instrumentation for image maps to check
@@ -150,9 +150,10 @@ void ImageMapResizeMinMemPolicy::Preprocess(ImageMapCache &imc, SceneConstRef sc
 	SDL_LOG("Memory required for original Image maps: " + ToMemString(originalMemUsed));
 	SDL_LOG("Memory required for MINMEM Image maps: " + ToMemString(currentMemUsed));
 	
-	// Delete instrumentation for image maps checked
-	for (auto i : imgMapsIndices)
-		imc.maps[i]->DeleteInstrumentation();
+	//TODO
+	//// Delete instrumentation for image maps checked
+	//for (auto i : imgMapsIndices)
+		//imc.maps[i]->DeleteInstrumentation();
 
 	SDL_LOG("Applying resize policy " << ImageMapResizePolicyType2String(GetType()) << " time: " <<
 			(boost::format("%.1f") % (WallClockTime() - startTime)) << "secs");

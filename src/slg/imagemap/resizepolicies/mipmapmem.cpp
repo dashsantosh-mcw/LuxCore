@@ -85,15 +85,18 @@ ImageMapUPtr ImageMapResizeMipMapMemPolicy::ApplyResizePolicy(const std::string 
 // ImageMapResizeMinMemPolicy::Preprocess()
 //------------------------------------------------------------------------------
 
-void ImageMapResizeMipMapMemPolicy::Preprocess(ImageMapCache &imc, SceneConstRef scene,
-		const bool useRTMode) const {
+void ImageMapResizeMipMapMemPolicy::Preprocess(
+	ImageMapCache &imc,
+	SceneConstRef scene,
+	const bool useRTMode
+) const {
 	if (useRTMode)
 		return;
 
 	SDL_LOG("Applying resize policy " << ImageMapResizePolicyType2String(GetType()) << "...");
-	
+
 	const double startTime = WallClockTime();
-	
+
 	// Build the list of image maps to check
 	vector<u_int> imgMapsIndices;
 	for (u_int i = 0; i < imc.resizePolicyToApply.size(); ++i) {
@@ -102,12 +105,15 @@ void ImageMapResizeMipMapMemPolicy::Preprocess(ImageMapCache &imc, SceneConstRef
 			imgMapsIndices.push_back(i);
 		}
 	}
-	
+
 	SDL_LOG("Image maps to process:  " << imgMapsIndices.size());
 
+
+
 	// Enable instrumentation for image maps to check
-	for (auto i : imgMapsIndices)
+	for (auto i : imgMapsIndices) {
 		imc.maps[i]->EnableInstrumentation();
+	}
 
 	// Do a test render to establish the optimal image maps sizes
 	CalcOptimalImageMapSizes(imc, scene, imgMapsIndices);
@@ -170,9 +176,10 @@ void ImageMapResizeMipMapMemPolicy::Preprocess(ImageMapCache &imc, SceneConstRef
 	SDL_LOG("Memory required for original Image maps: " + ToMemString(originalMemUsed));
 	SDL_LOG("Memory required for MIPMAPMEM Image maps: " + ToMemString(currentMemUsed));
 	
-	// Delete instrumentation for image maps checked
-	for (auto i : imgMapsIndices)
-		imc.maps[i]->DeleteInstrumentation();
+	//TODO
+	//// Delete instrumentation for image maps checked
+	//for (auto i : imgMapsIndices)
+		//imc.maps[i]->DeleteInstrumentation();
 
 	SDL_LOG("Applying resize policy " << ImageMapResizePolicyType2String(GetType()) << " time: " <<
 			(boost::format("%.1f") % (WallClockTime() - startTime)) << "secs");
