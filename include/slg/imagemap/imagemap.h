@@ -644,7 +644,6 @@ public:
 	virtual size_t GetMemoryChannelSize() const = 0;
 	virtual void *GetPixelsData() = 0;
 	virtual const void *GetPixelsData() const = 0;
-	virtual OIIO::image_span<std::byte> GetPixelsSpan() = 0;
 
 	virtual void SetFloat(const u_int index, const float v) = 0;
 	void SetFloat(const u_int x, const u_int y, const float v) {
@@ -691,6 +690,7 @@ public:
 	virtual void ReverseGammaCorrection(const float gamma) = 0;
 
 	virtual ImageMapStorageUPtr Copy() const = 0;
+	virtual OIIO::image_span<std::byte> ToSpan() = 0;
 
 	static StorageType String2StorageType(const std::string &type);
 	static std::string StorageType2String(const StorageType type);
@@ -701,6 +701,8 @@ public:
 	static std::string FilterType2String(const FilterType type);
 
 	friend class boost::serialization::access;
+
+	template<typename T> OIIO::image_span<T> GetPixelsSpan(u_int Channels);
 
 	u_int width, height;
 	WrapType wrapType;
@@ -713,15 +715,26 @@ protected:
 	template<class Archive> void serialize(Archive &ar, const u_int version);
 };
 
+
 template <class T, u_int CHANNELS>
 class ImageMapStorageImpl : public ImageMapStorage {
 public:
 	ImageMapStorageImpl(
-		std::vector<ImageMapPixel<T, CHANNELS>>&& ps,
 		const u_int w,
 		const u_int h,
 		const WrapType wm,
 		const FilterType ft
+	) :
+		ImageMapStorage(w, h, wm, ft),
+		pixels(w * h)
+	{}
+
+	ImageMapStorageImpl(
+		const u_int w,
+		const u_int h,
+		const WrapType wm,
+		const FilterType ft,
+		std::vector<ImageMapPixel<T, CHANNELS>>&& ps
 	) :
 		ImageMapStorage(w, h, wm, ft),
 		pixels(std::move(ps))
@@ -738,7 +751,8 @@ public:
 	virtual size_t GetMemoryChannelSize() const { return sizeof(T); };
 	virtual void *GetPixelsData() { return &pixels[0]; }
 	virtual const void *GetPixelsData() const { return &pixels[0]; }
-	virtual OIIO::image_span<std::byte> GetPixelsSpan();
+
+	OIIO::image_span<T> GetPixelsSpan();
 
 	virtual void SetFloat(const u_int index, const float v);
 	virtual void SetSpectrum(const u_int index, const luxrays::Spectrum &v);
@@ -756,6 +770,8 @@ public:
 	virtual void ReverseGammaCorrection(const float gamma);
 
 	virtual ImageMapStorageUPtr Copy() const;
+
+	virtual OIIO::image_span<std::byte> ToSpan();
 
 	friend class boost::serialization::access;
 
@@ -870,7 +886,6 @@ ImageMapStorageUPtr AllocImageMapStorage(
 	switch (channels) {
 		case 1:
 			return std::make_unique<ImageMapStorageImpl<T, 1>>(
-				std::vector<ImageMapPixel<T, 1>>(pixelCount),
 				width,
 				height,
 				wrapType,
@@ -878,7 +893,6 @@ ImageMapStorageUPtr AllocImageMapStorage(
 			);
 		case 2:
 			return std::make_unique<ImageMapStorageImpl<T, 2>>(
-				std::vector<ImageMapPixel<T, 2>>(pixelCount),
 				width,
 				height,
 				wrapType,
@@ -886,7 +900,6 @@ ImageMapStorageUPtr AllocImageMapStorage(
 			);
 		case 3:
 			return std::make_unique<ImageMapStorageImpl<T, 3>>(
-				std::vector<ImageMapPixel<T, 3>>(pixelCount),
 				width,
 				height,
 				wrapType,
@@ -894,7 +907,6 @@ ImageMapStorageUPtr AllocImageMapStorage(
 			);
 		case 4:
 			return std::make_unique<ImageMapStorageImpl<T, 4>>(
-				std::vector<ImageMapPixel<T, 4>>(pixelCount),
 				width,
 				height,
 				wrapType,

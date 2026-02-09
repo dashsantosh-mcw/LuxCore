@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <OpenImageIO/typedesc.h>
 #include <sstream>
 #include <algorithm>
 #include <numeric>
@@ -26,9 +27,11 @@
 #include <OpenColorIO/OpenColorIO.h>
 namespace OCIO = OCIO_NAMESPACE;
 
+#include <Imath/half.h>
 #include <OpenImageIO/imagebuf.h>
 #include <OpenImageIO/imagebufalgo.h>
 #include <OpenImageIO/dassert.h>
+#include <OpenImageIO/half.h>
 
 #include "luxrays/utils/properties.h"
 #include "slg/core/sdl.h"
@@ -240,6 +243,38 @@ ImageMapStorage::StorageType ImageMapStorage::String2StorageType(const string &t
 		throw runtime_error("Unknown storage type: " + type);
 }
 
+template<typename T>
+OIIO::image_span<T> ImageMapStorage::GetPixelsSpan(u_int channelCount) {
+
+	switch(channelCount) {
+		case 1: {
+			auto downcast = dynamic_cast<ImageMapStorageImpl<T, 1> *>(this);
+			assert(downcast);
+			auto span = downcast->GetPixelsSpan();
+			return span;
+		}
+		case 2: {
+			auto downcast = dynamic_cast<ImageMapStorageImpl<T, 2> *>(this);
+			assert(downcast);
+			auto span = downcast->GetPixelsSpan();
+			return span;
+		}
+		case 3: {
+			auto downcast = dynamic_cast<ImageMapStorageImpl<T, 3> *>(this);
+			assert(downcast);
+			auto span = downcast->GetPixelsSpan();
+			return span;
+		}
+		case 4: {
+			auto downcast = dynamic_cast<ImageMapStorageImpl<T, 4> *>(this);
+			assert(downcast);
+			auto span = downcast->GetPixelsSpan();
+			return span;
+		}
+		default: throw std::runtime_error("GetPixelsSpan: unhandlded channel count");
+	}
+}
+
 string ImageMapStorage::StorageType2String(const StorageType type) {
 	switch (type) {
 		case ImageMapStorage::BYTE:
@@ -329,10 +364,10 @@ ImageMapStorage::ChannelSelectionType ImageMapStorage::String2ChannelSelectionTy
 // ImageMapStorageImpl
 //------------------------------------------------------------------------------
 template <class T, u_int CHANNELS>
-OIIO::image_span<std::byte> ImageMapStorageImpl<T, CHANNELS>::GetPixelsSpan() {
+OIIO::image_span<T> ImageMapStorageImpl<T, CHANNELS>::GetPixelsSpan() {
 	T* ptr = &pixels[0][0];
-	auto imageSpan = OIIO::image_span(ptr, CHANNELS, width, height);
-	return imageSpan.as_writable_bytes_image_span();
+	auto imageSpan = OIIO::image_span<T>(ptr, CHANNELS, width * height, 1);
+	return imageSpan;
 }
 
 template <class T, u_int CHANNELS>
@@ -558,6 +593,17 @@ void ImageMapStorageImpl<T, CHANNELS>::ReverseGammaCorrection(const float gamma)
 }
 
 template <class T, u_int CHANNELS>
+OIIO::image_span<std::byte> ImageMapStorageImpl<T, CHANNELS>::ToSpan() {
+	auto span = OIIO::image_span<T>(
+		static_cast<T*>(GetPixelsData()),
+		CHANNELS,
+		width,
+		height
+	);
+	return span.as_writable_bytes_image_span();
+}
+
+template <class T, u_int CHANNELS>
 ImageMapStorageUPtr ImageMapStorageImpl<T, CHANNELS>::Copy() const {
 	const u_int pixelCount = width * height;
 	std::vector<ImageMapPixel<T, CHANNELS>> newPixels(pixelCount);
@@ -565,7 +611,7 @@ ImageMapStorageUPtr ImageMapStorageImpl<T, CHANNELS>::Copy() const {
 	std::copy(pixels.begin(), pixels.end(), newPixels.begin());
 
 	return std::make_unique<ImageMapStorageImpl<T, CHANNELS>>(
-		std::move(newPixels), width, height, wrapType, filterType
+		width, height, wrapType, filterType, std::move(newPixels)
 	);
 }
 
@@ -583,7 +629,7 @@ ImageMapStorageUPtr ImageMapStorageImpl<T, CHANNELS>::SelectChannel(
 			newPixels.emplace_back(p[channel]);
 		}
 		return std::make_unique<ImageMapStorageImpl<T, 1>>(
-			std::move(newPixels), width, height, wrapType, filterType
+			width, height, wrapType, filterType, std::move(newPixels)
 		);
 	};
 
@@ -641,7 +687,7 @@ ImageMapStorageUPtr ImageMapStorageImpl<T, CHANNELS>::SelectChannel(
 			}
 
 			return std::make_unique<ImageMapStorageImpl<T, 1>>(
-				std::move(newPixels), width, height, wrapType, filterType
+				width, height, wrapType, filterType, std::move(newPixels)
 			);
 		}
 		case ImageMapStorage::RGB: {
@@ -655,7 +701,7 @@ ImageMapStorageUPtr ImageMapStorageImpl<T, CHANNELS>::SelectChannel(
 				newPixels.emplace_back(p[0]);
 			}
 			return std::make_unique<ImageMapStorageImpl<T, 3>>(
-				std::move(newPixels), width, height, wrapType, filterType
+				width, height, wrapType, filterType, std::move(newPixels)
 			);
 		}
 		case ImageMapStorage::DIRECTX2OPENGL_NORMALMAP: {
@@ -676,7 +722,7 @@ ImageMapStorageUPtr ImageMapStorageImpl<T, CHANNELS>::SelectChannel(
 			}
 
 			return std::make_unique<ImageMapStorageImpl<T, 3>>(
-				std::move(newPixels), width, height, wrapType, filterType
+				width, height, wrapType, filterType, std::move(newPixels)
 			);
 		}
 		default:
@@ -797,6 +843,18 @@ void ImageMap::Reload(const string &fileName, const u_int widthHint, const u_int
 	Init(fileName, instrumentationInfo->originalImgCfg, widthHint, heightHint);
 }
 
+
+template<typename T>
+static auto createBuffer(u_int channelCount, u_int width, u_int height) {
+	switch(channelCount) {
+		case 1: return std::vector<ImageMapPixel<T, 1>>(width * height);
+		case 2: return std::vector<ImageMapPixel<T, 2>>(width * height);
+		case 3: return std::vector<ImageMapPixel<T, 3>>(width * height);
+		case 4: return std::vector<ImageMapPixel<T, 4>>(width * height);
+		// TODO default: throw
+	}
+}
+
 void ImageMap::Init(const string &fileName, const ImageMapConfig &cfg,
 		const u_int widthHint, const u_int heightHint) {
 	const string resolvedFileName = SLG_FileNameResolver.ResolveFile(fileName);
@@ -804,111 +862,118 @@ void ImageMap::Init(const string &fileName, const ImageMapConfig &cfg,
 
 	if (!std::filesystem::exists(resolvedFileName))
 		throw runtime_error("ImageMap file doesn't exist: " + resolvedFileName);
-	else {
-		ImageSpec config;
-		config.attribute ("oiio:UnassociatedAlpha", 1);
-		unique_ptr<ImageInput> in(ImageInput::open(resolvedFileName, &config));
 
-		if (in.get()) {
-			// Check the mipmap level available
-			int mipmapLevel = 0;
-			stringstream ss;
-			vector<pair<u_int, u_int> > mipmapSizes;
-			while (in->seek_subimage(0, mipmapLevel)) {
-				const ImageSpec &spec = in->spec();
-				
-				mipmapSizes.push_back(make_pair(spec.width, spec.height));
-				ss << "[" << spec.width << "x" << spec.height << "]";
 
-				++mipmapLevel;
-			}
-			SDL_LOG("Mip map available: " << ss.str());
-			
-			// Select the best mipmap
-			u_int bestMipmapIndex = 0;
-			u_int bestMipmapWidth = mipmapSizes[0].first;
-			u_int bestMipmapHeight = mipmapSizes[0].second;
+	ImageSpec config;
+	config.attribute ("oiio:UnassociatedAlpha", 1);
+	std::unique_ptr<ImageInput> in(ImageInput::open(resolvedFileName, &config));
 
-			if ((widthHint > 0) || (heightHint > 0)) {
-				// Only if I have size hints
-				for (u_int i = 1 ; i < mipmapSizes.size(); ++i) {
-					if ((mipmapSizes[i].first >= widthHint) &&
-							(mipmapSizes[i].second >= heightHint) &&
-							(mipmapSizes[i].first < bestMipmapWidth) &&
-							(mipmapSizes[i].second < bestMipmapHeight)) {
-						bestMipmapIndex = i;
-						bestMipmapWidth = mipmapSizes[i].first;
-						bestMipmapHeight = mipmapSizes[i].second;
-					}
-				}
-			}
+	if (!in)
+		throw runtime_error(
+			"Error opening image file: " + resolvedFileName +
+			" (error = " + geterror() +")"
+		);
 
-			SDL_LOG("Reading mip map level: " << bestMipmapIndex);
-			if (!in->seek_subimage(0, bestMipmapIndex))
-				throw runtime_error("Unable to read mip map level: " + ToString(bestMipmapIndex));
+	// Check the mipmap level available
+	int mipmapLevel = 0;
+	stringstream ss;
+	std::vector<pair<u_int, u_int> > mipmapSizes;
+	while (in->seek_subimage(0, mipmapLevel)) {
+		const ImageSpec &spec = in->spec();
 
-			const ImageSpec &spec = in->spec();
-			u_int width = spec.width;
-			u_int height = spec.height;
-			u_int channelCount = spec.nchannels;
+		mipmapSizes.push_back(make_pair(spec.width, spec.height));
+		ss << "[" << spec.width << "x" << spec.height << "]";
 
-			if ((channelCount != 1) && (channelCount != 2) &&
-					(channelCount != 3) && (channelCount != 4))
-				throw runtime_error("Unsupported number of channels in an ImageMap: " + ToString(channelCount));
-
-			// Anything not TypeDesc::UCHAR or TypeDesc::HALF, is stored in float format
-
-			ImageMapStorage::StorageType selectedStorageType = cfg.storageType;
-			if (selectedStorageType == ImageMapStorage::AUTO) {
-				// Automatically select the storage type
-
-				if (spec.format == TypeDesc::UCHAR)
-					selectedStorageType = ImageMapStorage::BYTE;
-				else if (spec.format == TypeDesc::HALF)
-					selectedStorageType = ImageMapStorage::HALF;
-				else
-					selectedStorageType = ImageMapStorage::FLOAT;
-			}
-
-			switch (selectedStorageType) {
-				case ImageMapStorage::BYTE: {
-					pixelStorage = AllocImageMapStorage<u_char>(
-						channelCount, width, height, cfg.wrapType, cfg.filterType
-					);
-
-					in->read_image(
-						0, 0, 0, channelCount, TypeDesc::UCHAR, pixelStorage->GetPixelsSpan());
-					//TODO
-					//in->read_image(0, 0, 0, channelCount, TypeDesc::UCHAR, pixelStorage->GetPixelsData());
-					in->close();
-					in.reset();
-					break;
-				}
-				case ImageMapStorage::HALF: {
-					pixelStorage = AllocImageMapStorage<half>(channelCount, width, height,
-							cfg.wrapType, cfg.filterType);
-
-					in->read_image(0, 0, 0, channelCount, TypeDesc::HALF, pixelStorage->GetPixelsData());
-					in->close();
-					in.reset();
-					break;
-				}
-				case ImageMapStorage::FLOAT: {
-					pixelStorage = AllocImageMapStorage<float>(channelCount, width, height,
-							cfg.wrapType, cfg.filterType);
-
-					in->read_image(0, 0, 0, channelCount, TypeDesc::FLOAT, pixelStorage->GetPixelsData());
-					in->close();
-					in.reset();
-					break;
-				}
-				default:
-					throw runtime_error("Unsupported selected storage type in an ImageMap: " + ToString(selectedStorageType));
-			}
-		} else
-			throw runtime_error("Error opening image file: " + resolvedFileName +
-					" (error = " + geterror() +")");
+		++mipmapLevel;
 	}
+	SDL_LOG("Mip map available: " << ss.str());
+
+	// Select the best mipmap
+	u_int bestMipmapIndex = 0;
+	u_int bestMipmapWidth = mipmapSizes[0].first;
+	u_int bestMipmapHeight = mipmapSizes[0].second;
+
+	if ((widthHint > 0) || (heightHint > 0)) {
+		// Only if I have size hints
+		for (u_int i = 1 ; i < mipmapSizes.size(); ++i) {
+			if ((mipmapSizes[i].first >= widthHint) &&
+					(mipmapSizes[i].second >= heightHint) &&
+					(mipmapSizes[i].first < bestMipmapWidth) &&
+					(mipmapSizes[i].second < bestMipmapHeight)) {
+				bestMipmapIndex = i;
+				bestMipmapWidth = mipmapSizes[i].first;
+				bestMipmapHeight = mipmapSizes[i].second;
+			}
+		}
+	}
+
+	SDL_LOG("Reading mip map level: " << bestMipmapIndex);
+	if (!in->seek_subimage(0, bestMipmapIndex))
+		throw runtime_error(
+			"Unable to read mip map level: " + ToString(bestMipmapIndex)
+		);
+
+	const ImageSpec &spec = in->spec();
+	u_int width = spec.width;
+	u_int height = spec.height;
+	u_int channelCount = spec.nchannels;
+
+	if ((channelCount != 1) && (channelCount != 2) &&
+			(channelCount != 3) && (channelCount != 4))
+		throw runtime_error(
+			"Unsupported number of channels in an ImageMap: " + ToString(channelCount)
+		);
+
+	// Anything not TypeDesc::UCHAR or TypeDesc::HALF, is stored in float format
+
+	ImageMapStorage::StorageType selectedStorageType = cfg.storageType;
+	if (selectedStorageType == ImageMapStorage::AUTO) {
+		// Automatically select the storage type
+
+		if (spec.format == TypeDesc::UCHAR)
+			selectedStorageType = ImageMapStorage::BYTE;
+		else if (spec.format == TypeDesc::HALF)
+			selectedStorageType = ImageMapStorage::HALF;
+		else
+			selectedStorageType = ImageMapStorage::FLOAT;
+	}
+
+	// Allocate storage
+	TypeDesc td;
+	switch (selectedStorageType) {
+		case ImageMapStorage::BYTE:
+			pixelStorage = AllocImageMapStorage<u_char>(
+				channelCount, width, height, cfg.wrapType, cfg.filterType
+			);
+			td = TypeDesc::UCHAR;
+			break;
+		case ImageMapStorage::HALF:
+			pixelStorage = AllocImageMapStorage<half>(
+				channelCount, width, height, cfg.wrapType, cfg.filterType
+			);
+			td = TypeDesc::HALF;
+			break;
+		case ImageMapStorage::FLOAT:
+			pixelStorage = AllocImageMapStorage<float>(
+				channelCount, width, height, cfg.wrapType, cfg.filterType
+			);
+			td = TypeDesc::FLOAT;
+			break;
+		default: throw runtime_error(
+			"Unsupported selected storage type in an ImageMap: "
+			+ ToString(selectedStorageType)
+		);
+	}
+
+	// Read image
+	bool res = in->read_image(
+		0, bestMipmapIndex, 0, channelCount, td, pixelStorage->ToSpan()
+	);
+	if (not res) {
+		auto error = in->geterror();
+		SDL_LOG("Error reading image map: " << error);
+	}
+	in->close();
 
 	switch (cfg.colorSpaceCfg.colorSpaceType) {
 		case ColorSpaceConfig::NOP_COLORSPACE:
@@ -926,7 +991,7 @@ void ImageMap::Init(const string &fileName, const ImageMapConfig &cfg,
 			throw runtime_error("Unknown color space in ImageMap::ImageMap(" +
 					fileName + "): " + ToString(cfg.colorSpaceCfg.colorSpaceType));
 	}
-	
+
 	SelectChannel(cfg.selectionType);
 	Preprocess();
 }

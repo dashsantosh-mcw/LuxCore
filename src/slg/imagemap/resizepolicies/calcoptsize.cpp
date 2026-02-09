@@ -247,7 +247,6 @@ void ImageMapResizePolicy::RenderFunc(
 	}
 
 	//frameBuffer.SaveHDR("thread" + ToString(threadIndex) + ".exr");
-	
 	threadsSyncBarrier.arrive_and_wait();
 
 	// Delete thread image maps instrumentation
