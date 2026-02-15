@@ -257,7 +257,7 @@ void Film::Output() {
 void Film::Output(
 	const string &fileName,
 	const FilmOutputs::FilmOutputType type,
-	PropertiesPtr props,
+	PropertiesRPtr props,
 	const bool executeImagePipeline
 ) {
 	// Handle the special case of the serialized film output

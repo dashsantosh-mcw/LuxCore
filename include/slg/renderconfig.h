@@ -31,9 +31,9 @@
 #include <memory>
 
 namespace slg {
-using luxrays::PropertiesPtr;
+using luxrays::PropertiesRPtr;
 using luxrays::PropertiesUPtr;
-using luxrays::PropertiesConstPtr;
+using luxrays::PropertiesConstRPtr;
 using luxrays::PropertiesConstRef;
 using luxrays::PropertiesRef;
 
@@ -52,10 +52,10 @@ public:
 	// Constructors are private, please use factory instead
 
 	// Case #1: External scene provided
-	RenderConfig(Private, PropertiesPtr props, SceneRef scene);
+	RenderConfig(Private, PropertiesRPtr props, SceneRef scene);
 
 	// Case #2: No external scene provided, will generate an internal one
-	RenderConfig(Private, PropertiesPtr props);
+	RenderConfig(Private, PropertiesRPtr props);
 
 	bool HasCachedKernels();
 
@@ -81,14 +81,14 @@ public:
 	SamplerUPtr AllocSampler(
 		const luxrays::RandomGeneratorUPtr & rndGen,
 		FilmRef film,
-		FilmSampleSplatterPtr flmSplatter,
+		FilmSampleSplatterRPtr flmSplatter,
 		const std::shared_ptr<SamplerSharedData> sharedData,
 		const luxrays::Properties &additionalProps
 	) const;
 	SamplerUPtr AllocSampler(
 		const luxrays::RandomGeneratorUPtr & rndGen,
 		std::experimental::observer_ptr<Film> film,
-		FilmSampleSplatterPtr flmSplatter,
+		FilmSampleSplatterRPtr flmSplatter,
 		const std::shared_ptr<SamplerSharedData> sharedData,
 		const luxrays::Properties &additionalProps
 	) const;
@@ -96,10 +96,10 @@ public:
 
 	RenderEngineUPtr AllocRenderEngine();
 
-	PropertiesPtr ToProperties() const;
+	PropertiesRPtr ToProperties() const;
 
 	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
-	static luxrays::PropertiesPtr GetDefaultProperties();
+	static luxrays::PropertiesRPtr GetDefaultProperties();
 
 	static RenderConfigUPtr LoadSerialized(const std::string &fileName);
 	static void SaveSerialized(
@@ -122,7 +122,7 @@ public:
 	SceneRef GetScene() { return sceneRef; }
 	PropertiesConstRef GetConfig() const { return *cfg; }
 	PropertiesRef GetConfig() { return *cfg; }
-	PropertiesPtr GetConfigPtr() { return cfg; }
+	PropertiesRPtr GetConfigPtr() { return cfg; }
 
 
 	// Serialization stuff

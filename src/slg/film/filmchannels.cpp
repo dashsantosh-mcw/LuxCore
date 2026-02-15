@@ -37,7 +37,7 @@ using namespace slg;
 void Film::FreeChannels() {
 }
 
-void Film::AddChannel(const FilmChannelType type, PropertiesPtr prop) {
+void Film::AddChannel(const FilmChannelType type, PropertiesRPtr prop) {
 	if (initialized)
 		throw runtime_error("It is only possible to add a channel to a Film before initialization");
 

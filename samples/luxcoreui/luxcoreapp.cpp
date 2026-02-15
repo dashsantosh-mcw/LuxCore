@@ -38,7 +38,7 @@ ImVec4 LuxCoreApp::colLabel = ImVec4(1.f, .5f, 0.f, 1.f);
 // LuxCoreApp
 //------------------------------------------------------------------------------
 
-LuxCoreApp::LuxCoreApp(RenderConfigPtr & renderConfig) :
+LuxCoreApp::LuxCoreApp(RenderConfigRPtr & renderConfig) :
 		// Note: isOpenCLAvailable and isCUDAAvailable have to be initialized before
 		// ObjectEditorWindow constructors call (it is used by RenderEngineWindow).
 		isOpenCLAvailable(GetPlatformDesc()->Get(Property("compile.LUXRAYS_ENABLE_OPENCL")(false)).Get<bool>()),
@@ -195,7 +195,7 @@ void LuxCoreApp::SetRenderingEngineType(const string &engineType) {
 	}
 }
 
-void LuxCoreApp::RenderConfigParse(PropertiesPtr props) {
+void LuxCoreApp::RenderConfigParse(PropertiesRPtr props) {
 	if (session) {
 		// Reset the session
 		session.reset();
@@ -278,26 +278,26 @@ void LuxCoreApp::LoadRenderConfig(const std::string &fileName, const std::string
 
 			auto scene = ScenePtr(Scene::Create());
 			scene->Parse(sceneProps);
-			PropertiesPtr ptr = renderConfigProps;
-			config = RenderConfigPtr(RenderConfig::Create(std::move(renderConfigProps), scene));
+			PropertiesRPtr ptr = renderConfigProps;
+			config = RenderConfigRPtr(RenderConfig::Create(std::move(renderConfigProps), scene));
 			config->DeleteSceneOnExit();
 
 			StartRendering();
 		} else if (ext == ".cfg") {
 			// It is a LuxCore SDL file
-			config = RenderConfigPtr(RenderConfig::Create(std::make_unique<Properties>(fileName)));
+			config = RenderConfigRPtr(RenderConfig::Create(std::make_unique<Properties>(fileName)));
 
 			StartRendering();
 		} else if (ext == ".bcf") {
 			// It is a LuxCore RenderConfig binary archive
-			config = RenderConfigPtr(RenderConfig::Create(fileName));
+			config = RenderConfigRPtr(RenderConfig::Create(fileName));
 
 			StartRendering();
 		} else if (ext == ".rsm") {
 			// It is a LuxCore resume file
 			std::shared_ptr<RenderState> startState;
 			std::unique_ptr<Film> startFilm;
-			config = RenderConfigPtr(RenderConfig::Create(fileName, startState, startFilm));
+			config = RenderConfigRPtr(RenderConfig::Create(fileName, startState, startFilm));
 
 			StartRendering(startState, startFilm);
 		} else

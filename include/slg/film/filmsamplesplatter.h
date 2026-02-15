@@ -36,7 +36,7 @@ public:
 	~FilmSampleSplatter();
 
 	FilterConstRef GetFilter() const { return *filter; }
-	const FilterUPtr& GetFilterPtr() const { return filter; }
+	const FilterUPtr& GetFilterRPtr() const { return filter; }
 
 	// This method must be thread-safe.
 	void AtomicSplatSample(

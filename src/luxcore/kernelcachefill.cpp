@@ -262,7 +262,7 @@ static void RenderTestScene(const Properties &cfgSetUpProps, const Properties &s
 			Property("film.outputs.1.type")("RGB_IMAGEPIPELINE") <<
 			Property("film.outputs.1.filename")("image.png");
 
-	RenderConfigPtr config = RenderConfig::Create(std::move(cfgProps), sceneptr);
+	RenderConfigRPtr config = RenderConfig::Create(std::move(cfgProps), sceneptr);
 	auto session = RenderSession::Create(config);
 
 	// Start the rendering
@@ -280,7 +280,7 @@ static void RenderTestScene(const Properties &cfgSetUpProps, const Properties &s
 }
 
 static void KernelCacheFillImpl(
-	PropertiesPtr configPtr,
+	PropertiesRPtr configPtr,
 	void (*ProgressHandler)(const size_t, const size_t)
 ) {
 	auto& config = *configPtr;
@@ -321,7 +321,7 @@ static void KernelCacheFillImpl(
 
 #endif
 
-void luxcore::KernelCacheFill(PropertiesPtr config, void (*ProgressHandler)(const size_t, const size_t)) {
+void luxcore::KernelCacheFill(PropertiesRPtr config, void (*ProgressHandler)(const size_t, const size_t)) {
 	API_BEGIN("{}, {}", ToArgString(config),(void *)ProgressHandler);
 
 #if !defined(LUXRAYS_DISABLE_OPENCL)

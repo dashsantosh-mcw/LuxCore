@@ -102,7 +102,7 @@ bool Film::GetFilmSize(const Properties &cfg,
 	return subRegionUsed;
 }
 
-FilmUPtr Film::FromProperties(PropertiesPtr cfg) {
+FilmUPtr Film::FromProperties(PropertiesRPtr cfg) {
 	//--------------------------------------------------------------------------
 	// Create the Film
 	//--------------------------------------------------------------------------

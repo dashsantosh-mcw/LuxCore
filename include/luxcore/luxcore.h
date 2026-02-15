@@ -81,17 +81,17 @@ using ScenePtr = std::unique_ptr<Scene>;
 using SceneConstPtr = std::unique_ptr<const Scene>;
 
 class RenderConfig;
-using RenderConfigPtr = std::unique_ptr<RenderConfig>;
+using RenderConfigRPtr = std::unique_ptr<RenderConfig>;
 using RenderConfigRef = RenderConfig &;
 
 class RenderState;
-using RenderStatePtr = std::shared_ptr<RenderState>;
+using RenderStateRPtr = std::shared_ptr<RenderState>;
 
 class RenderSession;
-using RenderSessionPtr = std::unique_ptr<RenderSession>;
+using RenderSessionRPtr = std::unique_ptr<RenderSession>;
 
 using luxrays::Properties;
-using PropertiesPtr = const std::unique_ptr<luxrays::Properties> &;
+using PropertiesRPtr = const std::unique_ptr<luxrays::Properties> &;
 using PropertiesUPtr = std::unique_ptr<luxrays::Properties>;
 
 class Film;
@@ -184,7 +184,7 @@ CPP_EXPORT CPP_API void ParseLXS(
  * Property("kernelcachefill.renderengine.types")("PATHOCL", "TILEPATHOCL", "RTPATHOCL").
  */
 CPP_EXPORT CPP_API void KernelCacheFill(
-	PropertiesPtr config,
+	PropertiesRPtr config,
 	void (*ProgressHandler)(const size_t, const size_t) = NULL
 );
 
@@ -384,7 +384,7 @@ public:
 	 *
 	 */
 	static FilmUPtr Create(
-		PropertiesPtr props,
+		PropertiesRPtr props,
 		const bool hasPixelNormalizedChannel,
 		const bool hasScreenNormalizedChannel
 	);
@@ -468,7 +468,7 @@ public:
 	virtual void SaveOutput(
 		const std::string &fileName,
 		const FilmOutputType type,
-		PropertiesPtr props
+		PropertiesRPtr props
 	) const = 0;
 
 	/*!
@@ -622,7 +622,7 @@ public:
 	 *
 	 * \param props are the Properties to set.
 	 */
-	virtual void Parse(PropertiesPtr props) = 0;
+	virtual void Parse(PropertiesRPtr props) = 0;
 
 	/*!
 	 * \brief Delete all image pipelines and goes the default image
@@ -852,7 +852,7 @@ public:
 	 * \param resizePolicyProps defines texture image maps resize policy.
 	 */
 	static ScenePtr Create(
-		PropertiesPtr resizePolicyProps = nullptr
+		PropertiesRPtr resizePolicyProps = nullptr
 	);
 	/*!
 	 * \brief Creates a new Scene as defined by props.
@@ -862,8 +862,8 @@ public:
 	 */
 
 	static ScenePtr Create(
-		PropertiesPtr props,
-		PropertiesPtr resizePolicyProps = nullptr
+		PropertiesRPtr props,
+		PropertiesRPtr resizePolicyProps = nullptr
 	);
 	/*!
 	 * \brief Creates a new Scene as defined in fileName file.
@@ -877,7 +877,7 @@ public:
 	 */
 	static ScenePtr Create(
 		const std::string &fileName,
-		PropertiesPtr resizePolicyProps = nullptr
+		PropertiesRPtr resizePolicyProps = nullptr
 	);
 
 	virtual ~Scene();
@@ -1093,7 +1093,7 @@ public:
 	 * \param props are the Properties with the definition of camera, textures,
 	 * materials and/or objects.
 	 */
-	virtual void Parse(PropertiesPtr props) = 0;
+	virtual void Parse(PropertiesRPtr props) = 0;
 
 	/*!
 	 * \brief Duplicate an object in an instance using the passed transformation.
@@ -1223,7 +1223,7 @@ public:
 	 *
 	 * \return a reference to the Properties of this Scene.
 	 */
-	virtual PropertiesPtr ToProperties() const = 0;
+	virtual PropertiesRPtr ToProperties() const = 0;
 	/*!
 	 * \brief Serializes a Scene in a file.
 	 *
@@ -1328,7 +1328,7 @@ public:
 	 *
 	 * \return the RenderConfig properties.
 	 */
-	virtual PropertiesPtr GetProperties() const = 0;
+	virtual PropertiesRPtr GetProperties() const = 0;
 	/*!
 	 * \brief Returns the Property with the given name or the default value if it
 	 * has not been defined.
@@ -1343,7 +1343,7 @@ public:
 	 *
 	 * \return the RenderConfig properties.
 	 */
-	virtual PropertiesPtr ToProperties() const = 0;
+	virtual PropertiesRPtr ToProperties() const = 0;
 
 	/*!
 	 * \brief Returns a reference to the Scene used in the RenderConfig.
@@ -1359,7 +1359,7 @@ public:
 	 *
 	 * \param props are the Properties to set.
 	 */
-	virtual void Parse(PropertiesPtr props) = 0;
+	virtual void Parse(PropertiesRPtr props) = 0;
 	/*!
 	 * \brief Deletes any configuration Property starting with the given prefix.
 	 * This method can be used only when the RenderConfig is not in use by a
@@ -1428,7 +1428,7 @@ public:
 	 *
 	 * \return the default Properties.
 	 */
-	static PropertiesPtr GetDefaultProperties();
+	static PropertiesRPtr GetDefaultProperties();
 };
 
 /*!
@@ -1462,7 +1462,7 @@ public:
 	 *
 	 * \param config is the RenderConfig used to create the rendering session.
 	 */
-	static RenderSessionPtr Create(const RenderConfigPtr & config);
+	static RenderSessionRPtr Create(const RenderConfigRPtr & config);
 
 	/*!
 	 * \brief Creates a new RenderSession using the provided RenderConfig and
@@ -1474,8 +1474,8 @@ public:
 	 * \param startFilm is the optional Film to use to resume rendering. This
 	 * parameter is usually set by RenderConfig
 	 */
-	static RenderSessionPtr Create(
-			const RenderConfigPtr & config,
+	static RenderSessionRPtr Create(
+			const RenderConfigRPtr & config,
 			std::shared_ptr<RenderState>&  startState,
 			Film& startFilm
 	);
@@ -1488,8 +1488,8 @@ public:
 	 * \param startStateFileName is the file name of a RenderState to use to resume rendering.
 	 * \param startFilmFileName is the file name of a Film to use to resume rendering.
 	 */
-	static RenderSessionPtr Create(
-		const RenderConfigPtr & config,
+	static RenderSessionRPtr Create(
+		const RenderConfigRPtr & config,
 		const std::string &startStateFileName,
 		const std::string &startFilmFileName
 	);
@@ -1599,7 +1599,7 @@ public:
 	 * \param props are the Properties with the definition of: film.imagepipeline(s).*
 	 * (including radiance channel scales), film.outputs.*, film.width or film.height.
 	 */
-	virtual void Parse(PropertiesPtr props) = 0;
+	virtual void Parse(PropertiesRPtr props) = 0;
 
 	/*!
 	 * \brief Save all the rendering related information (the LuxCore RenderConfig,

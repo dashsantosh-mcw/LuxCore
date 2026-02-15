@@ -62,7 +62,7 @@ using namespace slg;
 // Helpers
 //------------------------------------------------------------------------------
 
-static void PrintConfig(PropertiesPtr props) {
+static void PrintConfig(PropertiesRPtr props) {
 
 	if (not props) return;
 
@@ -86,7 +86,7 @@ static std::unique_ptr<Properties> defaultProperties;
 
 
 // Case #1: a scene is provided by caller
-RenderConfig::RenderConfig(Private p, PropertiesPtr props, SceneRef scn)
+RenderConfig::RenderConfig(Private p, PropertiesRPtr props, SceneRef scn)
 	:
 	cfg(std::make_unique<Properties>()),
 	sceneRef(scn)
@@ -107,7 +107,7 @@ RenderConfig::RenderConfig(Private p, PropertiesPtr props, SceneRef scn)
 
 
 // Case #2: no scene is provided by caller, RenderConfig has to create one
-RenderConfig::RenderConfig(Private p, PropertiesPtr props)
+RenderConfig::RenderConfig(Private p, PropertiesRPtr props)
 	:
 	cfg(std::make_unique<Properties>()),
 	sceneRef(NullScene)  // Temporary, awaiting scene construction
@@ -169,7 +169,7 @@ void RenderConfig::InitDefaultProperties() {
 }
 
 
-PropertiesPtr RenderConfig::GetDefaultProperties() {
+PropertiesRPtr RenderConfig::GetDefaultProperties() {
 	InitDefaultProperties();
 
 	return defaultProperties;
@@ -364,7 +364,7 @@ std::unique_ptr<SamplerSharedData> RenderConfig::AllocSamplerSharedData(
 std::unique_ptr<Sampler> RenderConfig::AllocSampler(
 	const std::unique_ptr<RandomGenerator> & rndGen,
 	std::experimental::observer_ptr<Film> film,
-	FilmSampleSplatterPtr flmSplatter,
+	FilmSampleSplatterRPtr flmSplatter,
 	const std::shared_ptr<SamplerSharedData> sharedData,
 	const Properties &additionalProps
 ) const {
@@ -377,7 +377,7 @@ std::unique_ptr<Sampler> RenderConfig::AllocSampler(
 std::unique_ptr<Sampler> RenderConfig::AllocSampler(
 	const std::unique_ptr<RandomGenerator> & rndGen,
 	FilmRef film,
-	FilmSampleSplatterPtr flmSplatter,
+	FilmSampleSplatterRPtr flmSplatter,
 	const std::shared_ptr<SamplerSharedData> sharedData,
 	const Properties &additionalProps
 ) const {
@@ -401,7 +401,7 @@ RenderEngineUPtr RenderConfig::AllocRenderEngine() {
 	return RenderEngine::FromProperties(*this);
 }
 
-PropertiesPtr RenderConfig::ToProperties() const {
+PropertiesRPtr RenderConfig::ToProperties() const {
 	if (!propsCache->GetSize())
 		propsCache = ToProperties(*cfg);
 

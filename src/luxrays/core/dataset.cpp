@@ -171,7 +171,7 @@ void DataSet::UpdateAccelerators() {
 	}
 }
 
-bool DataSet::IsEqual(DataSetConstPtr dataSet) const {
+bool DataSet::IsEqual(DataSetConstRPtr dataSet) const {
 	return (dataSet != NULL) && (dataSetID == dataSet->dataSetID);
 }
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

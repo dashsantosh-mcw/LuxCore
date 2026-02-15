@@ -57,20 +57,20 @@ using namespace slg;
 // Scene
 //------------------------------------------------------------------------------
 
-Scene::Scene(luxrays::PropertiesPtr resizePolicyProps) {
+Scene::Scene(luxrays::PropertiesRPtr resizePolicyProps) {
 	Init(resizePolicyProps);
 }
 
 Scene::Scene(
-	PropertiesPtr scnProps,
-	PropertiesPtr resizePolicyProps
+	PropertiesRPtr scnProps,
+	PropertiesRPtr resizePolicyProps
 ) {
 	Init(resizePolicyProps);
 
 	Parse(scnProps);
 }
 
-void Scene::Init(luxrays::PropertiesPtr resizePolicyProps) {
+void Scene::Init(luxrays::PropertiesRPtr resizePolicyProps) {
 	defaultWorldVolume = nullptr;
 	// Just in case there is an unexpected exception during the scene loading
     camera = nullptr;
@@ -391,7 +391,7 @@ bool Scene::IsMeshDefined(const string &meshName) const {
 	return extMeshCache.IsExtMeshDefined(meshName);
 }
 
-void Scene::Parse(PropertiesPtr props) {
+void Scene::Parse(PropertiesRPtr props) {
 	if (enableParsePrint) {
 		SDL_LOG("========================Scene::Parse()========================="
 		<< endl << *props);

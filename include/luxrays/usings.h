@@ -97,11 +97,11 @@ using T##Ref = T&; \
 using T##ConstRef = const T&; \
 using T##UPtr = std::unique_ptr<T>; \
 using T##ConstUPtr = std::unique_ptr<const T>; \
-using T##Ptr = const std::unique_ptr<T> &; \
-using T##ConstPtr = const std::unique_ptr<const T> &; \
+using T##RPtr = const std::unique_ptr<T> &; \
+using T##ConstRPtr = const std::unique_ptr<const T> &; \
 using T##SPtr = std::shared_ptr<T>; \
-using T##OPtr = std::experimental::observer_ptr<T>; \
 using T##ConstSPtr = std::shared_ptr<const T>; \
+using T##OPtr = std::experimental::observer_ptr<T>; \
 using T##ConstOPtr = std::experimental::observer_ptr<const T>; \
 
 

@@ -43,13 +43,13 @@
 
 #define LA_ARRAYSIZE(_ARR)	((int)(sizeof(_ARR) / sizeof(*_ARR)))
 
-using luxcore::RenderConfigPtr;
-using luxcore::RenderSessionPtr;
+using luxcore::RenderConfigRPtr;
+using luxcore::RenderSessionRPtr;
 
 
 class LuxCoreApp {
 public:
-	LuxCoreApp(RenderConfigPtr & renderConfig);
+	LuxCoreApp(RenderConfigRPtr & renderConfig);
 	~LuxCoreApp();
 
 	void RunApp(
@@ -167,9 +167,9 @@ private:
 	HelpWindow helpWindow;
 	UserImportancePaintWindow userImportancePaintWindow;
 
-	RenderConfigPtr & config;
+	RenderConfigRPtr & config;
 
-	RenderSessionPtr session;
+	RenderSessionRPtr session;
 
 	GLuint renderFrameBufferTexID;
 	GLenum renderFrameBufferTexMinFilter, renderFrameBufferTexMagFilter;

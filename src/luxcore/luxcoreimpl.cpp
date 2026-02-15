@@ -58,7 +58,7 @@ std::unique_ptr<FilmImpl> FilmImpl::Create(const std::string &fileName) {
 	return std::make_unique<FilmImplStandalone>(fileName);
 }
 std::unique_ptr<FilmImpl> FilmImpl::Create(
-	luxrays::PropertiesPtr props,
+	luxrays::PropertiesRPtr props,
 	const bool hasPixelNormalizedChannel,
 	const bool hasScreenNormalizedChannel
 ) {
@@ -191,7 +191,7 @@ void FilmImpl::AddFilm(FilmConstRef film,
 void FilmImpl::SaveOutput(
 	const std::string &fileName,
 	const FilmOutputType type,
-	PropertiesPtr props
+	PropertiesRPtr props
 ) const {
 	API_BEGIN("{}, {}, {}", ToArgString(fileName),ToArgString(type), ToArgString(*props));
 
@@ -407,7 +407,7 @@ float * FilmImplSession::UpdateChannelFloat(const FilmChannelType type,
 	return result;
 }
 
-void FilmImplSession::Parse(PropertiesPtr props) {
+void FilmImplSession::Parse(PropertiesRPtr props) {
 	API_BEGIN("{}", ToArgString(props));
 
 	throw runtime_error("Film::Parse() can be used only with a stand alone Film");
@@ -502,7 +502,7 @@ FilmImplStandalone::FilmImplStandalone(const std::string &fileName) {
 }
 
 FilmImplStandalone::FilmImplStandalone(
-	luxrays::PropertiesPtr props,
+	luxrays::PropertiesRPtr props,
 	const bool hasPixelNormalizedChannel,
 	const bool hasScreenNormalizedChannel
 ) {
@@ -627,7 +627,7 @@ float *FilmImplStandalone::UpdateChannelFloat(const FilmChannelType type,
 	return result;
 }
 
-void FilmImplStandalone::Parse(PropertiesPtr props) {
+void FilmImplStandalone::Parse(PropertiesRPtr props) {
 	API_BEGIN("{}", ToArgString(props));
 
 	standAloneFilm->Parse(props);
@@ -807,7 +807,7 @@ SceneImpl::SceneImpl(Private p, slg::SceneRef scn) :
 {}
 
 // Other cases: SceneImpl owns the scene.
-SceneImpl::SceneImpl(Private p, luxrays::PropertiesPtr resizePolicyProps) :
+SceneImpl::SceneImpl(Private p, luxrays::PropertiesRPtr resizePolicyProps) :
 	camera(std::make_unique<CameraImpl>(*this)),
 	scenePropertiesCache(std::make_unique<luxrays::Properties>()),
 	internalScene(std::make_unique<slg::Scene>(resizePolicyProps)),
@@ -816,8 +816,8 @@ SceneImpl::SceneImpl(Private p, luxrays::PropertiesPtr resizePolicyProps) :
 
 SceneImpl::SceneImpl(
 	Private p,
-	luxrays::PropertiesPtr props,
-	luxrays::PropertiesPtr resizePolicyProps
+	luxrays::PropertiesRPtr props,
+	luxrays::PropertiesRPtr resizePolicyProps
 ) :
 	camera(std::make_unique<CameraImpl>(*this)),
 	scenePropertiesCache(std::make_unique<luxrays::Properties>()),
@@ -827,7 +827,7 @@ SceneImpl::SceneImpl(
 
 static slg::SceneUPtr LoadScene(
 	const string fileName,
-	luxrays::PropertiesPtr resizePolicyProps
+	luxrays::PropertiesRPtr resizePolicyProps
 ) {
 	const string ext = luxrays::GetFileNameExt(fileName);
 	if (ext == ".bsc") {
@@ -848,7 +848,7 @@ static slg::SceneUPtr LoadScene(
 SceneImpl::SceneImpl(
 	Private p,
 	const string fileName,
-	luxrays::PropertiesPtr resizePolicyProps
+	luxrays::PropertiesRPtr resizePolicyProps
 ) :
 	internalScene(LoadScene(fileName, resizePolicyProps)),
 	sceneRef(*internalScene),
@@ -1104,7 +1104,7 @@ const unsigned int  SceneImpl::GetObjectCount() const {
 	return result;
 }
 
-void SceneImpl::Parse(PropertiesPtr props) {
+void SceneImpl::Parse(PropertiesRPtr props) {
 	API_BEGIN("{}", ToArgString(props));
 
 	// Invalidate the scene properties cache
@@ -1431,7 +1431,7 @@ void SceneImpl::DefineMesh(std::unique_ptr<ExtTriangleMesh>&& mesh) {
 	API_END();
 }
 
-PropertiesPtr SceneImpl::ToProperties() const {
+PropertiesRPtr SceneImpl::ToProperties() const {
 	API_BEGIN_NOARGS();
 
 	if (!scenePropertiesCache->GetSize())
@@ -1478,7 +1478,7 @@ auto result = TriangleMesh::AllocTrianglesBuffer(meshTriCount);
 // Case #1: Non owing constructor: RenderConfigImpl is provided a scene (as a ref)
 RenderConfigImpl::RenderConfigImpl(
 	Private p,
-	PropertiesPtr props,
+	PropertiesRPtr props,
 	SceneImpl& scn
 ) :
 	sceneRef(scn),
@@ -1489,7 +1489,7 @@ RenderConfigImpl::RenderConfigImpl(
 // In these cases, RenderConfigImpl owns the scene
 RenderConfigImpl::RenderConfigImpl(
 	Private p,
-	PropertiesPtr props
+	PropertiesRPtr props
 ) :
 	renderConfig(slg::RenderConfig::Create(std::ref(props))),  // Build an internal scene
 	internalScene(SceneImpl::Create<slg::SceneRef>(renderConfig->GetScene())),
@@ -1553,7 +1553,7 @@ RenderConfigImpl::RenderConfigImpl(
 		);
 }
 
-PropertiesPtr RenderConfigImpl::GetProperties() const {
+PropertiesRPtr RenderConfigImpl::GetProperties() const {
 	API_BEGIN_NOARGS();
 
 	auto& result = renderConfig->GetConfigPtr();
@@ -1574,10 +1574,10 @@ const Property RenderConfigImpl::GetProperty(const std::string &name) const {
 	return result;
 }
 
-PropertiesPtr RenderConfigImpl::ToProperties() const {
+PropertiesRPtr RenderConfigImpl::ToProperties() const {
 	API_BEGIN_NOARGS();
 
-	PropertiesPtr result = renderConfig->ToProperties();
+	PropertiesRPtr result = renderConfig->ToProperties();
 
 	//API_RETURN("{}", ToArgString(result));
 	API_END();
@@ -1615,7 +1615,7 @@ bool RenderConfigImpl::HasCachedKernels() const {
 	return result;
 }
 
-void RenderConfigImpl::Parse(PropertiesPtr props) {
+void RenderConfigImpl::Parse(PropertiesRPtr props) {
 	API_BEGIN("{}", ToArgString(props));
 
 	renderConfig->Parse(*props);
@@ -1676,7 +1676,7 @@ void RenderConfigImpl::ExportGLTF(const std::string &fileName) const {
 	API_END();
 }
 
-PropertiesPtr RenderConfigImpl::GetDefaultProperties() {
+PropertiesRPtr RenderConfigImpl::GetDefaultProperties() {
 	API_BEGIN_NOARGS();
 
 	auto& result = slg::RenderConfig::GetDefaultProperties();
@@ -1907,7 +1907,7 @@ LuxFilmRef RenderSessionImpl::GetFilm() {
 	return *film;
 }
 
-FilmImplPtr RenderSessionImpl::GetFilmPtr() {
+FilmImplRPtr RenderSessionImpl::GetFilmPtr() {
 	API_BEGIN_NOARGS();
 
 	API_RETURN("{}", (void *)film.get());
@@ -2099,7 +2099,7 @@ const PropertiesUPtr & RenderSessionImpl::GetStats() const {
 	return result;
 }
 
-void RenderSessionImpl::Parse(luxrays::PropertiesPtr props) {
+void RenderSessionImpl::Parse(luxrays::PropertiesRPtr props) {
 	API_BEGIN("{}", ToArgString(props));
 
 	renderSession->Parse(props);

@@ -43,8 +43,8 @@ static string GetFileNameExt(const string &fileName) {
 }
 
 static void BatchRendering(
-	const RenderConfigPtr & config,
-	RenderStatePtr startState,
+	const RenderConfigRPtr & config,
+	RenderStateRPtr startState,
 	Film& startFilm,
 	const bool showDevicesStats
 ) {
@@ -192,8 +192,8 @@ int main(int argc, char *argv[]) {
 
 		// Check if we have to parse a LuxCore SDL file or a LuxRender SDL file
 		std::unique_ptr<Scene> scene;
-		RenderConfigPtr config;
-		RenderStatePtr startRenderState;
+		RenderConfigRPtr config;
+		RenderStateRPtr startRenderState;
 		FilmUPtr startFilm;
 
 		if (configFileName.compare("") != 0) {

@@ -291,7 +291,7 @@ protected:
 
 // These usings cannot be gathered in slg/usings.h, as C++ does not allow
 // forward declarations on nested classes
-using ThreadFilmPtr = std::shared_ptr<PathOCLBaseOCLRenderThread::ThreadFilm>;
+using ThreadFilmRPtr = std::shared_ptr<PathOCLBaseOCLRenderThread::ThreadFilm>;
 using ThreadFilmConstPtr = std::shared_ptr<const PathOCLBaseOCLRenderThread::ThreadFilm>;
 
 }

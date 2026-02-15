@@ -47,7 +47,7 @@ using RenderConfigImplRef = RenderConfigImpl &;
 using RenderConfigImplConstRef = const RenderConfigImpl &;
 
 class RenderStateImpl;
-using RenderStateImplPtr = std::shared_ptr<RenderStateImpl>;
+using RenderStateImplRPtr = std::shared_ptr<RenderStateImpl>;
 
 class SceneImpl;
 using SceneImplConstRef = const SceneImpl &;
@@ -60,7 +60,7 @@ using CameraImplUPtr = std::unique_ptr<CameraImpl>;
 
 class FilmImpl;
 using FilmImplUPtr = std::unique_ptr<FilmImpl>;
-using FilmImplPtr = const std::unique_ptr<FilmImpl> &;
+using FilmImplRPtr = const std::unique_ptr<FilmImpl> &;
 using FilmImplRef = FilmImpl&;
 
 
@@ -91,7 +91,7 @@ public:
 	static FilmImplUPtr Create(slg::FilmUPtr&& film);
 	static FilmImplUPtr Create(const std::string &fileName);
 	static FilmImplUPtr Create(
-		luxrays::PropertiesPtr props,
+		luxrays::PropertiesRPtr props,
 		const bool hasPixelNormalizedChannel,
 		const bool hasScreenNormalizedChannel
 	);
@@ -119,7 +119,7 @@ public:
 	void SaveOutput(
 		const std::string &fileName,
 		const FilmOutputType type,
-		luxrays::PropertiesPtr props
+		luxrays::PropertiesRPtr props
 	) const;
 	virtual void SaveFilm(const std::string &fileName) const = 0;
 
@@ -151,7 +151,7 @@ public:
 	virtual unsigned int *UpdateChannelUInt(const FilmChannelType type,
 			const unsigned int index, const bool executeImagePipeline);
 
-	virtual void Parse(luxrays::PropertiesPtr props) = 0;
+	virtual void Parse(luxrays::PropertiesRPtr props) = 0;
 
 	virtual void DeleteAllImagePipelines() = 0;
 
@@ -177,7 +177,7 @@ class FilmImplStandalone : public FilmImpl {
 public:
 	FilmImplStandalone(const std::string &fileName);
 	FilmImplStandalone(
-		luxrays::PropertiesPtr props,
+		luxrays::PropertiesRPtr props,
 		const bool hasPixelNormalizedChannel,
 		const bool hasScreenNormalizedChannel
 	);
@@ -202,7 +202,7 @@ public:
 		const unsigned int index, const bool executeImagePipeline) override;
 
 
-	virtual void Parse(luxrays::PropertiesPtr props) override;
+	virtual void Parse(luxrays::PropertiesRPtr props) override;
 
 	virtual void DeleteAllImagePipelines() override;
 
@@ -248,7 +248,7 @@ public:
 		const unsigned int index, const bool executeImagePipeline) override;
 
 
-	virtual void Parse(luxrays::PropertiesPtr props) override;
+	virtual void Parse(luxrays::PropertiesRPtr props) override;
 
 	virtual void DeleteAllImagePipelines() override;
 
@@ -315,16 +315,16 @@ public:
 
 	// Constructors are private - please use factory
 	SceneImpl(Private, slg::SceneRef scn);  // Non owning constructor
-	SceneImpl(Private, luxrays::PropertiesPtr resizePolicyProps = nullptr);
+	SceneImpl(Private, luxrays::PropertiesRPtr resizePolicyProps = nullptr);
 	SceneImpl(
 		Private,
-		luxrays::PropertiesPtr props,
-		luxrays::PropertiesPtr resizePolicyProps
+		luxrays::PropertiesRPtr props,
+		luxrays::PropertiesRPtr resizePolicyProps
 	);
 	SceneImpl(
 		Private,
 		const std::string fileName,
-		luxrays::PropertiesPtr resizePolicyProps = nullptr
+		luxrays::PropertiesRPtr resizePolicyProps = nullptr
 	);
 
 	void GetBBox(float min[3], float max[3]) const;
@@ -372,7 +372,7 @@ public:
 	const unsigned int GetLightCount() const;
 	const unsigned int GetObjectCount() const;
 
-	void Parse(luxrays::PropertiesPtr props);
+	void Parse(luxrays::PropertiesRPtr props);
 
 	void DuplicateObject(
 		const std::string &srcObjName, const std::string &dstObjName,
@@ -426,7 +426,7 @@ public:
 			const unsigned int width, const unsigned int height,
 			ChannelSelectionType selectionType, WrapType wrapType);
 
-	luxrays::PropertiesPtr ToProperties() const;
+	luxrays::PropertiesRPtr ToProperties() const;
 	void Save(const std::string &fileName);
 
 	// Note: this method is not part of LuxCore API and it is used only internally
@@ -480,10 +480,10 @@ public:
 	// Constructors (private, please use factory instead)
 	RenderConfigImpl(  // Non owning constructor (scene is external)
 		Private,
-		luxrays::PropertiesPtr props,
+		luxrays::PropertiesRPtr props,
 		SceneImpl& scene
 	);
-	RenderConfigImpl(Private, luxrays::PropertiesPtr props);
+	RenderConfigImpl(Private, luxrays::PropertiesRPtr props);
 	RenderConfigImpl(Private, const std::string fileName);
 	RenderConfigImpl(
 		Private,
@@ -494,16 +494,16 @@ public:
 
 	virtual ~RenderConfigImpl() = default;
 
-	luxrays::PropertiesPtr GetProperties() const;
+	luxrays::PropertiesRPtr GetProperties() const;
 	const luxrays::Property GetProperty(const std::string &name) const;
-	luxrays::PropertiesPtr ToProperties() const;
+	luxrays::PropertiesRPtr ToProperties() const;
 
 	const Scene& GetScene() const override;
 	Scene& GetScene() override;
 
 	bool HasCachedKernels() const;
 
-	void Parse(luxrays::PropertiesPtr props);
+	void Parse(luxrays::PropertiesRPtr props);
 
 	void Delete(const std::string &prefix);
 
@@ -516,7 +516,7 @@ public:
 	void Export(const std::string &dirName) const;
 	void ExportGLTF(const std::string &fileName) const;
 
-	static luxrays::PropertiesPtr GetDefaultProperties();
+	static luxrays::PropertiesRPtr GetDefaultProperties();
 
 	template<typename T> T ReadFromSIF() const;
 
@@ -628,12 +628,12 @@ public:
 	void WaitNewFrame() override;
 
 	LuxFilmRef GetFilm() override;
-	FilmImplPtr GetFilmPtr();
+	FilmImplRPtr GetFilmPtr();
 
 	void UpdateStats() override;
 	const luxrays::PropertiesUPtr &GetStats() const override;
 
-	void Parse(luxrays::PropertiesPtr props) override;
+	void Parse(luxrays::PropertiesRPtr props) override;
 
 	void SaveResumeFile(const std::string &fileName) override;
 

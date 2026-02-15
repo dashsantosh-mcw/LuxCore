@@ -147,7 +147,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Check if we have to parse a LuxCore SDL file or a LuxRender SDL file
-    RenderConfigPtr config;
+    RenderConfigRPtr config;
     std::shared_ptr<RenderState> startRenderState = nullptr;
     std::unique_ptr<Film> startFilm = nullptr;
 

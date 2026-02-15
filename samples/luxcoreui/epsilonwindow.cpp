@@ -34,7 +34,7 @@ EpsilonWindow::EpsilonWindow(LuxCoreApp *a) : ObjectEditorWindow(a, "Epsilon") {
 }
 
 std::unique_ptr<Properties> EpsilonWindow::GetEpsilonProperties(
-    PropertiesPtr cfgProps
+    PropertiesRPtr cfgProps
 ) const {
 	return cfgProps->GetAllProperties("scene.epsilon");
 }
@@ -52,7 +52,7 @@ void EpsilonWindow::RefreshObjectProperties(const std::unique_ptr<Properties> & 
 	}
 }
 
-void EpsilonWindow::ParseObjectProperties(PropertiesPtr props) {
+void EpsilonWindow::ParseObjectProperties(PropertiesRPtr props) {
 	app->RenderConfigParse(GetEpsilonProperties(props));
 }
 

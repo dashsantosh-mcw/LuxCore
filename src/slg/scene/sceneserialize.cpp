@@ -38,8 +38,6 @@ using namespace slg;
 
 BOOST_CLASS_EXPORT_IMPLEMENT(slg::Scene)
 
-using ScenePtr = std::shared_ptr<Scene>;
-
 SceneUPtr Scene::LoadSerialized(const std::string &fileName) {
 	SerializationInputFile sif(fileName);
 

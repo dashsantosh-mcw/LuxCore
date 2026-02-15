@@ -304,7 +304,7 @@ PropertiesUPtr RenderEngine::GetDefaultProps() {
 }
 
 // Splattering
-FilmSampleSplatterPtr RenderEngine::GetSampleSplatter() const {
+FilmSampleSplatterRPtr RenderEngine::GetSampleSplatter() const {
 	return sampleSplatter;
 }
 
@@ -312,7 +312,7 @@ void RenderEngine::SetSampleSplatter(FilmSampleSplatterUPtr&& s) {
 	sampleSplatter = std::move(s);
 }
 
-void RenderEngine::SetSampleSplatter(FilterPtr filter) {
+void RenderEngine::SetSampleSplatter(FilterRPtr filter) {
 	SetSampleSplatter(std::make_unique<FilmSampleSplatter>(filter));
 }
 

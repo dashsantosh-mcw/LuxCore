@@ -32,7 +32,7 @@ using namespace luxcore;
 FilmRadianceGroupsWindow::FilmRadianceGroupsWindow(LuxCoreApp *a) : ObjectEditorWindow(a, "Film Radiance Group(s)") {
 }
 
-std::unique_ptr<Properties> FilmRadianceGroupsWindow::GetFilmRadianceGroupsProperties(PropertiesPtr cfgProps) const {
+std::unique_ptr<Properties> FilmRadianceGroupsWindow::GetFilmRadianceGroupsProperties(PropertiesRPtr cfgProps) const {
 	return cfgProps->GetAllProperties("film.imagepipelines." + ToString(app->imagePipelineIndex) + ".radiancescales");
 }
 

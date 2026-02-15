@@ -206,11 +206,11 @@ protected:
 
 	bool started, editMode, pauseMode;
 
-	FilterPtr GetPixelFilter() const { return pixelFilter; }
+	FilterRPtr GetPixelFilter() const { return pixelFilter; }
 
-	FilmSampleSplatterPtr GetSampleSplatter() const;
+	FilmSampleSplatterRPtr GetSampleSplatter() const;
 	void SetSampleSplatter(FilmSampleSplatterUPtr&&);
-	void SetSampleSplatter(FilterPtr);
+	void SetSampleSplatter(FilterRPtr);
 	void ResetSampleSplatter();
 
 private:

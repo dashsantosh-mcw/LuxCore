@@ -64,8 +64,8 @@ extern Properties * sceneProps;
 
 void luxcore::ParseLXS(
 	const string &fileName,
-	PropertiesPtr renderConfigProps,
-	PropertiesPtr sceneProps
+	PropertiesRPtr renderConfigProps,
+	PropertiesRPtr sceneProps
 ) {
 	API_BEGIN("{}, {}, {}", ToArgString(fileName), ToArgString(renderConfigProps), ToArgString(sceneProps));
 
@@ -293,7 +293,7 @@ std::unique_ptr<Film> Film::Create(const std::string &fileName) {
 }
 
 std::unique_ptr<Film> Film::Create(
-		luxrays::PropertiesPtr props,
+		luxrays::PropertiesRPtr props,
 		const bool hasPixelNormalizedChannel,
 		const bool hasScreenNormalizedChannel) {
 	API_BEGIN("{}, {}, {}", ToArgString(props), hasPixelNormalizedChannel, hasScreenNormalizedChannel);
@@ -384,7 +384,7 @@ Camera::~Camera() {
 //------------------------------------------------------------------------------
 
 std::unique_ptr<Scene> Scene::Create(
-		luxrays::PropertiesPtr resizePolicyProps
+		luxrays::PropertiesRPtr resizePolicyProps
 ) {
 	API_BEGIN("{}", (void *)resizePolicyProps.get());
 
@@ -396,8 +396,8 @@ std::unique_ptr<Scene> Scene::Create(
 }
 
 std::unique_ptr<Scene> Scene::Create(
-	luxrays::PropertiesPtr props,
-	luxrays::PropertiesPtr resizePolicyProps
+	luxrays::PropertiesRPtr props,
+	luxrays::PropertiesRPtr resizePolicyProps
 ) {
 	API_BEGIN("{}, {}", ToArgString(props), (void *)resizePolicyProps.get());
 
@@ -412,7 +412,7 @@ std::unique_ptr<Scene> Scene::Create(
 
 std::unique_ptr<Scene> Scene::Create(
 	const string &fileName,
-	luxrays::PropertiesPtr resizePolicyProps
+	luxrays::PropertiesRPtr resizePolicyProps
 ) {
 	API_BEGIN("{}, {}", ToArgString(fileName), (void *)resizePolicyProps.get());
 
@@ -553,7 +553,7 @@ std::unique_ptr<RenderConfig> RenderConfig::Create(
 	return rcfg;
 }
 
-PropertiesPtr RenderConfig::GetDefaultProperties() {
+PropertiesRPtr RenderConfig::GetDefaultProperties() {
 	API_BEGIN_NOARGS();
 
 	auto& result = luxcore::detail::RenderConfigImpl::GetDefaultProperties();
@@ -586,7 +586,7 @@ RenderState::~RenderState() {
 // RenderSession
 //------------------------------------------------------------------------------
 
-RenderSessionPtr RenderSession::Create(const RenderConfigPtr & config) {
+RenderSessionRPtr RenderSession::Create(const RenderConfigRPtr & config) {
 	API_BEGIN("{}", (void *) &config);
 
 	auto& configImpl = static_cast<RenderConfigImpl &>(*config);
@@ -597,8 +597,8 @@ RenderSessionPtr RenderSession::Create(const RenderConfigPtr & config) {
 
 	return std::move(result);
 }
-RenderSessionPtr RenderSession::Create(
-	const RenderConfigPtr & config,
+RenderSessionRPtr RenderSession::Create(
+	const RenderConfigRPtr & config,
 	std::shared_ptr<RenderState>& startState,
 	FilmRef startFilm
 ) {
@@ -633,8 +633,8 @@ RenderSessionPtr RenderSession::Create(
 	return result;
 }
 
-RenderSessionPtr RenderSession::Create(
-	const RenderConfigPtr & config,
+RenderSessionRPtr RenderSession::Create(
+	const RenderConfigRPtr & config,
 	const std::string &startStateFileName,
 	const std::string &startFilmFileName
 ) {

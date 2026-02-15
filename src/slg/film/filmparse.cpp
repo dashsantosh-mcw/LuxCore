@@ -846,7 +846,7 @@ void Film::ParseImagePipelines(const Properties &props) {
 // Film parser
 //------------------------------------------------------------------------------
 
-void Film::Parse(PropertiesPtr props) {
+void Film::Parse(PropertiesRPtr props) {
 	//--------------------------------------------------------------------------
 	// Check if there is a new image pipeline definition
 	//--------------------------------------------------------------------------

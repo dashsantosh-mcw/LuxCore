@@ -63,7 +63,7 @@ public:
 	u_longlong GetTotalTriangleCount() const { return totalTriangleCount; }
 
 	u_int GetDataSetID() const { return dataSetID; }
-	bool IsEqual(DataSetConstPtr dataSet) const;
+	bool IsEqual(DataSetConstRPtr dataSet) const;
 
 	friend class Context;
 	friend class OpenCLIntersectionDevice;

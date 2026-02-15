@@ -224,7 +224,7 @@ RenderStateSPtr RenderSession::GetRenderState() {
 	return renderEngine->GetRenderState();
 }
 
-void RenderSession::Parse(luxrays::PropertiesPtr props) {
+void RenderSession::Parse(luxrays::PropertiesRPtr props) {
 	assert (renderEngine->IsStarted());
 
 	if ((props->IsDefined("film.width") && (props->Get("film.width").Get<u_int>() != film->GetWidth())) ||

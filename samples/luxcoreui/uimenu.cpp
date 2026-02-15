@@ -194,7 +194,7 @@ void LuxCoreApp::MenuRendering()
       DeleteRendering();
     }
 
-    PropertiesPtr props = std::make_unique<Properties>();
+    PropertiesRPtr props = std::make_unique<Properties>();
     /*props <<
         Property("opencl.devices.select")("100") <<
         Property("scene.epsilon.min")(0.000123f) <<

@@ -52,7 +52,7 @@ using namespace luxcore::detail;
 namespace py = pybind11;
 
 using PropertyUPtr = std::unique_ptr<luxrays::Property>;
-using PropertyPtr = const std::unique_ptr<luxrays::Property> &;
+using PropertyRPtr = const std::unique_ptr<luxrays::Property> &;
 using SceneImplPtr = std::unique_ptr<luxcore::detail::SceneImpl>;
 using PropertiesUPtr = std::unique_ptr<luxrays::Properties>;
 
@@ -147,7 +147,7 @@ static void LuxCore_KernelCacheFill1() {
   KernelCacheFill(std::make_unique<Properties>());
 }
 
-static void LuxCore_KernelCacheFill2(PropertiesPtr config) {
+static void LuxCore_KernelCacheFill2(PropertiesRPtr config) {
   KernelCacheFill(config);
 }
 
@@ -312,7 +312,7 @@ py::tuple GetOpenVDBGridInfo(const std::string &filePathStr, const std::string &
 // Glue for Property class
 //------------------------------------------------------------------------------
 
-static py::list Property_GetBlobByIndex(PropertyPtr prop, const size_t i) {
+static py::list Property_GetBlobByIndex(PropertyRPtr prop, const size_t i) {
   const luxrays::Blob &blob = prop->Get<const luxrays::Blob &>(i);
   const char *data = blob.GetData();
   const size_t size = blob.GetSize();
@@ -324,7 +324,7 @@ static py::list Property_GetBlobByIndex(PropertyPtr prop, const size_t i) {
   return l;
 }
 
-static py::list Property_Get(PropertyPtr prop) {
+static py::list Property_Get(PropertyRPtr prop) {
   py::list l;
   for (u_int i = 0; i < prop->GetSize(); ++i) {
     const auto dataType = prop->GetValueType(i);
@@ -354,66 +354,66 @@ static py::list Property_Get(PropertyPtr prop) {
   return l;
 }
 
-static py::list Property_GetBools(PropertyPtr prop) {
+static py::list Property_GetBools(PropertyRPtr prop) {
   py::list l;
   for (u_int i = 0; i < prop->GetSize(); ++i)
     l.append(prop->Get<bool>(i));
   return l;
 }
 
-static py::list Property_GetInts(PropertyPtr prop) {
+static py::list Property_GetInts(PropertyRPtr prop) {
   py::list l;
   for (u_int i = 0; i < prop->GetSize(); ++i)
     l.append(prop->Get<long long>(i));
   return l;
 }
 
-static py::list Property_GetFloats(PropertyPtr prop) {
+static py::list Property_GetFloats(PropertyRPtr prop) {
   py::list l;
   for (u_int i = 0; i < prop->GetSize(); ++i)
     l.append(prop->Get<double>(i));
   return l;
 }
 
-static py::list Property_GetStrings(PropertyPtr prop) {
+static py::list Property_GetStrings(PropertyRPtr prop) {
   py::list l;
   for (u_int i = 0; i < prop->GetSize(); ++i)
     l.append(prop->Get<std::string>(i));
   return l;
 }
 
-static py::list Property_GetBlobs(PropertyPtr prop) {
+static py::list Property_GetBlobs(PropertyRPtr prop) {
   py::list l;
   for (u_int i = 0; i < prop->GetSize(); ++i)
     l.append(Property_GetBlobByIndex(prop, i));
   return l;
 }
 
-static bool Property_GetBool(PropertyPtr prop) {
+static bool Property_GetBool(PropertyRPtr prop) {
   return prop->Get<bool>(0);
 }
 
-static long long Property_GetInt(PropertyPtr prop) {
+static long long Property_GetInt(PropertyRPtr prop) {
   return prop->Get<long long>(0);
 }
 
-static unsigned long long Property_GetUnsignedLongLong(PropertyPtr prop) {
+static unsigned long long Property_GetUnsignedLongLong(PropertyRPtr prop) {
   return prop->Get<unsigned long long>(0);
 }
 
-static double Property_GetFloat(PropertyPtr prop) {
+static double Property_GetFloat(PropertyRPtr prop) {
   return prop->Get<double>(0);
 }
 
-static std::string Property_GetString(PropertyPtr prop) {
+static std::string Property_GetString(PropertyRPtr prop) {
   return prop->Get<std::string>(0);
 }
 
-static py::list Property_GetBlob(PropertyPtr prop) {
+static py::list Property_GetBlob(PropertyRPtr prop) {
   return Property_GetBlobByIndex(prop, 0);
 }
 
-static PropertyPtr Property_Add(PropertyPtr prop, const py::list &l) {
+static PropertyRPtr Property_Add(PropertyRPtr prop, const py::list &l) {
   const py::ssize_t size = len(l);
   for (py::ssize_t i = 0; i < size; ++i) {
     const std::string objType = py::cast<std::string>((l[i].attr("__class__")).attr("__name__"));
@@ -460,7 +460,7 @@ static PropertyPtr Property_Add(PropertyPtr prop, const py::list &l) {
   return prop;
 }
 
-static PropertyPtr Property_AddAllBool(PropertyPtr prop,
+static PropertyRPtr Property_AddAllBool(PropertyRPtr prop,
     const py::object &obj) {
   std::vector<bool> v;
   GetArray<bool>(obj, v);
@@ -471,7 +471,7 @@ static PropertyPtr Property_AddAllBool(PropertyPtr prop,
   return prop;
 }
 
-static PropertyPtr Property_AddAllInt(PropertyPtr prop,
+static PropertyRPtr Property_AddAllInt(PropertyRPtr prop,
     const py::object &obj) {
   std::vector<long long> v;
   GetArray<long long>(obj, v);
@@ -482,7 +482,7 @@ static PropertyPtr Property_AddAllInt(PropertyPtr prop,
   return prop;
 }
 
-static PropertyPtr Property_AddAllUnsignedLongLong(PropertyPtr prop,
+static PropertyRPtr Property_AddAllUnsignedLongLong(PropertyRPtr prop,
     const py::object &obj) {
   std::vector<unsigned long long> v;
   GetArray<unsigned long long>(obj, v);
@@ -493,7 +493,7 @@ static PropertyPtr Property_AddAllUnsignedLongLong(PropertyPtr prop,
   return prop;
 }
 
-static PropertyPtr Property_AddAllFloat(PropertyPtr prop,
+static PropertyRPtr Property_AddAllFloat(PropertyRPtr prop,
     const py::object &obj) {
   std::vector<float> v;
   GetArray<float>(obj, v);
@@ -504,7 +504,7 @@ static PropertyPtr Property_AddAllFloat(PropertyPtr prop,
   return prop;
 }
 
-static PropertyPtr Property_AddAllBoolStride(PropertyPtr prop,
+static PropertyRPtr Property_AddAllBoolStride(PropertyRPtr prop,
     const py::object &obj, const size_t width, const size_t stride) {
   std::vector<bool> v;
   GetArray<bool>(obj, v, width, stride);
@@ -515,7 +515,7 @@ static PropertyPtr Property_AddAllBoolStride(PropertyPtr prop,
   return prop;
 }
 
-static PropertyPtr Property_AddAllIntStride(PropertyPtr prop,
+static PropertyRPtr Property_AddAllIntStride(PropertyRPtr prop,
     const py::object &obj, const size_t width, const size_t stride) {
   std::vector<long long> v;
   GetArray<long long>(obj, v, width, stride);
@@ -526,7 +526,7 @@ static PropertyPtr Property_AddAllIntStride(PropertyPtr prop,
   return prop;
 }
 
-static PropertyPtr Property_AddAllUnsignedLongLongStride(PropertyPtr prop,
+static PropertyRPtr Property_AddAllUnsignedLongLongStride(PropertyRPtr prop,
     const py::object &obj, const size_t width, const size_t stride) {
   std::vector<unsigned long long> v;
   GetArray<unsigned long long>(obj, v, width, stride);
@@ -537,7 +537,7 @@ static PropertyPtr Property_AddAllUnsignedLongLongStride(PropertyPtr prop,
   return prop;
 }
 
-static PropertyPtr Property_AddAllFloatStride(PropertyPtr prop,
+static PropertyRPtr Property_AddAllFloatStride(PropertyRPtr prop,
     const py::object &obj, const size_t width, const size_t stride) {
   std::vector<float> v;
   GetArray<float>(obj, v, width, stride);
@@ -548,7 +548,7 @@ static PropertyPtr Property_AddAllFloatStride(PropertyPtr prop,
   return prop;
 }
 
-static PropertyPtr Property_Set(PropertyPtr prop, const size_t i,
+static PropertyRPtr Property_Set(PropertyRPtr prop, const size_t i,
     const py::object &obj) {
   const std::string objType = py::cast<std::string>((obj.attr("__class__")).attr("__name__"));
 
@@ -592,7 +592,7 @@ static PropertyPtr Property_Set(PropertyPtr prop, const size_t i,
   return prop;
 }
 
-static PropertyPtr Property_Set(PropertyPtr prop, const py::list &l) {
+static PropertyRPtr Property_Set(PropertyRPtr prop, const py::list &l) {
   const py::ssize_t size = len(l);
   for (py::ssize_t i = 0; i < size; ++i) {
     const py::object obj = l[i];
@@ -614,7 +614,7 @@ static PropertyUPtr Property_InitWithList(const py::str &name, const py::list &l
 // Glue for Properties class
 //------------------------------------------------------------------------------
 
-static py::list Properties_GetAllNamesRE(luxrays::PropertiesPtr props, const std::string &pattern) {
+static py::list Properties_GetAllNamesRE(luxrays::PropertiesRPtr props, const std::string &pattern) {
   py::list l;
   const std::vector<std::string> keys = props->GetAllNamesRE(pattern);
   for(const std::string key: keys) {
@@ -624,7 +624,7 @@ static py::list Properties_GetAllNamesRE(luxrays::PropertiesPtr props, const std
   return l;
 }
 
-static py::list Properties_GetAllNames1(luxrays::PropertiesPtr props) {
+static py::list Properties_GetAllNames1(luxrays::PropertiesRPtr props) {
   py::list l;
   const std::vector<std::string> keys = props->GetAllNames();
   for(const std::string key: keys) {
@@ -634,7 +634,7 @@ static py::list Properties_GetAllNames1(luxrays::PropertiesPtr props) {
   return l;
 }
 
-static py::list Properties_GetAllNames2(luxrays::PropertiesPtr props, const std::string &prefix) {
+static py::list Properties_GetAllNames2(luxrays::PropertiesRPtr props, const std::string &prefix) {
   py::list l;
   const std::vector<std::string> keys = props->GetAllNames(prefix);
   for(const std::string key: keys) {
@@ -644,7 +644,7 @@ static py::list Properties_GetAllNames2(luxrays::PropertiesPtr props, const std:
   return l;
 }
 
-static py::list Properties_GetAllUniqueSubNames(luxrays::PropertiesPtr props, const std::string prefix) {
+static py::list Properties_GetAllUniqueSubNames(luxrays::PropertiesRPtr props, const std::string prefix) {
   py::list l;
   const std::vector<std::string> keys = props->GetAllUniqueSubNames(prefix);
   for(const auto key: keys) {
@@ -654,7 +654,7 @@ static py::list Properties_GetAllUniqueSubNames(luxrays::PropertiesPtr props, co
   return l;
 }
 
-static luxrays::Property Properties_GetWithDefaultValues(luxrays::PropertiesPtr props,
+static luxrays::Property Properties_GetWithDefaultValues(luxrays::PropertiesRPtr props,
     const std::string &name, const py::list &l) {
   luxrays::PropertyValues values;
 
@@ -681,7 +681,7 @@ static luxrays::Property Properties_GetWithDefaultValues(luxrays::PropertiesPtr 
   return props->Get(luxrays::Property(name, values));
 }
 
-void Properties_DeleteAll(luxrays::PropertiesPtr props, const py::list &l) {
+void Properties_DeleteAll(luxrays::PropertiesRPtr props, const py::list &l) {
   const py::ssize_t size = len(l);
   for (py::ssize_t i = 0; i < size; ++i) {
     const std::string objType = py::cast<std::string>((l[i].attr("__class__")).attr("__name__"));
@@ -2087,10 +2087,10 @@ static void Scene_UpdateObjectTransformation(const SceneImplPtr & scene,
 
 static py::tuple RenderConfig_LoadResumeFile(const py::str &fileNameStr) {
   const std::string fileName = py::cast<std::string>(fileNameStr);
-  RenderStateImplPtr startState;
+  RenderStateImplRPtr startState;
   FilmImplUPtr startFilm;
   auto config = RenderConfigImpl::Create<
-	  const std::string&, RenderStateImplPtr&, FilmImplUPtr&
+	  const std::string&, RenderStateImplRPtr&, FilmImplUPtr&
   >(fileName, startState, startFilm);
 
   return py::make_tuple(config, startState, startFilm);
@@ -2352,9 +2352,9 @@ PYBIND11_MODULE(pyluxcore, m) {
     .def("AddAllInt", &Property_AddAllIntStride)
     .def("AddUnsignedLongLong", &Property_AddAllUnsignedLongLongStride)
     .def("AddAllFloat", &Property_AddAllFloatStride)
-    .def<PropertyPtr (*)(PropertyPtr , const py::list &)>
+    .def<PropertyRPtr (*)(PropertyRPtr , const py::list &)>
       ("Set", &Property_Set)
-    .def<PropertyPtr (*)(PropertyPtr , const size_t, const py::object &)>
+    .def<PropertyRPtr (*)(PropertyRPtr , const size_t, const py::object &)>
       ("Set", &Property_Set)
 
     .def("__str__", &luxrays::Property::ToString)
@@ -2386,7 +2386,7 @@ PYBIND11_MODULE(pyluxcore, m) {
 	)
 
     // Required because Properties::Set is overloaded
-	.def<luxrays::Properties &(luxrays::Properties::*)(PropertyPtr)>
+	.def<luxrays::Properties &(luxrays::Properties::*)(PropertyRPtr)>
       ("Set", &luxrays::Properties::Set)
 
     .def<luxrays::Properties &(luxrays::Properties::*)(const luxrays::Properties &)>
@@ -2493,7 +2493,7 @@ PYBIND11_MODULE(pyluxcore, m) {
     .def(
 		py::init(
 			[] (
-				luxrays::PropertiesPtr props,
+				luxrays::PropertiesRPtr props,
 				bool hasPixelNormalizedChannel,
 				bool hasScreenNormalizedChannel
 			) -> FilmImplUPtr {
@@ -2570,12 +2570,12 @@ PYBIND11_MODULE(pyluxcore, m) {
 		py::keep_alive<1, 2>()
 	)
     .def(
-		py::init(&SceneImpl::Create<luxrays::PropertiesPtr, luxrays::PropertiesPtr>),
+		py::init(&SceneImpl::Create<luxrays::PropertiesRPtr, luxrays::PropertiesRPtr>),
 		py::keep_alive<1, 2>(),
 		py::keep_alive<1, 3>()
 	)
     .def(
-		py::init(&SceneImpl::Create<luxrays::PropertiesPtr>),
+		py::init(&SceneImpl::Create<luxrays::PropertiesRPtr>),
 		py::keep_alive<1, 2>()
 	)
     .def(
@@ -2639,17 +2639,17 @@ PYBIND11_MODULE(pyluxcore, m) {
 
   py::class_<luxcore::detail::RenderConfigImpl, py::smart_holder>(m, "RenderConfig")
     .def(
-		py::init(&RenderConfigImpl::Create<luxrays::PropertiesPtr>),
+		py::init(&RenderConfigImpl::Create<luxrays::PropertiesRPtr>),
 		py::keep_alive<1, 2>()
 	)
     .def(
-		py::init(&RenderConfigImpl::Create<luxrays::PropertiesPtr, SceneImpl&>),
+		py::init(&RenderConfigImpl::Create<luxrays::PropertiesRPtr, SceneImpl&>),
 		py::keep_alive<1, 2>(),
 		py::keep_alive<1, 3>()
 	)
     //.def(py::init<luxrays::Properties, SceneImplPtr >()[with_custodian_and_ward<1, 3>()])
     //.def(
-		//py::init<luxrays::PropertiesPtr, std::unique_ptr<luxcore::detail::SceneImpl> >()
+		//py::init<luxrays::PropertiesRPtr, std::unique_ptr<luxcore::detail::SceneImpl> >()
 			//, py::return_value_policy::move)
     //.def("__init__", make_constructor(RenderConfig_LoadFile))
     //.def(py::init(&RenderConfig_LoadFile)) TODO
@@ -2693,7 +2693,7 @@ PYBIND11_MODULE(pyluxcore, m) {
 
 	.def(
 		py::init<>(&RenderSessionImpl::Create
-			<RenderConfigImpl&, RenderStateImplPtr&, FilmImplStandalone& >
+			<RenderConfigImpl&, RenderStateImplRPtr&, FilmImplStandalone& >
 		),
 		py::keep_alive<1, 2>()
 	)

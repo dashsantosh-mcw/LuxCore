@@ -1062,7 +1062,7 @@ Properties &Properties::Set(const Property &prop) {
 	return Set(Property(prop));
 }
 
-Properties &Properties::Set(PropertyPtr prop) {
+Properties &Properties::Set(PropertyRPtr prop) {
 	return Set(Property(*prop));
 }
 

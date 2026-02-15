@@ -559,7 +559,7 @@ public:
 	 */
 	Properties &Set(const Property &prop);
 	Properties &Set(Property&& prop);
-	Properties &Set(luxrays::PropertyPtr prop);
+	Properties &Set(luxrays::PropertyRPtr prop);
 	/*!
 	 * \brief Sets a single Property.
 	 * 
