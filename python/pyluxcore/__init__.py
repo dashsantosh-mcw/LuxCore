@@ -64,7 +64,7 @@ def ensure_nvrtc():
 
     # Find path to nvidia-cuda-nvrtc libs
     try:
-        nvrtc_mod = importlib.import_module("nvidia.cuda_nvrtc")
+        nvrtc_mod = importlib.import_module("nvidia.cu13")
     except ModuleNotFoundError:
         print("nvrtc: Python module not found")
         return
@@ -79,7 +79,11 @@ def ensure_nvrtc():
 
     # Select main libs (not alt flavors) and order them so that main lib is the
     # 1st item in the list
-    libs = [str(f) for f in libpath.iterdir() if "alt" not in f.name and "nvrtc" in f.name]
+    libs = [
+        str(f)
+        for f in libpath.iterdir()
+        if "alt" not in f.name and "nvrtc" in f.name
+    ]
     libs.sort(key=len)
     assert libs
 
