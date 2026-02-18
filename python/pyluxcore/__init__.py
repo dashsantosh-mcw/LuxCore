@@ -54,7 +54,7 @@ def ensure_nvrtc():
 
     2 strategies:
     - Linux: we preload libnvrtc.so
-    - Windows: we preload nvrtc64_120, to ensure it is serviceable,
+    - Windows: we preload nvrtc64_xxx, to ensure it is serviceable,
         but we also add the dll path to the process DLL search path
 
     Please note that MacOS is out-of-scope.
@@ -73,7 +73,7 @@ def ensure_nvrtc():
     if platform.system() == "Linux":
         libpath = modpath / "lib"
     elif platform.system() == "Windows":
-        libpath = modpath / "bin"
+        libpath = modpath / "bin" / "x86_64"
     else:
         return
 
