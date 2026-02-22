@@ -35,16 +35,15 @@ void Scene::ParseCamera(const Properties &props) {
 		return;
 	}
 
-	Camera *newCamera = CreateCamera(props);
+	auto newCamera = CreateCamera(props);
 
 	// Use the new camera
-	delete camera;
-	camera = newCamera;
+	camera = std::move(newCamera);
 
 	editActions.AddAction(CAMERA_EDIT);
 }
 
-Camera *Scene::CreateCamera(const Properties &props) {
+CameraUPtr Scene::CreateCamera(const Properties &props) {
 	Point orig, target;
 	Vector up;
 	if (props.IsDefined("scene.camera.lookat")) {
@@ -77,7 +76,7 @@ Camera *Scene::CreateCamera(const Properties &props) {
 	SDL_LOG("Camera position: " << orig);
 	SDL_LOG("Camera target: " << target);
 
-	unique_ptr<Camera> camera;
+	CameraUPtr camera;
 	if ((type == "environment") || (type == "orthographic") || (type == "perspective") || (type == "stereo")) {
 		if (type == "orthographic") {
 			OrthographicCamera *orthoCamera;
@@ -127,10 +126,10 @@ Camera *Scene::CreateCamera(const Properties &props) {
 
 				ImageMapConfig imgCfg(props, "scene.camera.bokeh.distribution.image");
 				// Force float storage
-				imgCfg.storageType = ImageMapStorage::FLOAT;
+				imgCfg.SetStorageType(ImageMapStorage::FLOAT);
 
-				perspCamera->bokehDistributionImageMap = imgMapCache.GetImageMap(imgMapName, imgCfg, false);
-				
+				perspCamera->bokehDistributionImageMap = &imgMapCache.GetImageMap(imgMapName, imgCfg, false);
+
 				if (perspCamera->bokehDistributionImageMap->GetSpectrumMean() == 0.f)
 					throw runtime_error("Used a black image in camera bokeh distribution: " + imgMapName);
 			}
@@ -206,11 +205,12 @@ Camera *Scene::CreateCamera(const Properties &props) {
 
 	camera->autoVolume = props.Get(Property("scene.camera.autovolume.enable")(true)).Get<bool>();
 	if (!camera->autoVolume && props.IsDefined("scene.camera.volume")) {
-		const Material *vol = matDefs.GetMaterial(props.Get("scene.camera.volume").Get<string>());
-		if (dynamic_cast<const Volume *>(vol))
-			camera->volume = static_cast<const Volume *>(vol);
-		else
-			throw runtime_error("Camera volume is a material: " + vol->GetName());
+		MaterialConstRef vol = matDefs.GetMaterial(props.Get("scene.camera.volume").Get<string>());
+		try {
+			camera->SetVolume(dynamic_cast<const Volume&>(vol));
+		} catch (std::bad_cast&) {
+			throw runtime_error("Camera volume is a material: " + vol.GetName());
+		}
 	}
 
 	// Check if I have to use a motion system
@@ -242,6 +242,6 @@ Camera *Scene::CreateCamera(const Properties &props) {
 	// all no raster related transformations
 	camera->Update(100u, 100u, nullptr);
 
-	return camera.release();
+	return camera;
 }
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

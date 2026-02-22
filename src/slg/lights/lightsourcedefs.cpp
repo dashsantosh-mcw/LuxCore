@@ -32,36 +32,30 @@ using namespace slg;
 // LightSourceDefinitions
 //------------------------------------------------------------------------------
 
-LightSourceDefinitions::LightSourceDefinitions() : lightTypeCount(LIGHT_SOURCE_TYPE_COUNT, 0) {
-	emitLightStrategy = new LightStrategyLogPower();
-	illuminateLightStrategy = new LightStrategyLogPower();
-	infiniteLightStrategy = new LightStrategyLogPower();
+LightSourceDefinitions::LightSourceDefinitions() :
+	lightTypeCount(LIGHT_SOURCE_TYPE_COUNT, 0)
+{
+	emitLightStrategy = std::make_unique<LightStrategyLogPower>();
+	illuminateLightStrategy = std::make_unique<LightStrategyLogPower>();
+	infiniteLightStrategy = std::make_unique<LightStrategyLogPower>();
 	lightGroupCount = 1;
 }
 
 LightSourceDefinitions::~LightSourceDefinitions() {
-	delete emitLightStrategy;
-	delete illuminateLightStrategy;
-	delete infiniteLightStrategy;
-	for (auto const &e : lightsByName)
-		delete e.second;
 }
 
-void LightSourceDefinitions::DefineLightSource(LightSource *newLight) {
+void LightSourceDefinitions::DefineLightSource(LightSourceUPtr&& newLight) {
 	const string &name = newLight->GetName();
 
 	if (IsLightSourceDefined(name)) {
-		const LightSource *oldLight = GetLightSource(name);
+		auto& oldLight = GetLightSource(name);
 
 		// Update name/LightSource definition
 		lightsByName.erase(name);
-		lightsByName[name] = newLight;
-
-		// Delete old LightSource
-		delete oldLight;
+		lightsByName[name] = std::move(newLight);
 	} else {
 		// Add the new LightSource
-		lightsByName[name] = newLight;
+		lightsByName[name] = std::move(newLight);
 	}
 }
 
@@ -69,31 +63,51 @@ bool LightSourceDefinitions::IsLightSourceDefined(const std::string &name) const
 	return (lightsByName.count(name) > 0);
 }
 
-const LightSource *LightSourceDefinitions::GetLightSource(const string &name) const {
+LightSourceConstRef LightSourceDefinitions::GetLightSource(const string &name) const {
 	// Check if the LightSource has been already defined
 	auto e = lightsByName.find(name);
 
 	if (e == lightsByName.end())
 		throw runtime_error("Reference to an undefined LightSource in LightSourceDefinitions::GetLightSource(): " + name);
-	else
-		return e->second;
+
+	return *e->second;
 }
 
-LightSource *LightSourceDefinitions::GetLightSource(const string &name) {
+LightSourceRef LightSourceDefinitions::GetLightSource(const string &name) {
 	// Check if the LightSource has been already defined
 	auto e = lightsByName.find(name);
 
 	if (e == lightsByName.end())
 		throw runtime_error("Reference to an undefined LightSource in LightSourceDefinitions::GetLightSource(): " + name);
-	else
-		return e->second;
+
+	return *e->second;
 }
 
-const TriangleLight *LightSourceDefinitions::GetLightSourceByMeshAndTriIndex(const u_int meshIndex, const u_int triIndex) const {
+LightSourceConstPtr LightSourceDefinitions::GetLightSourcePtr(const string &name) const {
+	// Check if the LightSource has been already defined
+	auto e = lightsByName.find(name);
+
+	if (e == lightsByName.end())
+		throw runtime_error("Reference to an undefined LightSource in LightSourceDefinitions::GetLightSource(): " + name);
+
+	return e->second.get();
+}
+
+LightSourcePtr LightSourceDefinitions::GetLightSourcePtr(const string &name) {
+	// Check if the LightSource has been already defined
+	auto e = lightsByName.find(name);
+
+	if (e == lightsByName.end())
+		throw runtime_error("Reference to an undefined LightSource in LightSourceDefinitions::GetLightSource(): " + name);
+
+	return e->second.get();
+}
+
+TriangleLightConstRef LightSourceDefinitions::GetLightSourceByMeshAndTriIndex(const u_int meshIndex, const u_int triIndex) const {
 	const u_int offset = lightIndexOffsetByMeshIndex[meshIndex];
 	const u_int lightIndex = lightIndexByTriIndex[offset + triIndex];
 
-	return (const TriangleLight *)lights[lightIndex];
+	return static_cast<TriangleLightConstRef>(lights[lightIndex].get());
 }
 
 vector<string> LightSourceDefinitions::GetLightSourceNames() const {
@@ -111,7 +125,6 @@ void LightSourceDefinitions::DeleteLightSource(const string &name) {
 	if (e == lightsByName.end())
 		throw runtime_error("Reference to an undefined LightSource in LightSourceDefinitions::DeleteLightSource(): " + name);
 	else {
-		delete e->second;
 		lightsByName.erase(name);
 	}
 }
@@ -130,15 +143,19 @@ void LightSourceDefinitions::DeleteLightSourceStartWith(const string &namePrefix
 		DeleteLightSource(name);
 }
 
-void LightSourceDefinitions::DeleteLightSourceByMaterial(const Material *mat) {
+void LightSourceDefinitions::DeleteLightSourceByMaterial(MaterialConstRef mat) {
 	// Build the list of lights to delete
-	vector<string> nameList;
+	std::vector<string> nameList;
 	for (auto const &e : lightsByName) {
 		const string &name = e.first;
-		const LightSource *l = e.second;
+		auto& l = *e.second;
 
-		if ((l->GetType() == TYPE_TRIANGLE) && (((const TriangleLight *)l)->lightMaterial == mat))
+		if (
+			l.GetType() == TYPE_TRIANGLE
+			&& (static_cast<const TriangleLight&>(l)).lightMaterial == &mat
+		) {
 			nameList.push_back(name);
+		}
 	}
 
 	for (auto const &name : nameList)
@@ -147,72 +164,74 @@ void LightSourceDefinitions::DeleteLightSourceByMaterial(const Material *mat) {
 
 void LightSourceDefinitions::SetLightStrategy(const luxrays::Properties &props) {
 	if (LightStrategy::GetType(props) != emitLightStrategy->GetType()) {
-		delete emitLightStrategy;
 		emitLightStrategy = LightStrategy::FromProperties(props);
 	}
 
 	if (LightStrategy::GetType(props) != illuminateLightStrategy->GetType()) {
-		delete illuminateLightStrategy;
 		illuminateLightStrategy = LightStrategy::FromProperties(props);
 	}
 
 	if (LightStrategy::GetType(props) != infiniteLightStrategy->GetType()) {
-		delete infiniteLightStrategy;
 		infiniteLightStrategy = LightStrategy::FromProperties(props);
 	}
 }
 
-void LightSourceDefinitions::UpdateVolumeReferences(const Volume *oldVol, const Volume *newVol) {
+void LightSourceDefinitions::UpdateVolumeReferences(
+	VolumeConstRef oldVol, VolumeRef newVol
+) {
 	for (auto const &e : lightsByName) {
-		LightSource *l = e.second;
-		
-		l->UpdateVolumeReferences(oldVol, newVol);
+		auto& l = *e.second;
+
+		l.UpdateVolumeReferences(oldVol, newVol);
 	}
 
 }
 
-void LightSourceDefinitions::Preprocess(const Scene *scene, const bool useRTMode) {
+void LightSourceDefinitions::Preprocess(SceneConstRef scene, const bool useRTMode) {
 	// Update lightGroupCount, envLightSources, intersectableLightSources,
 	// lightIndexOffsetByMeshIndex, lightsDistribution, etc.
 
 //	const double start = WallClockTime();
-	
+	SLG_LOG("Preprocessing light source definitions");
+
 	lightGroupCount = 0;
 	lights.clear();
-	lights.resize(lightsByName.size());
 	intersectableLightSources.clear();
 	envLightSources.clear();
 	fill(lightTypeCount.begin(), lightTypeCount.end(), 0);
 	// To accelerate the light pointer to light index lookup
-	robin_hood::unordered_flat_map<const LightSource *, u_int> light2indexLookupAccel;
-	
+	robin_hood::unordered_flat_map<
+		const LightSource *,
+		u_int
+	> light2indexLookupAccel;
+
 	u_int i = 0;
 	for (auto const &e : lightsByName) {
-		LightSource *l = e.second;
+		auto& l = *e.second;
 
 		// Initialize the light source index
-		l->lightSceneIndex = i;
-		light2indexLookupAccel[l] = i;
+		l.lightSceneIndex = i;
+		light2indexLookupAccel[&l] = i;
 
 		// Update the light group count
-		lightGroupCount = Max(lightGroupCount, l->GetID() + 1);
+		lightGroupCount = Max(lightGroupCount, l.GetID() + 1);
 
 		// Update the light type count
-		++lightTypeCount[l->GetType()];
+		++lightTypeCount[l.GetType()];
 
 		// Update the list of all lights
-		lights[i] = l;
+		lights.push_back(l);
 
 		// Update the list of env. lights
-		if (l->IsEnvironmental())
-			envLightSources.push_back((EnvLightSource *)l);
+		if (l.IsEnvironmental())
+			envLightSources.push_back(static_cast<EnvLightSourceRef>(l));
 
-		TriangleLight *tl = dynamic_cast<TriangleLight *>(l);
-		if (tl) {
+		// Update the list of triangle lights
+		try {
+			auto& tl = dynamic_cast<TriangleLightRef>(l);
 			intersectableLightSources.push_back(tl);
-
-			tl->meshIndex = scene->objDefs.GetSceneObjectIndex(tl->sceneObject);
-		}
+			tl.meshIndex = scene.GetObjects().GetSceneObjectIndex(*tl.sceneObject);
+		} catch (std::bad_cast&) {}
 
 		++i;
 	}
@@ -221,39 +240,38 @@ void LightSourceDefinitions::Preprocess(const Scene *scene, const bool useRTMode
 //	SLG_LOG("Light step #1 preprocessing time: " << (end1 - start) << "secs");
 
 	for(u_int i = 0; i < lights.size(); ++i) {
-		TriangleLight *tl = dynamic_cast<TriangleLight *>(lights[i]);
-		if (tl) {
+		try {
+			auto& tl = dynamic_cast<TriangleLightRef>(lights[i].get());
 			intersectableLightSources.push_back(tl);
-
-			tl->meshIndex = scene->objDefs.GetSceneObjectIndex(tl->sceneObject);
-		}
+			tl.meshIndex = scene.GetObjects().GetSceneObjectIndex(*tl.sceneObject);
+		} catch(std::bad_cast&) {}
 	}
 
 //	const double end2 = WallClockTime();
 //	SLG_LOG("Light step #2 preprocessing time: " << (end2 - end1) << "secs");
 
 	// Build 2 tables to go from mesh index and triangle index to light index
-	lightIndexOffsetByMeshIndex.resize(scene->objDefs.GetSize());
+	lightIndexOffsetByMeshIndex.resize(scene.GetObjects().GetSize());
 	lightIndexByTriIndex.clear();
-	
-	// Step #1: initialize lightIndexOffsetByMeshIndex and set the lightIndexByTriIndex size
-	
-	const u_int meshCount = scene->objDefs.GetSize();
-	for (u_int meshIndex = 0; meshIndex < meshCount; ++meshIndex) {
-		const SceneObject *so = scene->objDefs.GetSceneObject(meshIndex);
 
-		if (so->GetMaterial()->IsLightSource()) {
+	// Step #1: initialize lightIndexOffsetByMeshIndex and set the lightIndexByTriIndex size
+
+	const u_int meshCount = scene.GetObjects().GetSize();
+	for (u_int meshIndex = 0; meshIndex < meshCount; ++meshIndex) {
+		auto& so = scene.GetObjects().GetSceneObject(meshIndex);
+
+		if (so.GetMaterial().IsLightSource()) {
 			lightIndexOffsetByMeshIndex[meshIndex] = lightIndexByTriIndex.size();
 
-			const ExtMesh *mesh = so->GetExtMesh();
-			lightIndexByTriIndex.resize(lightIndexByTriIndex.size() + mesh->GetTotalTriangleCount());
+			auto& mesh = so.GetExtMesh();
+			lightIndexByTriIndex.resize(lightIndexByTriIndex.size() + mesh.GetTotalTriangleCount());
 		} else
 			lightIndexOffsetByMeshIndex[meshIndex] = NULL_INDEX;
 	}
 
 	// Step #2: initializelightIndexByTriIndex in parallel (to speed up the
 	// execution in case of large number of light sources)
-	
+
 	#pragma omp parallel for
 	for (
 			// Visual C++ 2013 supports only OpenMP 2.5
@@ -261,16 +279,16 @@ void LightSourceDefinitions::Preprocess(const Scene *scene, const bool useRTMode
 			unsigned
 #endif
 			int meshIndex = 0; meshIndex < meshCount; ++meshIndex) {
-		const SceneObject *so = scene->objDefs.GetSceneObject(meshIndex);
+		auto& so = scene.GetObjects().GetSceneObject(meshIndex);
 
-		if (so->GetMaterial()->IsLightSource()) {
-			const ExtMesh *mesh = so->GetExtMesh();
-			const string prefix = Scene::EncodeTriangleLightNamePrefix(so->GetName());
-			for (u_int triIndex = 0; triIndex < mesh->GetTotalTriangleCount(); ++triIndex) {
+		if (so.GetMaterial().IsLightSource()) {
+			auto& mesh = so.GetExtMesh();
+			const string prefix = Scene::EncodeTriangleLightNamePrefix(so.GetName());
+			for (u_int triIndex = 0; triIndex < mesh.GetTotalTriangleCount(); ++triIndex) {
 				const string lightName = prefix + ToString(triIndex);
 
 				lightIndexByTriIndex[lightIndexOffsetByMeshIndex[meshIndex] + triIndex] =
-						light2indexLookupAccel[GetLightSource(lightName)];
+						light2indexLookupAccel[&GetLightSource(lightName)];
 			}
 		}
 	}
@@ -279,14 +297,18 @@ void LightSourceDefinitions::Preprocess(const Scene *scene, const bool useRTMode
 //	SLG_LOG("Light step #3 preprocessing time: " << (end3 - end2) << "secs");
 
 	// I need to check all volume definitions for radiance group usage too
-	for (u_int i = 0; i < scene->matDefs.GetSize(); ++i) {
-		const Material *mat = scene->matDefs.GetMaterial(i);
+	for (u_int i = 0; i < scene.GetMaterials().GetSize(); ++i) {
+		auto& mat = scene.GetMaterials().GetMaterial(i);
 
-		const Volume *vol = dynamic_cast<const Volume *>(mat);
-		if (vol && vol->GetVolumeEmissionTexture()) {
-			// Update the light group count
-			lightGroupCount = Max(lightGroupCount, vol->GetVolumeLightID() + 1);
+		try {
+			auto& vol = dynamic_cast<VolumeConstRef>(mat);
+			if (vol.HasVolumeEmissionTexture()) {
+				// Update the light group count
+				lightGroupCount = Max(lightGroupCount, vol.GetVolumeLightID() + 1);
+			}
 		}
+		catch(std::bad_cast&) { /* Not a volume: pass */}
+
 	}
 	//SLG_LOG("Radiance group count: " << lightGroupCount);
 
@@ -296,13 +318,13 @@ void LightSourceDefinitions::Preprocess(const Scene *scene, const bool useRTMode
 	// Build the light strategy
 	if (lights.size() > 1024) {
 		// Use a multi-thread initialization for large number of light sources
-		std::thread emitLightStrategyThread([&, this, scene, useRTMode]() {
+		std::thread emitLightStrategyThread([this, &scene, useRTMode]() {
 			emitLightStrategy->Preprocess(scene, TASK_EMIT, useRTMode);
 		});
-		std::thread illuminateLightStrategyThread([&, this, scene, useRTMode]() {
+		std::thread illuminateLightStrategyThread([this, &scene, useRTMode]() {
 			illuminateLightStrategy->Preprocess(scene, TASK_ILLUMINATE, useRTMode);
 		});
-		std::thread infiniteLightStrategyThread([&, this, scene, useRTMode]() {
+		std::thread infiniteLightStrategyThread([this, &scene, useRTMode]() {
 			infiniteLightStrategy->Preprocess(scene, TASK_INFINITE_ONLY, useRTMode);
 		});
 
@@ -322,9 +344,9 @@ void LightSourceDefinitions::Preprocess(const Scene *scene, const bool useRTMode
 //	SLG_LOG("Light total preprocessing time: " << (endTotal - start) << "secs");
 }
 
-void LightSourceDefinitions::UpdateVisibilityMaps(const Scene *scene, const bool useRTMode) {
+void LightSourceDefinitions::UpdateVisibilityMaps(SceneConstRef scene, const bool useRTMode) {
 	// Build visibility maps for Env. lights
-	for (EnvLightSource *envLight : GetEnvLightSources())
-		envLight->UpdateVisibilityMap(scene, useRTMode);
+	for (auto& envLight : GetEnvLightSources())
+		envLight.UpdateVisibilityMap(scene, useRTMode);
 }
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

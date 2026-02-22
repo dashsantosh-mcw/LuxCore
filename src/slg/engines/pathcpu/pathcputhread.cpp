@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <cassert>
 #include <thread>
 #include "luxrays/utils/thread.h"
 
@@ -39,7 +40,9 @@ PathCPURenderThread::PathCPURenderThread(PathCPURenderEngine *engine,
 }
 
 void PathCPURenderThread::RenderFunc(std::stop_token stop_token) {
-	//SLG_LOG("[PathCPURenderEngine::" << threadIndex << "] Rendering thread started");
+#ifndef NDEBUG
+	SLG_LOG("[PathCPURenderEngine::" << threadIndex << "] Rendering thread started");
+#endif
 
 	//--------------------------------------------------------------------------
 	// Initialization
@@ -52,15 +55,19 @@ void PathCPURenderThread::RenderFunc(std::stop_token stop_token) {
 	const PathTracer &pathTracer = engine->pathTracer;
 
 	// (engine->seedBase + 1) seed is used for sharedRndGen
-	RandomGenerator *rndGen = new RandomGenerator(engine->seedBase + 1 + threadIndex);
+	auto rndGen = std::make_unique<RandomGenerator>(engine->seedBase + 1 + threadIndex);
 
 	// Setup the sampler(s)
 
-	Sampler *eyeSampler = nullptr;
-	Sampler *lightSampler = nullptr;
 
-	eyeSampler = engine->renderConfig->AllocSampler(rndGen, engine->film,
-			nullptr, engine->samplerSharedData, Properties());
+	SamplerUPtr lightSampler;
+
+	auto eyeSampler = engine->renderConfig.AllocSampler(
+		rndGen, engine->GetFilm(),
+		engine->GetSampleSplatter(),
+		engine->samplerSharedData,
+		Properties()
+	);
 	eyeSampler->SetThreadIndex(threadIndex);
 	eyeSampler->RequestSamples(PIXEL_NORMALIZED_ONLY, pathTracer.eyeSampleSize);
 
@@ -73,9 +80,13 @@ void PathCPURenderThread::RenderFunc(std::stop_token stop_token) {
 			Property("sampler.imagesamples.enable")(false) <<
 			Property("sampler.metropolis.addonlycaustics")(true);
 
-		lightSampler = Sampler::FromProperties(props, rndGen, engine->film, engine->lightSampleSplatter,
-				engine->lightSamplerSharedData);
-		
+		lightSampler = Sampler::FromProperties(
+			props, rndGen,
+			FilmPtr(&engine->GetFilm()),
+			engine->lightSampleSplatter,
+			engine->lightSamplerSharedData
+		);
+
 		lightSampler->SetThreadIndex(threadIndex);
 		lightSampler->RequestSamples(SCREEN_NORMALIZED_ONLY, pathTracer.lightSampleSize);
 	}
@@ -86,7 +97,8 @@ void PathCPURenderThread::RenderFunc(std::stop_token stop_token) {
 	// Setup PathTracer thread state
 	PathTracerThreadState pathTracerThreadState(device,
 			eyeSampler, lightSampler,
-			engine->renderConfig->scene, engine->film,
+			engine->renderConfig.GetScene(),
+			engine->GetFilm(),
 			&varianceClamping);
 
 	//--------------------------------------------------------------------------
@@ -112,20 +124,17 @@ void PathCPURenderThread::RenderFunc(std::stop_token stop_token) {
 #endif
 
 		// Check halt conditions
-		if (engine->film->GetConvergence() == 1.f)
+		if (engine->GetFilm().GetConvergence() == 1.f)
 			break;
-                if (stop_token.stop_requested())
-                        break;
+		if (stop_token.stop_requested())
+			break;
 
 		if (engine->photonGICache) {
-			const u_int spp = engine->film->GetTotalEyeSampleCount() / engine->film->GetPixelCount();
+			const u_int spp = engine->GetFilm().GetTotalEyeSampleCount() / engine->GetFilm().GetPixelCount();
 			engine->photonGICache->Update(threadIndex, spp);
 		}
 	}
 
-	delete eyeSampler;
-	delete lightSampler;
-	delete rndGen;
 
 	threadDone = true;
 
@@ -135,6 +144,8 @@ void PathCPURenderThread::RenderFunc(std::stop_token stop_token) {
 	if (engine->photonGICache)
 		engine->photonGICache->FinishUpdate(threadIndex);
 
-	//SLG_LOG("[PathCPURenderEngine::" << threadIndex << "] Rendering thread halted");
+#ifndef NDEBUG
+	SLG_LOG("[PathCPURenderEngine::" << threadIndex << "] Rendering thread halted");
+#endif
 }
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

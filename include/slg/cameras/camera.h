@@ -19,10 +19,12 @@
 #ifndef _SLG_CAMERA_H
 #define	_SLG_CAMERA_H
 
+#include "slg/usings.h"
 #include "luxrays/utils/properties.h"
 #include "luxrays/core/geometry/transform.h"
 #include "luxrays/core/geometry/motionsystem.h"
 #include "luxrays/utils/mc.h"
+#include "slg/volumes/volume.h"
 
 #include "slg/imagemap/imagemapcache.h"
 
@@ -48,7 +50,7 @@ public:
 	} CameraType;
 
 	Camera(const CameraType t) : clipHither(1e-3f), clipYon(1e30f),
-		shutterOpen(0.f), shutterClose(1.f), autoVolume(true), volume(NULL),
+		shutterOpen(0.f), shutterClose(1.f), autoVolume(true), volume(nullptr),
 		motionSystem(NULL), type(t) { }
 	virtual ~Camera() {
 		delete motionSystem;
@@ -82,7 +84,7 @@ public:
 	// Preprocess/update methods
 	virtual void Update(const u_int filmWidth, const u_int filmHeight,
 		const u_int *filmSubRegion);
-	virtual void UpdateAuto(const Scene *scene);
+	virtual void UpdateAuto(SceneConstRef scene);
 
 	// Rendering methods
 	float GenerateRayTime(const float u) const { return luxrays::Lerp(u, shutterOpen, shutterClose); }
@@ -103,20 +105,23 @@ public:
 		const float filmX, const float filmY,
 		float *pdfW, float *fluxToRadianceFactor) const = 0;
 
-	virtual luxrays::Properties ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
-	virtual void UpdateVolumeReferences(const Volume *oldVol, const Volume *newVol);
+	virtual luxrays::PropertiesUPtr ToProperties(const ImageMapCache &imgMapCache, const bool useRealFileName) const;
+	virtual void UpdateVolumeReferences(VolumeConstRef oldVol, VolumeConstRef newVol);
 
-	static Camera *AllocCamera(const luxrays::Properties &props);
+	static CameraUPtr AllocCamera(const luxrays::Properties &props);
 
 	// User defined values
 	float clipHither, clipYon, shutterOpen, shutterClose;
 
+	bool HasVolume() const { return bool(volume); }
+	VolumeConstRef GetVolume() const { return *volume; }
+	void SetVolume(VolumeConstRef vol) { volume = std::addressof(vol); }
+
 	bool autoVolume;
-	const Volume *volume;
 
 	// For motion blur
 	const luxrays::MotionSystem *motionSystem;
-	
+
 	// A copy of Film values
 	u_int filmWidth, filmHeight;
 	u_int filmSubRegion[4];
@@ -126,7 +131,9 @@ protected:
 	luxrays::BBox ComputeBBox(const luxrays::Point &orig) const;
 
 	const CameraType type;
+	VolumeConstPtr volume;
 };
+
 
 }
 

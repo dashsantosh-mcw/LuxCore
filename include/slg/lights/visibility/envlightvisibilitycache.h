@@ -201,10 +201,13 @@ class ELVCSceneVisibility;
 
 class EnvLightVisibilityCache {
 public:
-	EnvLightVisibilityCache(const Scene *scene, const EnvLightSource *envLight,
-			ImageMap *luminanceMapImage,
-			const ELVCParams &params);
-	EnvLightVisibilityCache(const Scene *scene, const EnvLightSource *envLight,
+	EnvLightVisibilityCache(
+		SceneConstRef scene,
+		const EnvLightSource *envLight,
+		ImageMapUPtr&& luminanceMapImage,
+		const ELVCParams &params
+	);
+	EnvLightVisibilityCache(SceneConstRef scene, const EnvLightSource *envLight,
 			const u_int mapWidth, const u_int mapHeight, const ELVCParams &params);
 	virtual ~EnvLightVisibilityCache();
 
@@ -224,8 +227,8 @@ public:
 			float uv[2], float *pdf) const;
 	float Pdf(const BSDF &bsdf, const float u, const float v) const;
 
-	static ELVCParams Properties2Params(const std::string &prefix, const luxrays::Properties props);
-	static luxrays::Properties Params2Props(const std::string &prefix, const ELVCParams &params);
+	static ELVCParams Properties2Params(const std::string &prefix, luxrays::PropertiesConstRef props);
+	static luxrays::PropertiesUPtr Params2Props(const std::string &prefix, const ELVCParams &params);
 
 	static const u_int defaultLuminanceMapWidth, defaultLuminanceMapHeight;
 	
@@ -236,7 +239,10 @@ private:
 
 	float EvaluateBestRadius();
 	void TraceVisibilityParticles();
-	void BuildCacheEntry(const u_int entryIndex, const ImageMap *luminanceMapImageScaled);
+	void BuildCacheEntry(
+		const u_int entryIndex,
+		const ImageMapUPtr& luminanceMapImageScaled
+	);
 	void BuildCacheEntries();
 	void BuildTileDistributions();
 
@@ -245,9 +251,9 @@ private:
 	void LoadPersistentCache(const std::string &fileName);
 	void SavePersistentCache(const std::string &fileName);
 
-	const Scene *scene;
+	SceneConstRef scene;
 	const EnvLightSource *envLight;
-	const ImageMap *luminanceMapImage;
+	ImageMapUPtr luminanceMapImage;
 
 	ELVCParams params;
 

@@ -24,6 +24,7 @@
 #include <mutex>
 
 #include "luxrays/luxrays.h"
+#include "luxrays/usings.h"
 #include "luxrays/core/accelerator.h"
 #include "luxrays/core/trianglemesh.h"
 
@@ -31,7 +32,7 @@ namespace luxrays {
 
 class DataSet {
 public:
-	DataSet(const Context *luxRaysContext);
+	DataSet(const Context& luxRaysContext);
 	~DataSet();
 
 	AcceleratorType GetAcceleratorType() const { return accelType; }
@@ -45,13 +46,13 @@ public:
 	bool RequiresMotionBlurSupport() const { return enableMotionBlurSupport && hasMotionBlur; }
 	bool HasMotionBlur() const { return hasMotionBlur; }
 
-	TriangleMeshID Add(const Mesh *mesh);
+	TriangleMeshID Add(MeshConstRef mesh);
 	void Preprocess();
 	bool IsPreprocessed() const { return preprocessed; }
 	void UpdateBBoxes();
 
 	bool HasAccelerator(const AcceleratorType accelType) const;
-	const Accelerator *GetAccelerator(const AcceleratorType accelType);
+	AcceleratorConstSPtr GetAccelerator(const AcceleratorType accelType) const;
 	bool DoesAllAcceleratorsSupportUpdate() const;
 	void UpdateAccelerators();
 
@@ -62,7 +63,7 @@ public:
 	u_longlong GetTotalTriangleCount() const { return totalTriangleCount; }
 
 	u_int GetDataSetID() const { return dataSetID; }
-	bool IsEqual(const DataSet *dataSet) const;
+	bool IsEqual(DataSetConstRPtr dataSet) const;
 
 	friend class Context;
 	friend class OpenCLIntersectionDevice;
@@ -70,7 +71,7 @@ public:
 private:
 	u_int dataSetID;
 
-	const Context *context;
+	const Context& context;
 
 	u_longlong totalVertexCount;
 	u_longlong totalTriangleCount;
@@ -79,8 +80,8 @@ private:
 	BBox bbox;
 	BSphere bsphere;
 
-	std::mutex accelsMutex;
-	std::unordered_map<AcceleratorType, Accelerator *> accels;
+	mutable std::mutex accelsMutex;
+	mutable std::unordered_map<AcceleratorType, AcceleratorSPtr> accels;  // Cache
 
 	AcceleratorType accelType;
 	bool preprocessed;

@@ -19,6 +19,7 @@
 #ifndef _SLG_PHOTONGICACHE_H
 #define	_SLG_PHOTONGICACHE_H
 
+#include <functional>
 #include <vector>
 #include <barrier>
 
@@ -28,6 +29,7 @@
 #include "luxrays/utils/serializationutils.h"
 
 #include "slg/slg.h"
+#include "slg/usings.h"
 #include "slg/samplers/sobol.h"
 #include "slg/bsdf/bsdf.h"
 #include "slg/scene/scene.h"
@@ -41,6 +43,7 @@ namespace slg {
 namespace ocl {
 #include "slg/engines/caches/photongi/pgic_types.cl"
 }
+
 
 //------------------------------------------------------------------------------
 // Photon Mapping based GI cache
@@ -59,7 +62,8 @@ protected:
 	// Used by serialization
 	GenericPhoton() { }
 
-	template<class Archive> void serialize(Archive &ar, const u_int version) {
+	template<class Archive>
+	void serialize(Archive &ar, const u_int version) {
 		ar & p;
 		ar & isVolume;
 	}
@@ -260,12 +264,12 @@ class EyePathInfo;
 
 class PhotonGICache {
 public:
-	PhotonGICache(const Scene *scn, const PhotonGICacheParams &params);
+	PhotonGICache(SceneConstRef scn, const PhotonGICacheParams &params);
 	virtual ~PhotonGICache();
 
-	void SetScene(const Scene *scn) { scene = scn; }
+	void SetScene(SceneRef scn) { scene = scn; }
 	PhotonGIDebugType GetDebugType() const { return params.debugType; }
-	
+
 	bool IsIndirectEnabled() const { return params.indirect.enabled; }
 	bool IsCausticEnabled() const { return params.caustic.enabled; }
 	bool IsPhotonGIEnabled(const BSDF &bsdf) const;
@@ -273,7 +277,7 @@ public:
 			const float lastGlossiness, const float u0) const;
 	bool IsDirectLightHitVisible(const EyePathInfo &pathInfo,
 		const bool photonGICausticCacheUsed) const;
-	
+
 	const PhotonGICacheParams &GetParams() const { return params; }
 
 	void Preprocess(const u_int threadCount);
@@ -287,7 +291,7 @@ public:
 
 	const luxrays::SpectrumGroup *GetIndirectRadiance(const BSDF &bsdf) const;
 	luxrays::SpectrumGroup ConnectWithCausticPaths(const BSDF &bsdf) const;
-	
+
 	const std::vector<RadiancePhoton> &GetRadiancePhotons() const { return radiancePhotons; }
 	const PGICRadiancePhotonBvh *GetRadiancePhotonsBVH() const { return radiancePhotonsBVH; }
 	const u_int GetRadiancePhotonTracedCount() const { return indirectPhotonTracedCount; }
@@ -301,9 +305,9 @@ public:
 	static PhotonGIDebugType String2DebugType(const std::string &type);
 	static std::string DebugType2String(const PhotonGIDebugType type);
 
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static const luxrays::Properties &GetDefaultProps();
-	static PhotonGICache *FromProperties(const Scene *scn, const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr GetDefaultProps();
+	static PhotonGICache *FromProperties(SceneConstRef scn, const luxrays::Properties &cfg);
 
 	friend class PGICSceneVisibility;
 	friend class TracePhotonsThread;
@@ -333,7 +337,8 @@ private:
 
 	template<class Archive> void serialize(Archive &ar, const u_int version);
 
-	const Scene *scene;
+	std::reference_wrapper<const Scene> scene;
+
 	PhotonGICacheParams params;
 
 	u_int threadCount;

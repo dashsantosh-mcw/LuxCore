@@ -22,9 +22,11 @@
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
 #include "luxrays/devices/nativeintersectiondevice.h"
+#include "luxrays/usings.h"
 #include "slg/slg.h"
 
 namespace slg {
+
 
 class PathOCLBaseRenderEngine;
 
@@ -61,7 +63,7 @@ protected:
 	PathOCLBaseRenderEngine *renderEngine;
 	luxrays::NativeIntersectionDevice *intersectionDevice;
 
-	std::jthread *renderThread;
+	luxrays::JThreadUPtr renderThread;
 
 	bool started, editMode, threadDone;
 };

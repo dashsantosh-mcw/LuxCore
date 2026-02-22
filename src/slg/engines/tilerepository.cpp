@@ -18,11 +18,15 @@
 
 #include <mutex>
 #include <boost/format.hpp>
+#include <optional>
 
 #include "slg/engines/tilerepository.h"
+#include "luxrays/utils/properties.h"
 #include "slg/film/imagepipeline/plugins/gammacorrection.h"
 #include "slg/film/imagepipeline/plugins/tonemaps/linear.h"
 #include "slg/film/imagepipeline/plugins/tonemaps/autolinear.h"
+#include "slg/usings.h"
+#include "slg/volumes/volume.h"
 
 using namespace std;
 using namespace luxrays;
@@ -32,11 +36,11 @@ using namespace slg;
 // Tile
 //------------------------------------------------------------------------------
 
-Tile::Tile(TileRepository *repo, const Film &film, const u_int index,
+Tile::Tile(TileRepository *repo, FilmConstRef film, const u_int index,
 		const u_int tileX, const u_int tileY) :
 			tileRepository(repo), tileIndex(index), pass(0), pendingPasses(0),
 			error(numeric_limits<float>::infinity()),
-			done(false), allPassFilm(NULL), evenPassFilm(NULL),
+			done(false), allPassFilm(nullptr), evenPassFilm(nullptr),
 			allPassFilmTotalYValue(0.f), hasEnoughWarmUpSample(false) {
 	const u_int *filmSubRegion = film.GetSubRegion();
 
@@ -45,8 +49,8 @@ Tile::Tile(TileRepository *repo, const Film &film, const u_int index,
 	coord.width = Min(tileX + tileRepository->tileWidth, filmSubRegion[1] + 1) - tileX;
 	coord.height = Min(tileY + tileRepository->tileHeight, filmSubRegion[3] + 1) - tileY;
 
-	allPassFilm = NULL;
-	evenPassFilm = NULL;
+	allPassFilm = nullptr;
+	evenPassFilm = nullptr;
 	const bool hasVarianceClamping = tileRepository->varianceClamping.hasClamping();
 	const bool hasConvergenceTest = (tileRepository->enableMultipassRendering && (tileRepository->convergenceTestThreshold > 0.f));
 
@@ -60,12 +64,10 @@ Tile::Tile() {
 }
 
 Tile::~Tile() {
-	delete allPassFilm;
-	delete evenPassFilm;
 }
 
-void Tile::InitTileFilm(const Film &film, Film **tileFilm) {
-	(*tileFilm) = new Film(coord.width, coord.height);
+void Tile::InitTileFilm(const Film &film, FilmUPtr *tileFilm) {
+	(*tileFilm) = Film::Create(coord.width, coord.height);
 	(*tileFilm)->CopyDynamicSettings(film);
 
 	// Remove all channels but RADIANCE_PER_PIXEL_NORMALIZED and IMAGEPIPELINE
@@ -82,7 +84,7 @@ void Tile::InitTileFilm(const Film &film, Film **tileFilm) {
 
 	// Build an image pipeline with only an auto-linear tone mapping and
 	// gamma correction.
-	unique_ptr<ImagePipeline> imagePipeline(new ImagePipeline());
+	auto imagePipeline = std::make_unique<ImagePipeline>();
 	imagePipeline->AddPlugin(new LinearToneMap(1.f));
 	imagePipeline->AddPlugin(new GammaCorrectionPlugin(2.2f));
 	(*tileFilm)->SetImagePipelines(imagePipeline.release());
@@ -307,7 +309,7 @@ void TileRepository::Clear() {
 	convergedTiles.clear();
 }
 
-void TileRepository::Restart(Film *film, const u_int startPass, const u_int multipassIndex) {
+void TileRepository::Restart(FilmRef film, const u_int startPass, const u_int multipassIndex) {
 	todoTiles.clear();
 	pendingTiles.clear();
 	convergedTiles.clear();
@@ -320,7 +322,7 @@ void TileRepository::Restart(Film *film, const u_int startPass, const u_int mult
 	done = false;
 	// Reset the film convergence, it may have been set by previous
 	// rendering (for instance in RTPATHOCL)
-	film->SetConvergence(0.f);
+	film.SetConvergence(0.f);
 	filmTotalYValue = 0.f;
 
 	multipassRenderingIndex = multipassIndex;
@@ -377,7 +379,7 @@ void TileRepository::HilberCurveTiles(
 	}
 }
 
-void TileRepository::InitTiles(const Film &film) {
+void TileRepository::InitTiles(FilmConstRef film) {
 	const double t1 = WallClockTime();
 
 	const u_int *filmSubRegion = film.GetSubRegion();
@@ -418,7 +420,7 @@ void TileRepository::InitTiles(const Film &film) {
 	SLG_LOG(boost::format("Tiles initialization time: %.2f secs") % elapsedTime);
 }
 
-void TileRepository::SetDone(Film *film) {
+void TileRepository::SetDone(FilmRef film) {
 	// Rendering done
 	if (!done) {
 		if (enableRenderingDonePrint) {
@@ -427,8 +429,8 @@ void TileRepository::SetDone(Film *film) {
 		}
 
 		done = true;
-		
-		film->SetConvergence(1.f);
+
+		film.SetConvergence(1.f);
 	}
 }
 
@@ -470,7 +472,7 @@ bool TileRepository::GetNewTileWork(TileWork &tileWork) {
 			return false;
 		}
 	}
-		
+
 	// Add the tile to the pending list (so it is counted multiple times
 	// in case it was pendingTile)
 	pendingTiles.push_back(tileWork.tile);
@@ -478,8 +480,8 @@ bool TileRepository::GetNewTileWork(TileWork &tileWork) {
 	return true;
 }
 
-bool TileRepository::NextTile(Film *film, std::mutex *filmMutex,
-		TileWork &tileWork, Film *tileFilm) {
+bool TileRepository::NextTile(FilmRef film, std::mutex *filmMutex,
+		TileWork &tileWork, FilmRef tileFilm) {
 	// Now I have to lock the repository
 	std::unique_lock<std::mutex> lock(tileMutex);
 
@@ -488,7 +490,7 @@ bool TileRepository::NextTile(Film *film, std::mutex *filmMutex,
 		Tile *tile = tileWork.tile;
 
 		// Add the pass to the tile
-		tileWork.AddPass(*tileFilm);
+		tileWork.AddPass(tileFilm);
 
 		// Remove the first copy of tile from pending list (there can be multiple copy of the same tile)
 		pendingTiles.erase(find(pendingTiles.begin(), pendingTiles.end(), tile));
@@ -509,22 +511,22 @@ bool TileRepository::NextTile(Film *film, std::mutex *filmMutex,
 
 		// This allow to avoid to have to clear the film
 		if (enableFirstPassClear && (tileWork.passToRender == 1)) {
-			film->SetFilm(*tileFilm,
+			film.SetFilm(tileFilm,
 					0, 0,
-					Min(tileWidth, film->GetWidth() - tile->coord.x),
-					Min(tileHeight, film->GetHeight() - tile->coord.y),
+					Min(tileWidth, film.GetWidth() - tile->coord.x),
+					Min(tileHeight, film.GetHeight() - tile->coord.y),
 					tile->coord.x, tile->coord.y);
 		} else {
-			film->AddFilm(*tileFilm,
+			film.AddFilm(tileFilm,
 					0, 0,
-					Min(tileWidth, film->GetWidth() - tile->coord.x),
-					Min(tileHeight, film->GetHeight() - tile->coord.y),
+					Min(tileWidth, film.GetWidth() - tile->coord.x),
+					Min(tileHeight, film.GetHeight() - tile->coord.y),
 					tile->coord.x, tile->coord.y);
 		}
 	}
 
 	// For the support of film halt conditions
-	if (film->GetConvergence() == 1.f) {
+	if (film.GetConvergence() == 1.f) {
 		if (pendingTiles.size() == 0) {
 			// Rendering done
 			SetDone(film);
@@ -592,31 +594,31 @@ bool TileRepository::NextTile(Film *film, std::mutex *filmMutex,
 	return GetNewTileWork(tileWork);
 }
 
-Properties TileRepository::ToProperties(const Properties &cfg) {
-	Properties props;
+PropertiesUPtr TileRepository::ToProperties(const Properties &cfg) {
+	auto props = std::make_unique<Properties>();
 
 	// tile.size
-	const u_int defaultSize = cfg.Get(GetDefaultProps().Get("tile.size")).Get<u_int>();
+	const u_int defaultSize = cfg.Get(GetDefaultProps()->Get("tile.size")).Get<u_int>();
 	const Property sizeX = cfg.Get(Property("tile.size.x")(defaultSize));
 	const Property sizeY = cfg.Get(Property("tile.size.y")(defaultSize));
 
 	if (sizeX.Get<u_int>() == sizeY.Get<u_int>())
-		props << Property("tile.size")(sizeX.Get<u_int>());
+		*props << Property("tile.size")(sizeX.Get<u_int>());
 	else
-		props << sizeX << sizeY;
+		*props << sizeX << sizeY;
 
 	// tile.multipass.convergencetest.threshold
 	if (cfg.IsDefined("tile.multipass.convergencetest.threshold"))
-		props << cfg.Get(GetDefaultProps().Get("tile.multipass.convergencetest.threshold"));
+		*props << cfg.Get(GetDefaultProps()->Get("tile.multipass.convergencetest.threshold"));
 	else {
-		const float defaultThreshold = GetDefaultProps().Get("tile.multipass.convergencetest.threshold").Get<double>();
-		props << cfg.Get(Property("tile.multipass.convergencetest.threshold256")(defaultThreshold * 256.f));
+		const float defaultThreshold = GetDefaultProps()->Get("tile.multipass.convergencetest.threshold").Get<double>();
+		*props << cfg.Get(Property("tile.multipass.convergencetest.threshold256")(defaultThreshold * 256.f));
 	}
 
-	props <<
-			cfg.Get(GetDefaultProps().Get("tile.multipass.enable")) <<
-			cfg.Get(GetDefaultProps().Get("tile.multipass.convergencetest.threshold.reduction")) <<
-			cfg.Get(GetDefaultProps().Get("tile.multipass.convergencetest.warmup.count"));
+	*props <<
+			cfg.Get(GetDefaultProps()->Get("tile.multipass.enable")) <<
+			cfg.Get(GetDefaultProps()->Get("tile.multipass.convergencetest.threshold.reduction")) <<
+			cfg.Get(GetDefaultProps()->Get("tile.multipass.convergencetest.warmup.count"));
 
 	return props;
 }
@@ -625,28 +627,29 @@ TileRepository *TileRepository::FromProperties(const luxrays::Properties &cfg) {
 	u_int tileWidth = 32;
 	u_int tileHeight = 32;
 	if (cfg.IsDefined("tile.size"))
-		tileWidth = tileHeight = Max(8u, cfg.Get(GetDefaultProps().Get("tile.size")).Get<u_int>());
+		tileWidth = tileHeight = Max(8u, cfg.Get(GetDefaultProps()->Get("tile.size")).Get<u_int>());
 	tileWidth = Max(8u, cfg.Get(Property("tile.size.x")(tileWidth)).Get<u_int>());
 	tileHeight = Max(8u, cfg.Get(Property("tile.size.y")(tileHeight)).Get<u_int>());
-	unique_ptr<TileRepository> tileRepository(new TileRepository(tileWidth, tileHeight));
+	auto tileRepository = std::make_unique<TileRepository>(tileWidth, tileHeight);
 
-	tileRepository->enableMultipassRendering = cfg.Get(GetDefaultProps().Get("tile.multipass.enable")).Get<bool>();
+	tileRepository->enableMultipassRendering = cfg.Get(GetDefaultProps()->Get("tile.multipass.enable")).Get<bool>();
 
 	if (cfg.IsDefined("tile.multipass.convergencetest.threshold"))
-		tileRepository->convergenceTestThreshold = cfg.Get(GetDefaultProps().Get("tile.multipass.convergencetest.threshold")).Get<double>();
+		tileRepository->convergenceTestThreshold = cfg.Get(GetDefaultProps()->Get("tile.multipass.convergencetest.threshold")).Get<double>();
 	else {
-		const float defaultThreshold256 = 256.f * GetDefaultProps().Get("tile.multipass.convergencetest.threshold").Get<double>();
+		const float defaultThreshold256 = 256.f * GetDefaultProps()->Get("tile.multipass.convergencetest.threshold").Get<double>();
 		tileRepository->convergenceTestThreshold = cfg.Get(Property("tile.multipass.convergencetest.threshold256")(defaultThreshold256)).Get<double>() * (1.f / 256.f);
 	}
 
-	tileRepository->convergenceTestThresholdReduction = cfg.Get(GetDefaultProps().Get("tile.multipass.convergencetest.threshold.reduction")).Get<double>();
-	tileRepository->convergenceTestWarmUpSamples = cfg.Get(GetDefaultProps().Get("tile.multipass.convergencetest.warmup.count")).Get<u_int>();
+	tileRepository->convergenceTestThresholdReduction = cfg.Get(GetDefaultProps()->Get("tile.multipass.convergencetest.threshold.reduction")).Get<double>();
+	tileRepository->convergenceTestWarmUpSamples = cfg.Get(GetDefaultProps()->Get("tile.multipass.convergencetest.warmup.count")).Get<u_int>();
 
 	return tileRepository.release();
 }
 
-const Properties &TileRepository::GetDefaultProps() {
-	static Properties props =  Properties() <<
+PropertiesUPtr TileRepository::GetDefaultProps() {
+	auto props = std::make_unique<Properties>();
+	*props <<
 			Property("tile.size")(32) <<
 			Property("tile.multipass.enable")(true) <<
 			Property("tile.multipass.convergencetest.threshold")(6.f / 256.f) <<

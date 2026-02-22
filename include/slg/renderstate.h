@@ -21,6 +21,7 @@
 
 #include "luxrays/utils/serializationutils.h"
 #include "slg/slg.h"
+#include "slg/usings.h"
 
 namespace slg {
 
@@ -34,7 +35,7 @@ public:
 
 	void SaveSerialized(const std::string &fileName);
 
-	static RenderState *LoadSerialized(const std::string &fileName);
+	static RenderStateSPtr LoadSerialized(const std::string &fileName);
 
 	friend class boost::serialization::access;
 

@@ -42,7 +42,13 @@ public:
 
 protected:
 	void RTRenderFunc(std::stop_token stop_token);
-	virtual std::jthread *AllocRenderThread() { return new std::jthread(std::bind_front(&RTPathCPURenderThread::RTRenderFunc, this)); }
+	virtual luxrays::JThreadUPtr AllocRenderThread() {
+		auto t = std::make_unique<luxrays::JThread>(
+			std::bind_front(&RTPathCPURenderThread::RTRenderFunc, this)
+		);
+		luxrays::SetThreadName(t, "LxRTPathCPU");
+		return std::move(t);
+	}
 
 	virtual void StartRenderThread();
 };
@@ -51,7 +57,7 @@ class RTPathCPUSampler;
 
 class RTPathCPURenderEngine : public PathCPURenderEngine {
 public:
-	RTPathCPURenderEngine(const RenderConfig *cfg);
+	RTPathCPURenderEngine(RenderConfigRef cfg);
 	~RTPathCPURenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
@@ -67,8 +73,8 @@ public:
 
 	static RenderEngineType GetObjectType() { return RTPATHCPU; }
 	static std::string GetObjectTag() { return "RTPATHCPU"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(const RenderConfig *rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class PathCPURenderEngine;
 	friend class RTPathCPURenderThread;
@@ -79,13 +85,13 @@ public:
     };
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual bool IsRTMode() const { return true; }
 	
-	CPURenderThread *NewRenderThread(const u_int index,
+	CPURenderThreadUPtr NewRenderThread(const u_int index,
 			luxrays::IntersectionDevice *device) {
-		return new RTPathCPURenderThread(this, index, device);
+		return std::make_unique<RTPathCPURenderThread>(this, index, device);
 	}
 
 	virtual void StartLockLess();
@@ -95,7 +101,7 @@ protected:
 	virtual void EndSceneEditLockLess(const EditActionList &editActions);
 
 	virtual void BeginFilmEdit();
-	virtual void EndFilmEdit(Film *film, std::mutex *flmMutex);
+	virtual void EndFilmEdit(FilmRef film, std::mutex *flmMutex);
 
 	virtual void UpdateFilmLockLess();
 

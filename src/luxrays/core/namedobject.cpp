@@ -38,9 +38,12 @@ NamedObject::NamedObject(const string &nm) : name(nm) {
 }
 
 NamedObject::~NamedObject() {
+#ifndef NDEBUG
+	std::cerr << "Deleting object:" << name << '\n';
+#endif
 }
 
-Properties NamedObject::ToProperties() const {
+PropertiesUPtr NamedObject::ToProperties() const {
 	throw runtime_error("Named object \"" + name + "\" doesn't implement ToProperties() method");
 }
 

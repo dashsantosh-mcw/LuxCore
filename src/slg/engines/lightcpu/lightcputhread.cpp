@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <cassert>
 #include "luxrays/utils/thread.h"
 
 #include "slg/engines/lightcpu/lightcpu.h"
@@ -35,7 +36,9 @@ LightCPURenderThread::LightCPURenderThread(LightCPURenderEngine *engine,
 }
 
 void LightCPURenderThread::RenderFunc(std::stop_token stop_token) {
-	//SLG_LOG("[LightCPURenderThread::" << threadIndex << "] Rendering thread started");
+#ifndef NDEBUG
+	SLG_LOG("[LightCPURenderThread::" << threadIndex << "] Rendering thread started");
+#endif
 
 	//--------------------------------------------------------------------------
 	// Initialization
@@ -47,11 +50,11 @@ void LightCPURenderThread::RenderFunc(std::stop_token stop_token) {
 	LightCPURenderEngine *engine = (LightCPURenderEngine *)renderEngine;
 	const PathTracer &pathTracer = engine->pathTracer;
 	// (engine->seedBase + 1) seed is used for sharedRndGen
-	RandomGenerator *rndGen = new RandomGenerator(engine->seedBase + 1 + threadIndex);
+	auto rndGen = std::make_unique<RandomGenerator>(engine->seedBase + 1 + threadIndex);
 
 	// Setup the sampler
-	Sampler *sampler = engine->renderConfig->AllocSampler(rndGen, engine->film,
-			engine->sampleSplatter, engine->samplerSharedData,
+	auto sampler = engine->renderConfig.AllocSampler(rndGen, engine->GetFilm(),
+			engine->GetSampleSplatter(), engine->samplerSharedData,
 			// Disable image plane meaning for samples 0 and 1
 			Properties() << Property("sampler.imagesamples.enable")(false));
 	sampler->SetThreadIndex(threadIndex);
@@ -75,13 +78,13 @@ void LightCPURenderThread::RenderFunc(std::stop_token stop_token) {
 				break;
 		}
 
-		pathTracer.RenderLightSample(device, engine->renderConfig->scene,
-				engine->film, sampler, sampleResults);
+		pathTracer.RenderLightSample(device, engine->renderConfig.GetScene(),
+				engine->GetFilm(), *sampler, sampleResults);
 
 		// Variance clamping
 		if (varianceClamping.hasClamping()) {
 			for(u_int i = 0; i < sampleResults.size(); ++i)
-				varianceClamping.Clamp(*(engine->film), sampleResults[i]);
+				varianceClamping.Clamp(engine->GetFilm(), sampleResults[i]);
 		}
 
 		sampler->NextSample(sampleResults);
@@ -92,15 +95,14 @@ void LightCPURenderThread::RenderFunc(std::stop_token stop_token) {
 #endif
 
 		// Check halt conditions
-		if (engine->film->GetConvergence() == 1.f)
+		if (engine->GetFilm().GetConvergence() == 1.f)
 			break;
 	}
 
-	delete sampler;
-	delete rndGen;
-
 	threadDone = true;
 
-	//SLG_LOG("[LightCPURenderThread::" << threadIndex << "] Rendering thread halted");
+#ifndef NDEBUG
+	SLG_LOG("[LightCPURenderThread::" << threadIndex << "] Rendering thread halted");
+#endif
 }
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

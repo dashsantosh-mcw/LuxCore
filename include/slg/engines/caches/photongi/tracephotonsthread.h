@@ -22,10 +22,12 @@
 #include <vector>
 
 #include "luxrays/utils/utils.h"
+#include "luxrays/usings.h"
 
 #include "slg/slg.h"
 
 namespace slg {
+
 
 //------------------------------------------------------------------------------
 // TracePhotonsThread
@@ -89,7 +91,7 @@ private:
 	std::atomic<u_int> &globalIndirectSize;
 	std::atomic<u_int> &globalCausticSize;
 
-	std::jthread *renderThread;
+	luxrays::JThreadUPtr renderThread;
 
 	u_int sampleBootSize, sampleStepSize, sampleSize;
 	bool indirectDone, causticDone;

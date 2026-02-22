@@ -19,6 +19,7 @@
 #ifndef _SLG_SCENEVISIBILITY_H
 #define	_SLG_SCENEVISIBILITY_H
 
+#include <memory>
 #include <vector>
 
 #include "slg/slg.h"
@@ -27,14 +28,21 @@
 
 namespace slg {
 
+
 template <class T>
 class SceneVisibility {
 public:
-	SceneVisibility(const Scene *scene, std::vector<T> &visibilityParticles,
-			const u_int maxPathDepth, const u_int maxSampleCount,
+	SceneVisibility(
+			SceneConstRef scene,
+			std::vector<T> &visibilityParticles,
+			const u_int maxPathDepth,
+			const u_int maxSampleCount,
 			const float targetHitRate,
-			const float lookUpRadius, const float lookUpNormalAngle,
-			const float timeStart, const float timeEnd);
+			const float lookUpRadius,
+			const float lookUpNormalAngle,
+			const float timeStart,
+			const float timeEnd
+	);
 	virtual ~SceneVisibility();
 
 	void Build();
@@ -43,7 +51,7 @@ protected:
 	class TraceVisibilityThread {
 	public:
 		TraceVisibilityThread(SceneVisibility<T> &sv, const u_int index,
-				SobolSamplerSharedData &visibilitySobolSharedData,
+				std::shared_ptr<SobolSamplerSharedData> visibilitySobolSharedData,
 				IndexOctree<T> *particlesOctree, std::mutex &particlesOctreeMutex,
 				std::atomic<u_int> &globalVisibilityParticlesCount,
 				u_int &visibilityCacheLookUp, u_int &visibilityCacheHits,
@@ -54,7 +62,7 @@ protected:
 		void Join();
 
 	private:
-		void GenerateEyeRay(const Camera *camera, luxrays::Ray &eyeRay,
+		void GenerateEyeRay(CameraConstRef camera, luxrays::Ray &eyeRay,
 				PathVolumeInfo &volInfo, Sampler *sampler, SampleResult &sampleResult) const;
 
 		void RenderFunc(std::stop_token stop_token);
@@ -62,7 +70,7 @@ protected:
 		SceneVisibility<T> &sv;
 		const u_int threadIndex;
 
-		SobolSamplerSharedData &visibilitySobolSharedData;
+		std::shared_ptr<SobolSamplerSharedData> visibilitySobolSharedData;
 		IndexOctree<T> *particlesOctree;
 		std::mutex &particlesOctreeMutex;
 		std::atomic<u_int> &globalVisibilityParticlesCount;
@@ -70,7 +78,7 @@ protected:
 		u_int &visibilityCacheHits;
 		bool &visibilityWarmUp;
 
-		std::jthread *renderThread;
+		luxrays::JThreadUPtr renderThread;
 	};
 
 	virtual IndexOctree<T> *AllocOctree() const = 0;
@@ -79,7 +87,7 @@ protected:
 	virtual bool ProcessVisibilityParticle(const T &visibilityParticle, std::vector<T> &visibilityParticles,
 			IndexOctree<T> *particlesOctree, const float maxDistance2) const = 0;
 
-	const Scene *scene;
+	SceneConstRef scene;
 	std::vector<T> &visibilityParticles;
 	const u_int maxPathDepth, maxSampleCount;	
 	const float targetHitRate, lookUpRadius, lookUpNormalAngle, timeStart, timeEnd;

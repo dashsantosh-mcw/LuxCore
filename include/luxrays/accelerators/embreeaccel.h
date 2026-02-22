@@ -28,7 +28,7 @@ namespace luxrays {
 
 class EmbreeAccel : public Accelerator {
 public:
-	EmbreeAccel(const Context *context);
+	EmbreeAccel(const Context & context);
 	virtual ~EmbreeAccel();
 
 	virtual AcceleratorType GetType() const { return ACCEL_EMBREE; }
@@ -53,23 +53,23 @@ public:
 	virtual bool Intersect(const Ray *ray, RayHit *hit) const;
 
 private:
-	static bool MeshPtrCompare(const Mesh *p0, const Mesh *p1);
+	static bool MeshPtrCompare(const Mesh * p0, const Mesh * p1);
 	
-	void ExportTriangleMesh(const RTCScene embreeScene, const Mesh *mesh) const;
-	void ExportMotionTriangleMesh(const RTCScene embreeScene, const MotionTriangleMesh *mtm) const;
+	void ExportTriangleMesh(const RTCScene embreeScene, MeshConstRef mesh) const;
+	void ExportMotionTriangleMesh(const RTCScene embreeScene, const MotionTriangleMesh & mtm) const;
 
 	// Used for Embree initialization
 	static std::mutex initMutex;
 	// Used to count the number of existing EmbreeAccel instances
 	static u_int initCount;
 
-	const Context *ctx;
+	const Context & ctx;
 
 	RTCDevice embreeDevice;
 	RTCScene embreeScene;
-	std::map<const Mesh *, RTCScene, bool (*)(const Mesh *, const Mesh *)> uniqueRTCSceneByMesh;
-	std::map<const Mesh *, RTCGeometry, bool (*)(const Mesh *, const Mesh *)> uniqueGeomByMesh;
-	std::map<const Mesh *, Matrix4x4, bool (*)(const Mesh *, const Mesh *)> uniqueInstMatrixByMesh;
+	std::map<const Mesh * , RTCScene, bool (*)(const Mesh * , const Mesh * )> uniqueRTCSceneByMesh;
+	std::map<const Mesh * , RTCGeometry, bool (*)(const Mesh * , const Mesh * )> uniqueGeomByMesh;
+	std::map<const Mesh * , Matrix4x4, bool (*)(const Mesh * , const Mesh * )> uniqueInstMatrixByMesh;
 	// Used to normalize between 0.f and 1.f
 	float minTime, maxTime, timeScale;
 };

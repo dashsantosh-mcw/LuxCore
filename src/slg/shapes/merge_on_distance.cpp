@@ -670,7 +670,7 @@ ClusterMap mergePoints(const Point * points, u_int numPoints, u_int tolerance) {
 
 // Recreate a mesh, based on a source mesh and a clusterisation
 // Replace each variable with interpolated value
-luxrays::ExtTriangleMesh* RecreateMesh(
+luxrays::ExtTriangleMeshUPtr RecreateMesh(
 	const luxrays::ExtTriangleMesh& srcMesh,
 	const ClusterMap& clustermap
 ) {
@@ -914,7 +914,7 @@ luxrays::ExtTriangleMesh* RecreateMesh(
 	}
 
 	// Create new mesh
-	auto newMesh = new luxrays::ExtTriangleMesh(
+	auto newMesh = std::make_unique<luxrays::ExtTriangleMesh>(
 		numNewPoints,
 		numTriangles,
 		newPoints.release(),
@@ -944,15 +944,15 @@ luxrays::ExtTriangleMesh* RecreateMesh(
 namespace slg {
 
 MergeOnDistanceShape::MergeOnDistanceShape(
-	luxrays::ExtTriangleMesh * srcMesh,
+	luxrays::ExtTriangleMeshRef  srcMesh,
 	u_int tolerance
 ) {
 
-	SDL_LOG("Merge On Distance - Applying to " << srcMesh->GetName());
+	SDL_LOG("Merge On Distance - Applying to " << srcMesh.GetName());
 
 	const double startTime = WallClockTime();
 
-	mesh = ApplyMergeOnDistance(srcMesh, tolerance);
+	mesh = std::move(ApplyMergeOnDistance(srcMesh, tolerance));
 
 	const double endTime = WallClockTime();
 	SDL_LOG(
@@ -963,30 +963,28 @@ MergeOnDistanceShape::MergeOnDistanceShape(
 }
 
 MergeOnDistanceShape::~MergeOnDistanceShape() {
-	if (!refined)
-		delete mesh;
 }
 
-luxrays::ExtTriangleMesh*
+luxrays::ExtTriangleMeshUPtr
 MergeOnDistanceShape::ApplyMergeOnDistance(
-	luxrays::ExtTriangleMesh * srcMesh,
+	luxrays::ExtTriangleMeshRef srcMesh,
 	u_int tolerance
 ) {
 
 
 	// Get merged points
 	auto clusters = mergePoints(
-		srcMesh->GetVertices(),
-		srcMesh->GetTotalVertexCount(),
+		srcMesh.GetVertices(),
+		srcMesh.GetTotalVertexCount(),
 		tolerance
 	);
 
-	auto dstMesh = RecreateMesh(*srcMesh, clusters);
+	auto dstMesh = RecreateMesh(srcMesh, clusters);
 
 
 	SDL_LOG(
 		"Merge On Distance - Reduced from "
-		<< srcMesh->GetTotalVertexCount()
+		<< srcMesh.GetTotalVertexCount()
 		<< " to "
 		<< dstMesh->GetTotalVertexCount()
 		<< " vertices"
@@ -995,9 +993,9 @@ MergeOnDistanceShape::ApplyMergeOnDistance(
 	return dstMesh;
 }
 
-luxrays::ExtTriangleMesh *
-MergeOnDistanceShape::RefineImpl(const slg::Scene *scene) {
-	return mesh;
+luxrays::ExtTriangleMeshUPtr
+MergeOnDistanceShape::RefineImpl(SceneConstRef scene) {
+	return std::move(mesh);
 }
 
 }  // namespace slg

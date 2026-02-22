@@ -32,11 +32,11 @@ namespace luxrays {
 
 class CUDAIntersectionDevice : public CUDADevice, public HardwareIntersectionDevice {
 public:
-	CUDAIntersectionDevice(const Context *context,
+	CUDAIntersectionDevice(const Context & context,
 		CUDADeviceDescription *desc, const size_t devIndex);
 	virtual ~CUDAIntersectionDevice();
 
-	virtual void SetDataSet(DataSet *newDataSet);
+	virtual void SetDataSet(DataSetSPtr newDataSet);
 	virtual void Start();
 	virtual void Stop();
 

@@ -32,7 +32,7 @@ void NativeIntersectionDeviceDescription::AddDeviceDescs(std::vector<DeviceDescr
 // Native thread IntersectionDevice
 //------------------------------------------------------------------------------
 
-NativeIntersectionDevice::NativeIntersectionDevice(const Context *context,
+NativeIntersectionDevice::NativeIntersectionDevice(const Context & context,
 		NativeIntersectionDeviceDescription *desc,
 		const size_t devIndex) :
 	Device(context, devIndex), deviceDesc(desc) {
@@ -43,7 +43,7 @@ NativeIntersectionDevice::NativeIntersectionDevice(const Context *context,
 NativeIntersectionDevice::~NativeIntersectionDevice() {
 }
 
-void NativeIntersectionDevice::SetDataSet(DataSet *newDataSet) {
+void NativeIntersectionDevice::SetDataSet(DataSetSPtr newDataSet) {
 	IntersectionDevice::SetDataSet(newDataSet);
 
 	if (dataSet) {

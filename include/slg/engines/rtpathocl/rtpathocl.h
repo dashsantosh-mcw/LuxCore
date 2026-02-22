@@ -70,7 +70,7 @@ typedef enum {
 
 class RTPathOCLRenderEngine : public TilePathOCLRenderEngine {
 public:
-	RTPathOCLRenderEngine(const RenderConfig *cfg);
+	RTPathOCLRenderEngine(RenderConfigRef cfg);
 	virtual ~RTPathOCLRenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
@@ -81,7 +81,7 @@ public:
 	virtual void EndSceneEdit(const EditActionList &editActions);
 
 	virtual void BeginFilmEdit();
-	virtual void EndFilmEdit(Film *film, std::mutex *flmMutex);
+	virtual void EndFilmEdit(FilmRef film, std::mutex *flmMutex);
 
 	virtual void WaitNewFrame();
 
@@ -91,8 +91,8 @@ public:
 
 	static RenderEngineType GetObjectType() { return RTPATHOCL; }
 	static std::string GetObjectTag() { return "RTPATHOCL"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(const RenderConfig *rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class TilePathOCLRenderEngine;
 	friend class RTPathOCLRenderThread;
@@ -106,7 +106,7 @@ public:
     };
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual void InitGPUTaskConfiguration();
 	virtual bool IsRTMode() const { return true; }

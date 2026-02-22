@@ -49,8 +49,8 @@ void PathOCLBaseOCLRenderThread::InitFilm() {
 	u_int threadFilmWidth, threadFilmHeight, threadFilmSubRegion[4];
 	GetThreadFilmSize(&threadFilmWidth, &threadFilmHeight, threadFilmSubRegion);
 
-	for(ThreadFilm *threadFilm: threadFilms)
-		threadFilm->Init(renderEngine->film, threadFilmWidth, threadFilmHeight,
+	for(ThreadFilmRPtr threadFilm: threadFilms)
+		threadFilm->Init(renderEngine->GetFilm(), threadFilmWidth, threadFilmHeight,
 			threadFilmSubRegion);
 }
 
@@ -357,7 +357,7 @@ void PathOCLBaseOCLRenderThread::InitGPUTaskBuffer() {
 }
 
 void PathOCLBaseOCLRenderThread::InitSamplerSharedDataBuffer() {
-	const u_int *subRegion = renderEngine->film->GetSubRegion();
+	const u_int *subRegion = renderEngine->GetFilm().GetSubRegion();
 	const u_int filmRegionPixelCount = (subRegion[1] - subRegion[0] + 1) * (subRegion[3] - subRegion[2] + 1);
 
 	size_t size = 0;
@@ -664,7 +664,7 @@ void PathOCLBaseOCLRenderThread::InitRender() {
 	SetKernelArgs();
 
 	// Clear all thread films
-	for(ThreadFilm *threadFilm: threadFilms) {
+	for(ThreadFilmRPtr threadFilm: threadFilms) {
 		intersectionDevice->PushThreadCurrentDevice();
 		threadFilm->ClearFilm(intersectionDevice, filmClearKernel, filmClearWorkGroupSize);
 		intersectionDevice->PopThreadCurrentDevice();

@@ -12,10 +12,12 @@
  * Unless required by applicable law or agreed to in writing, software     *
  * distributed under the License is distributed on an "AS IS" BASIS,       *
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.*
+ *
  * See the License for the specific language governing permissions and     *
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include <cassert>
 #include <boost/format.hpp>
 
 #include "luxrays/utils/thread.h"
@@ -26,6 +28,7 @@
 #include "slg/engines/caches/photongi/tracephotonsthread.h"
 #include "slg/utils/pathdepthinfo.h"
 #include "slg/utils/pathinfo.h"
+#include "slg/cameras/camera.h"
 
 using namespace std;
 using namespace luxrays;
@@ -59,15 +62,15 @@ void TracePhotonsThread::Start() {
 	indirectPhotons.clear();
 	causticPhotons.clear();
 
-	renderThread = new std::jthread(std::bind_front(&TracePhotonsThread::RenderFunc, this));
+	renderThread = std::make_unique<luxrays::JThread>(
+		std::bind_front(&TracePhotonsThread::RenderFunc, this)
+	);
+	SetThreadName(renderThread, "LxTracePhotons");
 }
 
 void TracePhotonsThread::Join() {
-	if (renderThread) {
+	if (renderThread and renderThread->joinable()) {
 		renderThread->join();
-
-		delete renderThread;
-		renderThread = nullptr;
 	}
 }
 
@@ -113,29 +116,29 @@ bool TracePhotonsThread::TracePhotonPath(RandomGenerator &rndGen,
 	newIndirectPhotons.clear();
 	newCausticPhotons.clear();
 	vector<u_int> allNearEntryIndices;
-	
-	const Scene *scene = pgic.scene;
-	const Camera *camera = scene->camera;
+
+	SceneConstRef scene = pgic.scene;
+	auto& camera = scene.GetCamera();
 
 	bool usefulPath = false;
-	
+
 	Spectrum lightPathFlux;
 
 	const float timeSample = samples[0];
 	const float time = (pgic.params.photon.timeStart <= pgic.params.photon.timeEnd) ?
 		Lerp(timeSample, pgic.params.photon.timeStart, pgic.params.photon.timeEnd) :
-		camera->GenerateRayTime(timeSample);
+		camera.GenerateRayTime(timeSample);
 
 	// Select one light source
 	float lightPickPdf;
-	const LightSource *light = scene->lightDefs.GetEmitLightStrategy()->
-			SampleLights(samples[1], &lightPickPdf);
+	auto light = scene.GetLightSources().GetEmitLightStrategy().
+			SampleLights(scene, samples[1], &lightPickPdf);
 
 	if (light) {
 		// Initialize the light path
 		float lightEmitPdfW;
 		Ray nextEventRay;
-		lightPathFlux = light->Emit(*scene,
+		lightPathFlux = light->Emit(scene,
 				time, samples[2], samples[3], samples[4], samples[5], samples[6],
 				nextEventRay, lightEmitPdfW);
 
@@ -154,7 +157,7 @@ bool TracePhotonsThread::TracePhotonPath(RandomGenerator &rndGen,
 				RayHit nextEventRayHit;
 				BSDF bsdf;
 				Spectrum connectionThroughput;
-				const bool hit = scene->Intersect(nullptr, LIGHT_RAY | GENERIC_RAY, &pathInfo.volume, samples[sampleOffset],
+				const bool hit = scene.Intersect(nullptr, LIGHT_RAY | GENERIC_RAY, &pathInfo.volume, samples[sampleOffset],
 						&nextEventRay, &nextEventRayHit, &bsdf,
 						&connectionThroughput);
 

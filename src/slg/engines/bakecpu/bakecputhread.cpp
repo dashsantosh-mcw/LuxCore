@@ -24,6 +24,7 @@
 #include "slg/volumes/volume.h"
 #include "slg/utils/varianceclamping.h"
 #include "slg/film/imagepipeline/plugins/bakemapmargin.h"
+#include "luxrays/core/randomgen.h"
 
 using namespace std;
 using namespace luxrays;
@@ -41,7 +42,7 @@ BakeCPURenderThread::BakeCPURenderThread(BakeCPURenderEngine *engine,
 
 void BakeCPURenderThread::InitBakeWork(const BakeMapInfo &mapInfo) {
 	BakeCPURenderEngine *engine = (BakeCPURenderEngine *)renderEngine;
-	Scene *scene = engine->renderConfig->scene;
+	const auto& scene = engine->renderConfig.GetScene();
 
 	// Lock the main film
 	std::unique_lock<std::mutex> lock(*engine->filmMutex);
@@ -63,23 +64,21 @@ void BakeCPURenderThread::InitBakeWork(const BakeMapInfo &mapInfo) {
 	}
 
 	// Initialize the map Film
-	delete engine->mapFilm;
-	engine->mapFilm = nullptr;
-
-	engine->mapFilm = new Film(mapInfo.width, mapInfo.height, nullptr);
-	engine->mapFilm->CopyDynamicSettings(*engine->film);
+	engine->mapFilm = Film::Create(mapInfo.width, mapInfo.height, NULL);
+	engine->GetMapFilm().CopyDynamicSettings(engine->GetFilm());
 	// Copy the halt conditions too
-	engine->mapFilm->CopyHaltSettings(*engine->film);
-	engine->mapFilm->SetThreadCount(engine->renderThreads.size());
-	engine->mapFilm->Init();
+	engine->GetMapFilm().CopyHaltSettings(engine->GetFilm());
+	engine->GetMapFilm().SetThreadCount(engine->renderThreads.size());
+	engine->GetMapFilm().Init();
 
 	// Build the list of object to bake and each mesh area
 	for (auto const &objName : mapInfo.objectNames) {
-		const SceneObject *sceneObj = scene->objDefs.GetSceneObject(objName);
-		if (sceneObj)
-			engine->currentSceneObjsToBake.push_back(sceneObj);
-		else
-			SLG_LOG("WARNING: Unknown object to bake ignored (" << objName << ")");
+		auto& sceneObj = scene.GetObjects().GetSceneObject(objName);
+		engine->currentSceneObjsToBake.push_back(&sceneObj);
+		//if (sceneObj)
+			//engine->currentSceneObjsToBake.push_back(sceneObj);
+		//else
+			//SLG_LOG("WARNING: Unknown object to bake ignored (" << objName << ")");
 	}
 
 	if (engine->currentSceneObjsToBake.size() == 0)
@@ -96,28 +95,28 @@ void BakeCPURenderThread::InitBakeWork(const BakeMapInfo &mapInfo) {
 			unsigned
 #endif
 			int sceneObjIndex = 0; sceneObjIndex < engine->currentSceneObjDist.size(); ++sceneObjIndex) {
-		const SceneObject *sceneObj = engine->currentSceneObjsToBake[sceneObjIndex];
-		const ExtMesh *mesh = sceneObj->GetExtMesh();
-		
-		Transform localToWorld;
-		sceneObj->GetExtMesh()->GetLocal2World(0.f, localToWorld);
+		auto& sceneObj = *engine->currentSceneObjsToBake[sceneObjIndex];
+		auto& mesh = sceneObj.GetExtMesh();
 
-		vector<float> trisArea(mesh->GetTotalTriangleCount());
+		Transform localToWorld;
+		sceneObj.GetExtMesh().GetLocal2World(0.f, localToWorld);
+
+		std::vector<float> trisArea(mesh.GetTotalTriangleCount());
 		engine->currentSceneObjsToBakeArea[sceneObjIndex] = 0.f;
-		for (u_int triIndex = 0; triIndex < mesh->GetTotalTriangleCount(); ++triIndex) {
-			trisArea[triIndex] = mesh->GetTriangleArea(localToWorld, triIndex);
+		for (u_int triIndex = 0; triIndex < mesh.GetTotalTriangleCount(); ++triIndex) {
+			trisArea[triIndex] = mesh.GetTriangleArea(localToWorld, triIndex);
 			engine->currentSceneObjsToBakeArea[sceneObjIndex] += trisArea[triIndex];
 		}
-		
+
 		engine->currentSceneObjDist[sceneObjIndex] = new Distribution1D(&trisArea[0], trisArea.size());
 	}
-	
+
 	// To sample the meshes according their area
 	delete engine->currentSceneObjsDist;
 	engine->currentSceneObjsDist = new Distribution1D(&engine->currentSceneObjsToBakeArea[0], engine->currentSceneObjsToBakeArea.size());
 
 	// Reset the main film
-	engine->film->Reset();
+	engine->GetFilm().Reset();
 }
 
 void BakeCPURenderThread::SetSampleResultXY(const BakeMapInfo &mapInfo,
@@ -140,14 +139,14 @@ void BakeCPURenderThread::SetSampleResultXY(const BakeMapInfo &mapInfo,
 void BakeCPURenderThread::RenderEyeSample(const BakeMapInfo &mapInfo, PathTracerThreadState &state) const {
 	BakeCPURenderEngine *engine = (BakeCPURenderEngine *)renderEngine;
 	const PathTracer &pathTracer = engine->pathTracer;
-	vector<SampleResult> &sampleResults = state.eyeSampleResults;
+	vector<SampleResult> &sampleResults = state.GetEyeSampleResults();
 	SampleResult &sampleResult = sampleResults[0];
 
 	// Pick a scene object to sample
 	float sceneObjPickPdf;
 	const u_int currentSceneObjIndex = engine->currentSceneObjsDist->SampleDiscrete(state.eyeSampler->GetSample(0), &sceneObjPickPdf);
-	const SceneObject *sceneObj = engine->currentSceneObjsToBake[currentSceneObjIndex];
-	const ExtMesh *mesh = sceneObj->GetExtMesh();
+	auto& sceneObj = *engine->currentSceneObjsToBake[currentSceneObjIndex];
+	auto& mesh = sceneObj.GetExtMesh();
 
 	// Pick a triangle to sample
 	float triPickPdf;
@@ -155,17 +154,17 @@ void BakeCPURenderThread::RenderEyeSample(const BakeMapInfo &mapInfo, PathTracer
 
 	const float timeSample = state.eyeSampler->GetSample(4);
 	Transform localToWorld;
-	mesh->GetLocal2World(timeSample, localToWorld);
+	mesh.GetLocal2World(timeSample, localToWorld);
 
 	// Origin
 	Point samplePoint;
 	float b0, b1, b2;
-	mesh->Sample(localToWorld, triangleIndex, state.eyeSampler->GetSample(2), state.eyeSampler->GetSample(3),
+	mesh.Sample(localToWorld, triangleIndex, state.eyeSampler->GetSample(2), state.eyeSampler->GetSample(3),
 			&samplePoint, &b0, &b1, &b2);
 
-	const u_int sceneObjIndex = state.scene->objDefs.GetSceneObjectIndex(sceneObj);
+	const u_int sceneObjIndex = state.scene.GetObjects().GetSceneObjectIndex(sceneObj);
 	const PathVolumeInfo volInfo;
-	BSDF bsdf(*state.scene, sceneObjIndex, triangleIndex,
+	BSDF bsdf(state.scene, sceneObjIndex, triangleIndex,
 			samplePoint, b1, b2,
 			timeSample, state.eyeSampler->GetSample(pathTracer.eyeSampleSize), &volInfo);
 
@@ -174,7 +173,7 @@ void BakeCPURenderThread::RenderEyeSample(const BakeMapInfo &mapInfo, PathTracer
 	//--------------------------------------------------------------------------
 
 	PathTracer::ResetEyeSampleResults(sampleResults);
-	SetSampleResultXY(mapInfo, bsdf.hitPoint, *state.film, sampleResult);
+	SetSampleResultXY(mapInfo, bsdf.hitPoint, state.GetFilm(), sampleResult);
 
 	switch (mapInfo.type) {
 		case COMBINED: {
@@ -234,9 +233,14 @@ void BakeCPURenderThread::RenderEyeSample(const BakeMapInfo &mapInfo, PathTracer
 				// Render the received light from the path
 				//--------------------------------------------------------------
 
-				pathTracer.RenderEyePath(state.device, state.scene,
-						state.eyeSampler, pathInfo, eyeRay, bsdfSample,
-						state.eyeSampleResults);
+				pathTracer.RenderEyePath(
+					state.device, state.scene,
+					*state.eyeSampler,
+					pathInfo,
+					eyeRay,
+					bsdfSample,
+					state.GetEyeSampleResults()
+				);
 			}
 			break;
 		}
@@ -297,8 +301,8 @@ void BakeCPURenderThread::RenderEyeSample(const BakeMapInfo &mapInfo, PathTracer
 
 				const float NdotL = Dot(bsdf.hitPoint.shadeN, sampledDir);
 				pathTracer.RenderEyePath(state.device, state.scene,
-						state.eyeSampler, pathInfo, eyeRay, Spectrum(NdotL * INV_PI / samplePdf),
-						state.eyeSampleResults);
+						*state.eyeSampler, pathInfo, eyeRay, Spectrum(NdotL * INV_PI / samplePdf),
+						state.GetEyeSampleResults());
 			}
 			break;
 		}
@@ -336,10 +340,10 @@ void BakeCPURenderThread::RenderConnectToEyeCallBack(const BakeMapInfo &mapInfo,
 			(!engine->pathTracer.hybridBackForwardEnable || (pathInfo.depth.depth > 0))) {
 		// Check if the hit point is on one of the objects I'm baking
 		for (u_int i = 0; i < engine->currentSceneObjsToBake.size(); ++i) {
-			if (engine->currentSceneObjsToBake[i] == bsdf.GetSceneObject()) {
-				SampleResult &sampleResult = PathTracer::AddLightSampleResult(sampleResults, engine->mapFilm);
+			if (engine->currentSceneObjsToBake[i] == &bsdf.GetSceneObject()) {
+				SampleResult &sampleResult = PathTracer::AddLightSampleResult(sampleResults, engine->GetMapFilm());
 
-				SetSampleResultXY(mapInfo, bsdf.hitPoint, *engine->mapFilm, sampleResult);
+				SetSampleResultXY(mapInfo, bsdf.hitPoint, engine->GetMapFilm(), sampleResult);
 
 				const float fluxToRadianceFactor = 1.f / engine->currentSceneObjsToBakeArea[i];
 
@@ -361,8 +365,8 @@ void BakeCPURenderThread::RenderLightSample(const BakeMapInfo &mapInfo, PathTrac
 	const PathTracer::ConnectToEyeCallBackType connectToEyeCallBack = std::bind(
 			&BakeCPURenderThread::RenderConnectToEyeCallBack, this, mapInfo, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5);
 
-	pathTracer.RenderLightSample(state.device, state.scene, state.film, state.lightSampler,
-			state.lightSampleResults, connectToEyeCallBack);
+	pathTracer.RenderLightSample(state.device, state.scene, state.GetFilm(), *state.lightSampler,
+			state.GetLightSampleResults(), connectToEyeCallBack);
 }
 
 void BakeCPURenderThread::RenderSample(const BakeMapInfo &mapInfo, PathTracerThreadState &state) const {
@@ -370,30 +374,27 @@ void BakeCPURenderThread::RenderSample(const BakeMapInfo &mapInfo, PathTracerThr
 	const PathTracer &pathTracer = engine->pathTracer;
 
 	// Check if I have to trace an eye or light path
-	Sampler *sampler;
-	vector<SampleResult> *sampleResults;
-	if (pathTracer.HasToRenderEyeSample(state)) {
-		// Trace an eye path
-		sampler = state.eyeSampler;
-		sampleResults = &state.eyeSampleResults;
-	} else {
-		// Trace a light path
-		sampler = state.lightSampler;
-		sampleResults = &state.lightSampleResults;
-	}
+	const SamplerUPtr& sampler =
+		pathTracer.HasToRenderEyeSample(state) ? state.eyeSampler : state.lightSampler;
+
+	std::vector<SampleResult>& sampleResults = pathTracer.HasToRenderEyeSample(state) ?
+		state.GetEyeSampleResults() : state.GetLightSampleResults();
+
 	if (sampler == state.eyeSampler)
 		RenderEyeSample(mapInfo, state);
 	else
 		RenderLightSample(mapInfo, state);
 
 	// Variance clamping
-	pathTracer.ApplyVarianceClamp(state, *sampleResults);
+	pathTracer.ApplyVarianceClamp(state, sampleResults);
 
-	sampler->NextSample(*sampleResults);
+	sampler->NextSample(sampleResults);
 }
 
 void BakeCPURenderThread::RenderFunc(std::stop_token stop_token) {
-	//SLG_LOG("[BakeCPURenderEngine::" << threadIndex << "] Rendering thread started");
+#ifndef NDEBUG
+	SLG_LOG("[BakeCPURenderEngine::" << threadIndex << "] Rendering thread started");
+#endif
 
 	// This is really used only by Windows for 64+ threads support
 	SetThreadGroupAffinity(threadIndex);
@@ -435,15 +436,19 @@ void BakeCPURenderThread::RenderFunc(std::stop_token stop_token) {
 		//----------------------------------------------------------------------
 
 		// (engine->seedBase + 1) seed is used for sharedRndGen
-		RandomGenerator *rndGen = new RandomGenerator(engine->seedBase + 1 + threadIndex);
+		const std::unique_ptr<RandomGenerator> rndGen = std::make_unique<RandomGenerator>(engine->seedBase + 1 + threadIndex);
 
 		// Setup the sampler(s)
 
-		Sampler *eyeSampler = nullptr;
-		Sampler *lightSampler = nullptr;
+		SamplerUPtr lightSampler;
 
-		eyeSampler = engine->renderConfig->AllocSampler(rndGen, engine->mapFilm,
-				engine->sampleSplatter, engine->samplerSharedData, samplerAdditionalProps);
+		auto eyeSampler = engine->renderConfig.AllocSampler(
+			rndGen,
+			engine->GetMapFilm(),
+			engine->GetSampleSplatter(),
+			engine->samplerSharedData,
+			samplerAdditionalProps
+		);
 		eyeSampler->SetThreadIndex(threadIndex);
 		// Below, I need 7 additional samples
 		eyeSampler->RequestSamples(PIXEL_NORMALIZED_ONLY, pathTracer.eyeSampleSize + 8);
@@ -457,8 +462,12 @@ void BakeCPURenderThread::RenderFunc(std::stop_token stop_token) {
 				Property("sampler.imagesamples.enable")(false) <<
 				Property("sampler.metropolis.addonlycaustics")(true);
 
-			lightSampler = Sampler::FromProperties(props, rndGen, engine->mapFilm, nullptr,
-					engine->lightSamplerSharedData);
+			lightSampler = Sampler::FromProperties(
+				props,
+				std::cref(rndGen),
+				FilmPtr(&engine->GetMapFilm()),
+				FilmSampleSplatter::Null,
+				engine->lightSamplerSharedData);
 			lightSampler->SetThreadIndex(threadIndex);
 
 			lightSampler->RequestSamples(SCREEN_NORMALIZED_ONLY, pathTracer.lightSampleSize);
@@ -470,7 +479,8 @@ void BakeCPURenderThread::RenderFunc(std::stop_token stop_token) {
 		// Setup PathTracer thread state
 		PathTracerThreadState pathTracerThreadState(device,
 				eyeSampler, lightSampler,
-				engine->renderConfig->scene, engine->mapFilm,
+				engine->renderConfig.GetScene(),
+				engine->GetMapFilm(),
 				&varianceClamping,
 				true);
 
@@ -500,10 +510,10 @@ void BakeCPURenderThread::RenderFunc(std::stop_token stop_token) {
 				const double now = WallClockTime();
 				if (now - lastPrintTime > 2.0) {
 					// Print some information about the rendering progress
-					const double elapsedTime = engine->mapFilm->GetTotalTime();
-					const u_int pass = static_cast<u_int>(engine->mapFilm->GetTotalSampleCount() /
-							(engine->mapFilm->GetWidth() * engine->mapFilm->GetHeight()));
-					const float convergence = engine->mapFilm->GetConvergence();
+					const double elapsedTime = engine->GetMapFilm().GetTotalTime();
+					const u_int pass = static_cast<u_int>(engine->GetMapFilm().GetTotalSampleCount() /
+							(engine->GetMapFilm().GetWidth() * engine->GetMapFilm().GetHeight()));
+					const float convergence = engine->GetMapFilm().GetConvergence();
 					
 					SLG_LOG("Baking map #" << mapInfoIndex << "/" << engine->mapInfos.size() << ": "
 							"[Elapsed time " << int(elapsedTime) << " secs]"
@@ -515,38 +525,42 @@ void BakeCPURenderThread::RenderFunc(std::stop_token stop_token) {
 			}
 
 			// Check halt conditions
-			if (engine->mapFilm->GetConvergence() == 1.f)
+			if (engine->GetMapFilm().GetConvergence() == 1.f)
 				break;
                         if (stop_token.stop_requested())
                                 break;
 
 			if (engine->photonGICache) {
-                                const u_int spp = engine->mapFilm->GetTotalEyeSampleCount() / engine->mapFilm->GetPixelCount();
+                                const u_int spp = engine->GetMapFilm().GetTotalEyeSampleCount() / engine->GetMapFilm().GetPixelCount();
                                 engine->photonGICache->Update(threadIndex, spp);
                         }
 
 		}
 
-		delete eyeSampler;
-		delete rndGen;
+		//rndGen.reset();
 
 		engine->threadsSyncBarrier->arrive_and_wait();
 
 		if ((threadIndex == 0) && !stop_token.stop_requested()) {
 			// Execute the image pipeline
-			engine->mapFilm->ExecuteImagePipeline(mapInfo.imagePipelineIndex);
+			engine->GetMapFilm().ExecuteImagePipeline(mapInfo.imagePipelineIndex);
 
 			// Apply margin options
 			if (engine->marginPixels > 0)
-				BakeMapMarginPlugin::Apply(*engine->mapFilm, mapInfo.imagePipelineIndex,
+				BakeMapMarginPlugin::Apply(engine->GetMapFilm(), mapInfo.imagePipelineIndex,
 						engine->marginPixels, engine->marginSamplesThreshold, true);
 
 			// Save the rendered map
-			Properties props;
-			props << Property("index")(mapInfo.imagePipelineIndex);
-			engine->mapFilm->Output(mapInfo.fileName,
-					engine->mapFilm->HasChannel(Film::ALPHA) ? FilmOutputs::RGBA_IMAGEPIPELINE : FilmOutputs::RGB_IMAGEPIPELINE,
-					&props, false);
+			auto props = std::make_unique<Properties>();
+			*props << Property("index")(mapInfo.imagePipelineIndex);
+				engine->GetMapFilm().Output(
+				mapInfo.fileName,
+				engine->GetMapFilm().HasChannel(Film::ALPHA) ?
+					FilmOutputs::RGBA_IMAGEPIPELINE :
+					FilmOutputs::RGB_IMAGEPIPELINE,
+				props,
+				false
+			);
 		}
 
 		engine->threadsSyncBarrier->arrive_and_wait();
@@ -563,6 +577,8 @@ void BakeCPURenderThread::RenderFunc(std::stop_token stop_token) {
 	if (engine->photonGICache)
 		engine->photonGICache->FinishUpdate(threadIndex);
 
-	//SLG_LOG("[BakeCPURenderEngine::" << threadIndex << "] Rendering thread halted");
+#ifndef NDEBUG
+	SLG_LOG("[BakeCPURenderEngine::" << threadIndex << "] Rendering thread halted");
+#endif
 }
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

@@ -30,6 +30,9 @@
 #include "slg/core/sdl.h"
 
 namespace slg {
+using luxrays::ExtMesh;
+using luxrays::ExtMeshRef;
+using luxrays::ExtMeshUPtr;
 
 class ExtMeshCache {
 public:
@@ -39,7 +42,7 @@ public:
 	void SetDeleteMeshData(const bool v) { deleteMeshData = v; }
 
 	// This method can be safely called only from Scene::DefineMesh()
-	void DefineExtMesh(luxrays::ExtMesh *mesh);
+	std::tuple<ExtMesh&, ExtMeshUPtr> DefineExtMesh(ExtMeshUPtr&& mesh);
 	void SetMeshVertexAOV(const std::string &meshName,
 		const unsigned int index, float *data);
 	void SetMeshTriangleAOV(const std::string &meshName,
@@ -52,15 +55,18 @@ public:
 	void DeleteExtMesh(const std::string &meshName);
 
 	u_int GetSize() const;
-	void GetExtMeshNames(std::vector<std::string> &names) const;
+	auto GetExtMeshNames() const {
+		return meshes.GetNames();
+	}
 
-	luxrays::ExtMesh *GetExtMesh(const std::string &meshName);
-	luxrays::ExtMesh *GetExtMesh(const u_int index);
+
+	luxrays::ExtMeshRef GetExtMesh(const std::string &meshName);
+	luxrays::ExtMeshRef GetExtMesh(const u_int index);
 	u_int GetExtMeshIndex(const std::string &meshName) const;
-	u_int GetExtMeshIndex(const luxrays::ExtMesh *m) const;
+	u_int GetExtMeshIndex(luxrays::ExtMeshConstRef m) const;
 
-	std::string GetRealFileName(const luxrays::ExtMesh *m) const;
-	std::string GetSequenceFileName(const luxrays::ExtMesh *m) const;
+	std::string GetRealFileName(luxrays::ExtMeshConstRef m) const;
+	std::string GetSequenceFileName(luxrays::ExtMeshConstRef m) const;
 
 	friend class boost::serialization::access;
 

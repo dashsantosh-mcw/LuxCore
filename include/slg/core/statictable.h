@@ -27,6 +27,20 @@
 #include "luxrays/luxrays.h"
 #include "luxrays/utils/utils.h"
 
+// Nota: there are 3 root files to consider, when debugging objects below:
+// - include/slg/core/statictable.h (this file)
+//
+// - include/slg/core/objectstaticregistry.h
+// - include/slg/engines/renderengineregistry.h
+// - include/slg/lights/strategies/lightstrategyregistry.h
+// - include/slg/film/filters/filterregistry.h
+// - include/slg/samplers/samplerregistry.h
+//
+// - src/slg/engines/renderengine.cpp
+//
+// ...and also all src/slg/engines/*.cpp and include/slg/engines/*.h
+
+
 namespace slg {
 
 // The REGISTRY template parameter is there to be able to separate different
@@ -68,7 +82,7 @@ public:
 
 		return ss.str();
 	}
-	
+
 	class RegisterTableValue {
 	public:
 		RegisterTableValue(const K &key, const T &val) {
@@ -84,7 +98,7 @@ public:
 				throw std::runtime_error("Already registered key in StaticTable::RegisterTableValue::RegisterTableValue(): " +
 						boost::lexical_cast<std::string>(key));
 			 */
-			
+
 			table[key] = val;
 		}
 		virtual ~RegisterTableValue() { }
@@ -93,7 +107,7 @@ public:
 private:
 	static std::unordered_map<K, T> &GetTable() {
 		static std::unordered_map<K, T> table;
-		
+
 		return table;
 	}
 };

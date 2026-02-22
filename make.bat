@@ -8,6 +8,8 @@ REM SPDX-License-Identifier: Apache-2.0
 REM Convenience wrapper for CMake commands
 
 REM Script command (1st parameter)
+
+call setup_x64.bat
 set COMMAND=%1
 
 
@@ -59,8 +61,12 @@ if "%COMMAND%" == "" (
     call :ListPresets
 ) else if "%COMMAND%" == "wheel-test" (
     call :WheelTest
+) else if "%COMMAND%" == "msvc-init" (
+    call :MsvcInit
+) else if "%COMMAND%" == "windebug" (
+    call :WinDebug
 ) else (
-    echo Command "%COMMAND%" unknown
+    echo Unknown command: "%COMMAND%"
 )
 exit /B
 
@@ -101,6 +107,30 @@ call %LUXMAKE% config
 call %LUXMAKE% build-and-install pyluxcore
 call %LUXMAKE% wheel-test
 goto :EOF
+
+:MsvcInit
+REM 'setup_x64.bat' must be in PATH
+set CMAKE_CXX_COMPILER_LAUNCHER=ccache
+set CMAKE_C_COMPILER_LAUNCHER=ccache
+set BUILD_CMAKE_ARGS="-DCMAKE_VERBOSE_MAKEFILE=ON"
+set CCACHE_DIRECT=true
+set CCACHE_DEPEND=true
+call setup_x64.bat
+goto :EOF
+
+:WinDebug
+REM Special (quick & dirty) custom config for debugging on Windows platform
+REM Run it under cmd.exe
+REM 'setup_x64.bat' must be in PATH
+call :MsvcInit
+set LUX_BUILD_TYPE=Debug
+set LUX_SANITIZER=1
+set CMAKE_BUILD_PARALLEL_LEVEL=1
+call :Config
+call :BuildAndInstall luxcore
+call :BuildAndInstall luxcoreui
+call :BuildAndInstall luxcoreconsole
+call :BuildAndInstall pyluxcore 
 
 :Clear
 REM rmdir /S /Q

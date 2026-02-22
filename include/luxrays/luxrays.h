@@ -25,6 +25,7 @@
 #include "luxrays/cfg.h"
 #include "luxrays/utils/utils.h"
 
+
 /*!
  * \namespace luxrays
  *
@@ -59,10 +60,10 @@ class Vector;
 
 extern void Init();
 
-extern bool isOpenCLAvilable;
-extern bool isCudaAvilable;
-extern bool isOptixAvilable;
-extern std::locale cLocale;
+inline bool isOpenCLAvilable = true;
+inline bool isCudaAvilable = true;
+inline bool isOptixAvilable = true;
+inline std::locale cLocale("C");
 
 }
 

@@ -107,10 +107,19 @@ target_link_libraries(luxcore_static PRIVATE
     luxparser
 )
 
-
-
 add_definitions(-DCPP_API_EXPORTS ${VISIBILITY_FLAGS}) # for controlling visibility
 link_directories (${SLG_LIB_DIR} ${LuxRays_LIB_DIR})
+
+# In case of MSVC, run setup_x64.bat before all targets.
+# setup_x64.bat must therefore be in the PATH
+if(MSVC)
+    add_custom_target(setup_x64 ALL
+        COMMAND cmd /c setup_x64.bat
+        COMMENT "Running setup_x64.bat"
+    )
+    # Make all build targets depend on setup_x64
+    add_dependencies(luxcore setup_x64)
+endif()
 
 set_target_properties(luxcore PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 set_target_properties(luxcore_static PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -119,7 +128,7 @@ message(status ${INSTALL_EXCLUDE_REGEXES})
 install(
     TARGETS luxcore
     RUNTIME_DEPENDENCIES
-    PRE_EXCLUDE_REGEXES "api-ms-" "ext-ms-"
+    PRE_EXCLUDE_REGEXES "api-ms-" "ext-ms-" "clang_rt"
     POST_EXCLUDE_REGEXES ${INSTALL_EXCLUDE_REGEXES}
     DIRECTORIES ${CONAN_RUNTIME_LIB_DIRS}
     COMPONENT luxcore
@@ -131,6 +140,42 @@ install(
       GROUP_READ GROUP_EXECUTE
       WORLD_READ WORLD_EXECUTE
 )
+
+# Windows: install asan, if required
+IF(DEFINED ENV{LUX_SANITIZE} AND MSVC)
+    include(ImplibUtils)
+    find_library(ASAN_IMPLIB "clang_rt.asan_dynamic-x86_64")
+    implib_to_dll(ASAN_IMPLIB)
+    #set(CMAKE_LIBRARY_PATH "${CMAKE_LIBRARY_PATH};${ASAN_LIBRARY_PATH}")
+    add_library(ASAN SHARED IMPORTED)
+    set_target_properties(ASAN PROPERTIES
+        IMPORTED_LOCATION ${ASAN_LIBRARY}
+        IMPORTED_IMPLIB ${ASAN_IMPLIB}
+    )
+    cmake_path(GET ASAN_LIBRARY STEM LAST_ONLY ASAN_STEM)
+    cmake_path(GET ASAN_LIBRARY PARENT_PATH ASAN_PATH)
+    cmake_path(APPEND ASAN_PDB "${ASAN_PATH}" "${ASAN_STEM}.pdb")
+    MESSAGE(STATUS "Installing ${ASAN_LIBRARY} ${ASAN_STEM}.pdb")
+    install(
+        FILES "${ASAN_LIBRARY}" "${ASAN_PDB}"
+        COMPONENT luxcore
+        DESTINATION bin
+    )
+    #install(
+        #FILES "$<TARGET_PDB_FILE:ASAN>"
+        #COMPONENT luxcore
+        #DESTINATION bin
+    #)
+ENDIF()
+
+# Windows: Install pdb file (if msvc and debug)
+if(MSVC)
+  install(FILES "$<$<CONFIG:Debug>:$<TARGET_PDB_FILE:luxcore>>"
+    COMPONENT luxcore
+    DESTINATION bin
+    OPTIONAL
+  )
+endif()
 
 # Install oidn_denoise_cpu
 if(WIN32)

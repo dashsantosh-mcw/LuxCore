@@ -44,7 +44,7 @@ class CompiledScene;
 
 class PathOCLBaseRenderEngine : public OCLRenderEngine {
 public:
-	PathOCLBaseRenderEngine(const RenderConfig *cfg, const bool supportsNativeThreads);
+	PathOCLBaseRenderEngine(RenderConfigRef cfg, const bool supportsNativeThreads);
 	virtual ~PathOCLBaseRenderEngine();
 
 	virtual bool HasDone() const;
@@ -99,7 +99,7 @@ protected:
 	slg::ocl::Filter *oclPixelFilter;
 	PhotonGICache *photonGICache;
 
-	SamplerSharedData *lightSamplerSharedData;
+	std::shared_ptr<SamplerSharedData> lightSamplerSharedData;
 };
 
 }

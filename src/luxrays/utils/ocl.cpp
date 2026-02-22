@@ -294,7 +294,7 @@ cl_program oclKernelPersistentCache::Compile(cl_context context, cl_device_id de
 		if (binsSizes[0] > 0) {
 			// Using here alloca() can trigger a stack overflow on Windows for
 			// large kernel binaries
-			unique_ptr<char> bin(new char[binsSizes[0]]);
+			std::unique_ptr<char[]> bin(new char[binsSizes[0]]);
 			char *bins = bin.get();
 			CHECK_OCL_ERROR(clGetProgramInfo(program, CL_PROGRAM_BINARIES, sizeof(char *), &bins, nullptr));
 
@@ -303,7 +303,7 @@ cl_program oclKernelPersistentCache::Compile(cl_context context, cl_device_id de
 
 			// The use of std::filesystem::path is required for UNICODE support: fileName
 			// is supposed to be UTF-8 encoded.
-			
+
 			std::ofstream file(std::filesystem::path(fileName),
 				std::ofstream::out |
 				std::ofstream::binary |
@@ -386,6 +386,18 @@ cl_program oclKernelPersistentCache::Compile(cl_context context, cl_device_id de
 		}
 	}
 }
+
+void luxrays::CheckOpenCLError(const cl_int err, const char *file, const int line) {
+  	if (err != CL_SUCCESS) {
+		std::string msg = std::string("OpenCL driver API error ")
+			+ std::string("(code: ") + ToString(err)
+			+ std::string(", file:") + std::string(file)
+			+ std::string(", line: ") + ToString(line) + std::string(")")
+			+ std::string(": ") + oclErrorString(err) + "\n";
+		throw std::runtime_error(msg);
+	}
+}
+
 
 #endif
 // vim: autoindent noexpandtab tabstop=4 shiftwidth=4

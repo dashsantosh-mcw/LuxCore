@@ -46,7 +46,7 @@ public:
 		//const Context *deviceContext = device.GetContext();
 		//const std::string &deviceName(device.GetName());
 
-		const BufferType memTypeFlags = device.GetContext()->GetUseOutOfCoreBuffers() ?
+		const BufferType memTypeFlags = device.GetContext().GetUseOutOfCoreBuffers() ?
 			((BufferType)(BUFFER_TYPE_READ_ONLY | BUFFER_TYPE_OUT_OF_CORE)) :
 			BUFFER_TYPE_READ_ONLY;
 
@@ -85,7 +85,7 @@ public:
 				const u_int tmpLeftVertCount = pageVertCount - tmpVertIndex;
 
 				// Check if there is enough space in the temporary buffer for all vertices
-				const Mesh *currentMesh = mbvh.uniqueLeafs[currentLeafIndex]->meshes[currentMeshIndex];
+				auto currentMesh = mbvh.uniqueLeafs[currentLeafIndex]->meshes[currentMeshIndex];
 				const u_int toCopy = currentMesh->GetTotalVertexCount() - currentMeshVertIndex;
 				if (tmpLeftVertCount >= toCopy) {
 					// There is enough space for all mesh vertices
@@ -281,7 +281,7 @@ public:
 	}
 
 	void UpdateBVHNodes();
-	virtual void Update(const DataSet *newDataSet);
+	virtual void Update(DataSetConstSPtr newDataSet) override;
 	virtual void EnqueueTraceRayBuffer(HardwareDeviceBuffer *rayBuff,
 			HardwareDeviceBuffer *rayHitBuff, const unsigned int rayCount);
 
@@ -437,7 +437,7 @@ void MBVHKernel::UpdateBVHNodes() {
 	}
 }
 
-void MBVHKernel::Update(const DataSet *newDataSet) {
+void MBVHKernel::Update(DataSetConstSPtr newDataSet) {
 	if (!mbvh.nRootNodes)
 		return;
 
@@ -447,7 +447,7 @@ void MBVHKernel::Update(const DataSet *newDataSet) {
 	// I have to update kernel arguments changed inside UpdateBVHNodes()
 	SetIntersectionKernelArgs();
 
-	const Context *deviceContext = device.GetContext();
+	const Context & deviceContext = device.GetContext();
 	const std::string &deviceName = device.GetName();
 	LR_LOG(deviceContext, "[HardwareIntersectionDevice::" << deviceName << "] Updating DataSet transformations");
 

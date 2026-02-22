@@ -23,6 +23,8 @@
 
 #include "luxrays/core/intersectiondevice.h"
 #include "luxrays/utils/ocl.h"
+#include "luxrays/utils/thread.h"
+#include "luxrays/usings.h"
 
 #include "slg/slg.h"
 #include "slg/engines/oclrenderengine.h"
@@ -37,6 +39,7 @@ namespace slg {
 namespace ocl { namespace pathoclbase {
 #include "slg/engines/pathoclbase/kernels/pathoclbase_datatypes.cl"
 } }
+
 
 class PathOCLBaseRenderEngine;
 
@@ -63,13 +66,12 @@ public:
 
 	friend class PathOCLBaseRenderEngine;
 
-protected:
 	class ThreadFilm {
 	public:
 		ThreadFilm(PathOCLBaseOCLRenderThread *renderThread);
 		virtual ~ThreadFilm();
-		
-		void Init(Film *engineFilm,
+
+		void Init(FilmRef engineFilm,
 			const u_int threadFilmWidth, const u_int threadFilmHeight,
 			const u_int *threadFilmSubRegion);
 		void FreeAllOCLBuffers();
@@ -80,7 +82,8 @@ protected:
 		void RecvFilm(luxrays::HardwareIntersectionDevice *intersectionDevice);
 		void SendFilm(luxrays::HardwareIntersectionDevice *intersectionDevice);
 
-		Film *film;
+		FilmRef GetFilm() { return *film; }
+		FilmConstRef GetFilm() const { return *film; }
 
 		// Film buffers
 		std::vector<luxrays::HardwareDeviceBuffer *> channel_RADIANCE_PER_PIXEL_NORMALIZEDs_Buff;
@@ -132,10 +135,12 @@ protected:
 		luxrays::HardwareDeviceBuffer *denoiser_HistoImage_Buff;
 
 	private:
-		Film *engineFilm;
+		FilmUPtr film;
+		FilmPtr engineFilm;
 		PathOCLBaseOCLRenderThread *renderThread;
 	};
 
+protected:
 	// Implementation specific methods
 	virtual void RenderThreadImpl(std::stop_token stop_token) = 0;
 	virtual void GetThreadFilmSize(u_int *filmWidth, u_int *filmHeight, u_int *filmSubRegion) = 0;
@@ -258,9 +263,9 @@ protected:
 	u_int initKernelArgsCount;
 	std::string kernelsParameters;
 
-	std::jthread *renderThread;
+	luxrays::JThreadUPtr renderThread;
 
-	std::vector<ThreadFilm *> threadFilms;
+	std::vector<std::shared_ptr<ThreadFilm> > threadFilms;
 
 	// OpenCL kernels
 	luxrays::HardwareDeviceKernel *initSeedKernel;
@@ -282,6 +287,12 @@ protected:
 
 	bool started, editMode, threadDone;
 };
+
+
+// These usings cannot be gathered in slg/usings.h, as C++ does not allow
+// forward declarations on nested classes
+using ThreadFilmRPtr = std::shared_ptr<PathOCLBaseOCLRenderThread::ThreadFilm>;
+using ThreadFilmConstPtr = std::shared_ptr<const PathOCLBaseOCLRenderThread::ThreadFilm>;
 
 }
 

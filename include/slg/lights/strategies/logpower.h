@@ -31,7 +31,7 @@ class LightStrategyLogPower : public DistributionLightStrategy {
 public:
 	LightStrategyLogPower() : DistributionLightStrategy(TYPE_LOG_POWER) { }
 
-	virtual void Preprocess(const Scene *scene, const LightStrategyTask taskType,
+	virtual void Preprocess(SceneConstRef scene, const LightStrategyTask taskType,
 			const bool useRTMode);
 
 	virtual LightStrategyType GetType() const { return GetObjectType(); }
@@ -43,11 +43,11 @@ public:
 
 	static LightStrategyType GetObjectType() { return TYPE_LOG_POWER; }
 	static std::string GetObjectTag() { return "LOG_POWER"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static LightStrategy *FromProperties(const luxrays::Properties &cfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static LightStrategyUPtr FromProperties(const luxrays::Properties &cfg);
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 };
 
 }

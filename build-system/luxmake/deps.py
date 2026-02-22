@@ -17,7 +17,6 @@ import json
 import platform
 from functools import cache
 
-
 from .constants import BINARY_DIR
 from .utils import logger, fail, Colors, set_logger_verbose
 from .check import check_requirements
@@ -32,6 +31,14 @@ URL_SUFFIXES = {
     "macOS-ARM64": "macos-15-arm64",
     "macOS-X64": "macos-15-intel",
 }
+
+
+def logger_step(step):
+    """Log a new step."""
+    length = 12
+    stars = "*" * length
+    logger.info("")
+    logger.info(stars + "  " + step + "  " + stars)
 
 
 def find_platform():
@@ -85,14 +92,9 @@ def get_profile_name():
 @cache
 def ensure_conan_app():
     """Ensure Conan is installed."""
-    logger.info("Looking for conan")
     if not (res := shutil.which("conan")):
         fail("Conan not found!")
-    logger.info(
-        "Conan found: '%s'",
-        res,
-    )
-    return res
+    return Path(res)
 
 
 def run_conan(
@@ -101,22 +103,15 @@ def run_conan(
 ):
     """Run conan statement."""
     conan_app = ensure_conan_app()
-    if "env" not in kwargs:
-        kwargs["env"] = CONAN_ENV
-    else:
-        kwargs["env"].update(CONAN_ENV)
-    kwargs["env"].update(os.environ)
-    kwargs["text"] = kwargs.get(
-        "text",
-        True,
-    )
+    kwargs["env"] = os.environ.update(CONAN_ENV)
+    kwargs["text"] = kwargs.get("text", True)
     args = [conan_app] + args
     logger.debug(args)
     res = subprocess.run(
         args,
         shell=False,
         check=False,
-        **kwargs,
+        **kwargs
     )
     if res.returncode:
         fail("Error while executing conan:\n%s\n%s", res.stdout, res.stderr)
@@ -258,23 +253,17 @@ def install(
 
 def conan_home():
     """Get Conan home path."""
-    conan_app = ensure_conan_app()
-    res = subprocess.run(
-        [
-            conan_app,
-            "config",
-            "home",
-        ],
+    res = run_conan(
+        ["config", "home"],
         capture_output=True,
         text=True,
-        check=False,
     )
     if res.returncode:
         fail("Error while executing conan:\n%s\n%s", res.stdout, res.stderr)
     return Path(res.stdout.strip())
 
 
-def copy_conf(
+def copy_global_conf(
     dest,
 ):
     """Copy global.conf into conan tree."""
@@ -291,6 +280,24 @@ def copy_conf(
     )
 
 
+def set_global_conf(cache_dir):
+    """Set global.conf file."""
+    global_conf = conan_home() / "global.conf"
+    global_conf.touch()
+
+    logger.info("Writing configuration file: '%s'", str(global_conf))
+    with global_conf.open("w+") as p:
+
+        def write(entry):
+            logger.info(" - %s", entry)
+            p.write(entry)
+            p.write("\n")
+
+        write(f"core.cache:storage_path={cache_dir}")
+        write(f"core.download:download_cache={cache_dir}")
+        write(f"core:non_interactive=True")
+
+
 def main(
     call_args=None,
 ):
@@ -299,13 +306,14 @@ def main(
         "output_dir",
         "out",
     )
+    output_dir = Path(output_dir).absolute()
 
     # Set-up logger
     msg = f"{Colors.OKBLUE}BEGIN{Colors.ENDC}"
     logger.info(msg)
 
-    # Get settings
-    logger.info("Reading settings")
+    # Get settings & ensure requirements
+    logger_step("Checking requirements")
     with open(
         "build-system/build-settings.json",
         encoding="utf-8",
@@ -315,6 +323,7 @@ def main(
         "Output directory: %s",
         output_dir,
     )
+    ensure_conan_app()
 
     # Command-line parameters for standalone execution (debug)
     parser = argparse.ArgumentParser()
@@ -340,6 +349,7 @@ def main(
         "-o",
         "--output",
         type=Path,
+        default=BINARY_DIR,
         help="Output directory",
     )
     parser.add_argument(
@@ -366,12 +376,18 @@ def main(
     # Check requirements
     check_requirements()
 
+    # Workaround: in Windows, conan home and deployment cannot be in
+    # different drives...
+    preset_dir = output_dir.absolute() if os.name == "nt" else None
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     # Process
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(dir=preset_dir) as tmpdir:
 
         tmpdir = Path(tmpdir)
 
         _conan_home = tmpdir / ".conan2"
+        _conan_home.mkdir(parents=True, exist_ok=True)
 
         CONAN_ENV.update(
             {
@@ -381,6 +397,15 @@ def main(
                 "BUILD_TYPE": "Release",
             }
         )
+        os.putenv("CONAN_HOME", str(_conan_home))
+        del _conan_home
+
+        logger_step("Checking conan home")
+        logger.info("Temporary conan home is %s", str(conan_home()))
+
+        # Set global.conf
+        logger_step("Setting conan configuration")
+        set_global_conf(tmpdir)
 
         # Initialize
         user = args.user or settings["Dependencies"]["user"]
@@ -391,6 +416,7 @@ def main(
         )
 
         # Download and unzip
+        logger_step("Retrieving dependencies")
         if not args.local:
             logger.info(
                 "Downloading dependencies (url='%s')",
@@ -405,12 +431,15 @@ def main(
                 "Using local dependency set ('%s')",
                 args.local,
             )
+            # Unzip
+            with ZipFile(args.local) as downloaded:
+                downloaded.extractall(tmpdir)
 
         # Retrieve deps build information
         show_build_info(tmpdir)
 
         # Clean
-        logger.info("Cleaning local cache")
+        logger_step("Cleaning local cache")
         res = run_conan(
             [
                 "remove",
@@ -421,14 +450,10 @@ def main(
         )
         for line in res.stderr.splitlines():
             logger.info(line)
-        copy_conf(_conan_home)  # Copy global.conf in current conan home
 
         # Install
-        logger.info("Installing")
-        if not (local := args.local):
-            archive = tmpdir / "conan-cache-save.tgz"
-        else:
-            archive = local
+        logger_step("Installing")
+        archive = tmpdir / "conan-cache-save.tgz"
         res = run_conan(
             [
                 "cache",
@@ -441,7 +466,7 @@ def main(
             logger.info(line)
 
         # Check
-        logger.info("Checking integrity")
+        logger_step("Checking integrity")
         res = run_conan(
             [
                 "cache",
@@ -450,23 +475,56 @@ def main(
             ],
             capture_output=True,
         )
+        for line in res.stderr.splitlines():
+            logger.info(line)
         logger.info("Integrity check: OK")
 
-        # Installing profiles
-        logger.info("Installing profiles")
-        run_conan(
+        # Install profiles in conan home
+        logger_step("Installing profiles")
+        run_conan(["cache", "path", f"luxcoreconf/{release}@luxcore/luxcore"])
+
+        res = run_conan(
             [
                 "config",
                 "install-pkg",
+                "-vvv",
                 f"luxcoreconf/{release}@luxcore/luxcore",
-            ]
+            ],
+            capture_output=True,
         )
+        for line in res.stderr.splitlines():
+            logger.info(line)
+
+        # Install profiles into destination ("deploy")
+        src_profile_dir = conan_home() / "profiles"
+        profile_dir = output_dir.absolute() / ".conan2" / "profiles"
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("")
+        logger.info("Deploying profiles from %s to %s", src_profile_dir, profile_dir)
+        res = run_conan(
+            [
+                "config",
+                "install",
+                "--type=dir",
+                f"--target-folder={str(profile_dir)}",
+                "-vvv",
+                src_profile_dir,
+            ],
+            capture_output=True,
+        )
+        for line in res.stderr.splitlines():
+            logger.info(line)
 
         # Generate & deploy
+        logger_step("Generating...")
         # About release/debug mixing, see
         # https://github.com/conan-io/conan/issues/12656
-        logger.info("Generating...")
         generator = "Ninja Multi-Config"
+        # Next line is a workaround to replace {{profile_dir}}, which is
+        # not well handled by deployer...
+        CONAN_ENV["LUX_PROFILE_DIR"] = str(profile_dir)
+
+        logger.info(f"Conan profile directory is %s" % profile_dir)
         main_block = [
             "install",
             "--build=missing",
@@ -487,16 +545,15 @@ def main(
             "Debug",
             "Release",
         ]
+        if args.release:
+            main_block += [f"--options:all=&:deps_version={args.release}"]
         if args.extended:
             build_types += [
                 "RelWithDebInfo",
                 "MinSizeRel",
             ]
         for build_type in build_types:
-            logger.info(
-                "Generating '%s'",
-                build_type,
-            )
+            logger_step(f"Generating '{build_type}'")
             end_block = [
                 f"--settings=&:build_type={build_type}",
                 Path(
@@ -505,16 +562,21 @@ def main(
                     "conanfile.py",
                 ),
             ]
-            run_conan(main_block + end_block)
+            res = run_conan(main_block + end_block, capture_output=True)
+            for line in res.stderr.splitlines():
+                logger.info(line)
 
         # Show presets
-        subprocess.run(
+        res = subprocess.run(
             [
                 "cmake",
                 "--list-presets=build",
             ],
             check=False,
+            capture_output=True,
         )
+        for line in res.stderr.splitlines():
+            logger.info(line)
         print(
             "",
             flush=True,

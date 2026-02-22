@@ -33,7 +33,7 @@ class HardwareIntersectionDevice;
 class BVHAccel : public Accelerator {
 public:
 	// BVHAccel Public Methods
-	BVHAccel(const Context *context);
+	BVHAccel(const Context & context);
 	virtual ~BVHAccel();
 
 	virtual AcceleratorType GetType() const { return ACCEL_BVH; }
@@ -43,9 +43,11 @@ public:
 
 	virtual HardwareIntersectionKernel *NewHardwareIntersectionKernel(HardwareIntersectionDevice &device) const;
 
-	virtual void Init(const std::deque<const Mesh *> &meshes,
+	virtual void Init(
+		const std::deque<const Mesh *> &meshes,
 		const u_longlong totalVertexCount,
-		const u_longlong totalTriangleCount);
+		const u_longlong totalTriangleCount
+	);
 
 	virtual bool Intersect(const Ray *ray, RayHit *hit) const;
 
@@ -61,7 +63,7 @@ private:
 	u_int nNodes;
 	luxrays::ocl::BVHArrayNode *bvhTree;
 
-	const Context *ctx;
+	const Context & ctx;
 	std::deque<const Mesh *> meshes;
 	u_longlong totalVertexCount, totalTriangleCount;
 

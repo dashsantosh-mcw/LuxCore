@@ -20,6 +20,7 @@
 #define	_SLG_TILEPATHCPU_H
 
 #include "slg/slg.h"
+#include "luxrays/utils/thread.h"
 #include "slg/engines/cpurenderengine.h"
 #include "slg/engines/pathtracer.h"
 #include "slg/samplers/sampler.h"
@@ -44,7 +45,13 @@ public:
 	friend class TilePathCPURenderEngine;
 
 private:
-	virtual std::jthread *AllocRenderThread() { return new std::jthread(std::bind_front(&TilePathCPURenderThread::RenderFunc, this)); }
+	virtual luxrays::JThreadUPtr AllocRenderThread() {
+		auto t = std::make_unique<luxrays::JThread>(
+			std::bind_front(&TilePathCPURenderThread::RenderFunc, this)
+		);
+		luxrays::SetThreadName(t, "LxTilePathCPU");
+		return std::move(t);
+	}
 
 	void RenderFunc(std::stop_token stop_token);
 
@@ -54,13 +61,13 @@ private:
 
 class TilePathCPURenderEngine : public CPUTileRenderEngine {
 public:
-	TilePathCPURenderEngine(const RenderConfig *cfg);
+	TilePathCPURenderEngine(RenderConfigRef cfg);
 	~TilePathCPURenderEngine();
 
 	virtual RenderEngineType GetType() const { return GetObjectType(); }
 	virtual std::string GetTag() const { return GetObjectTag(); }
 
-	virtual RenderState *GetRenderState();
+	virtual RenderStateSPtr GetRenderState();
 
 	//--------------------------------------------------------------------------
 	// Static methods used by RenderEngineRegistry
@@ -68,13 +75,13 @@ public:
 
 	static RenderEngineType GetObjectType() { return TILEPATHCPU; }
 	static std::string GetObjectTag() { return "TILEPATHCPU"; }
-	static luxrays::Properties ToProperties(const luxrays::Properties &cfg);
-	static RenderEngine *FromProperties(const RenderConfig *rcfg);
+	static luxrays::PropertiesUPtr ToProperties(const luxrays::Properties &cfg);
+	static RenderEngine *FromProperties(RenderConfigRef rcfg);
 
 	friend class TilePathCPURenderThread;
 
 protected:
-	static const luxrays::Properties &GetDefaultProps();
+	static luxrays::PropertiesUPtr GetDefaultProps();
 
 	virtual void InitFilm();
 	virtual void StartLockLess();
@@ -87,9 +94,9 @@ protected:
 	PathTracer pathTracer;
 
 private:
-	virtual CPURenderThread *NewRenderThread(const u_int index,
+	virtual CPURenderThreadUPtr NewRenderThread(const u_int index,
 			luxrays::IntersectionDevice *device) {
-		return new TilePathCPURenderThread(this, index, device);
+		return std::make_unique<TilePathCPURenderThread>(this, index, device);
 	}
 };
 

@@ -24,6 +24,7 @@
 #include <barrier>
 
 #include "luxrays/devices/ocldevice.h"
+#include "slg/usings.h"
 #include "slg/imagemap/imagemap.h"
 #include "slg/core/sdl.h"
 
@@ -48,18 +49,18 @@ class ImageMapResizePolicy {
 public:
 	ImageMapResizePolicy() { }
 	virtual ~ImageMapResizePolicy() { }
-	
+
 	virtual ImageMapResizePolicyType GetType() const = 0;
 
-	virtual ImageMap *ApplyResizePolicy(const std::string &fileName, const ImageMapConfig &imgCfg, bool &toApply) const = 0;
-	virtual void Preprocess(ImageMapCache &imc, const Scene *scene, const bool useRTMode) const = 0;
+	virtual ImageMapUPtr ApplyResizePolicy(const std::string &fileName, const ImageMapConfig &imgCfg, bool &toApply) const = 0;
+	virtual void Preprocess(ImageMapCache &imc, SceneConstRef scene, const bool useRTMode) const = 0;
 
 	static ImageMapResizePolicy *FromProperties(const luxrays::Properties &props);
 	static ImageMapResizePolicyType String2ImageMapResizePolicyType(const std::string &type);
 	static std::string ImageMapResizePolicyType2String(const ImageMapResizePolicyType type);
 
 	static void CalcOptimalImageMapSizes(ImageMapCache &imc,
-			const Scene *scene, const std::vector<u_int> &imgMapsIndices);
+			SceneConstRef scene, const std::vector<u_int> &imgMapsIndices);
 	
 	friend class boost::serialization::access;
     struct completion_t {
@@ -72,10 +73,16 @@ private:
 
 
 
-	static void RenderFunc(std::stop_token stop_token, const u_int threadIndex,
-		ImageMapCache *imc, const std::vector<u_int> *imgMapsIndices, u_int *workCounter,
-		const Scene *scene, SobolSamplerSharedData *sobolSharedData,
-		std::barrier<completion_t> *threadsSyncBarrier);
+	static void RenderFunc(
+		size_t threadIndex,
+		ImageMapCache& imc,
+		const std::vector<u_int>& imgMapsIndices,
+		u_int& workCounter,
+		SceneConstRef scene,
+		std::shared_ptr<SobolSamplerSharedData> sobolSharedData,
+		std::barrier<completion_t>& threadsSyncBarrier,
+		std::stop_token stop_token
+	);
 };
 
 //------------------------------------------------------------------------------
@@ -88,8 +95,8 @@ public:
 	~ImageMapResizeNonePolicy() { }
 	
 	virtual ImageMapResizePolicyType GetType() const { return POLICY_NONE; }
-	virtual ImageMap *ApplyResizePolicy(const std::string &fileName, const ImageMapConfig &imgCfg, bool &toApply) const;
-	virtual void Preprocess(ImageMapCache &imc, const Scene *scene, const bool useRTMode) const { };
+	virtual ImageMapUPtr ApplyResizePolicy(const std::string &fileName, const ImageMapConfig &imgCfg, bool &toApply) const;
+	virtual void Preprocess(ImageMapCache &imc, SceneConstRef scene, const bool useRTMode) const { };
 
 	friend class boost::serialization::access;
 
@@ -109,8 +116,8 @@ public:
 	~ImageMapResizeFixedPolicy() { }
 	
 	virtual ImageMapResizePolicyType GetType() const { return POLICY_FIXED; }
-	virtual ImageMap *ApplyResizePolicy(const std::string &fileName, const ImageMapConfig &imgCfg, bool &toApply) const;
-	virtual void Preprocess(ImageMapCache &imc, const Scene *scene, const bool useRTMode) const { };
+	virtual ImageMapUPtr ApplyResizePolicy(const std::string &fileName, const ImageMapConfig &imgCfg, bool &toApply) const;
+	virtual void Preprocess(ImageMapCache &imc, SceneConstRef scene, const bool useRTMode) const { };
 
 	friend class boost::serialization::access;
 
@@ -140,8 +147,8 @@ public:
 	~ImageMapResizeMinMemPolicy() { }
 	
 	virtual ImageMapResizePolicyType GetType() const { return POLICY_MINMEM; }
-	virtual ImageMap *ApplyResizePolicy(const std::string &fileName, const ImageMapConfig &imgCfg, bool &toApply) const;
-	virtual void Preprocess(ImageMapCache &imc, const Scene *scene, const bool useRTMode) const;
+	virtual ImageMapUPtr ApplyResizePolicy(const std::string &fileName, const ImageMapConfig &imgCfg, bool &toApply) const;
+	virtual void Preprocess(ImageMapCache &imc, SceneConstRef scene, const bool useRTMode) const;
 
 	friend class boost::serialization::access;
 
@@ -171,8 +178,8 @@ public:
 	~ImageMapResizeMipMapMemPolicy() { }
 	
 	virtual ImageMapResizePolicyType GetType() const { return POLICY_MIPMAPMEM; }
-	virtual ImageMap *ApplyResizePolicy(const std::string &fileName, const ImageMapConfig &imgCfg, bool &toApply) const;
-	virtual void Preprocess(ImageMapCache &imc, const Scene *scene, const bool useRTMode)const;
+	virtual ImageMapUPtr ApplyResizePolicy(const std::string &fileName, const ImageMapConfig &imgCfg, bool &toApply) const;
+	virtual void Preprocess(ImageMapCache &imc, SceneConstRef scene, const bool useRTMode)const;
 
 	friend class boost::serialization::access;
 
