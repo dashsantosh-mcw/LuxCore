@@ -24,6 +24,7 @@
 #include <stdexcept>
 
 #include "luxrays/core/context.h"
+#include "cuew.h"
 #include "luxrays/core/hardwaredevice.h"
 #include "luxrays/devices/nativeintersectiondevice.h"
 #if !defined(LUXRAYS_DISABLE_OPENCL)
@@ -108,6 +109,10 @@ Context::Context(LuxRaysDebugHandler handler, PropertiesUPtr&& config)
 	LR_LOG((*this), "CUDA support: enabled");
 
 	if (isCudaAvilable) {
+		if(!cuDriverGetVersion) {
+			LR_LOG((*this), "Warning: No CUDA API available");
+			return;
+		}
 		LR_LOG((*this), "CUDA support: available");
 
 		int driverVersion;

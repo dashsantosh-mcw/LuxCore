@@ -16,6 +16,7 @@
  * limitations under the License.                                          *
  ***************************************************************************/
 
+#include "slg/slg.h"
 #if !defined(LUXRAYS_DISABLE_OPENCL)
 
 #include <memory>
@@ -70,6 +71,10 @@ DeviceType OpenCLDeviceDescription::GetOCLDeviceType(const cl_device_id oclDevic
 
 void OpenCLDeviceDescription::GetPlatformsList(std::vector<cl_platform_id> &platformsList) {
 	cl_uint platformsCount;
+	if (!clGetPlatformIDs) {
+		SLG_LOG("Warning: no OpenCL implementation found");
+		return;
+	}
 	const cl_int err = clGetPlatformIDs(0, nullptr, &platformsCount);
 	// -1001 is CL_PLATFORM_NOT_FOUND_KHR and it means not a valid OpenCL ICD has been
 	// found so I just return an empty list.
