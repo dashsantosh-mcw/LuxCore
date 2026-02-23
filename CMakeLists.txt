@@ -258,7 +258,7 @@ if(MSVC)
   # Enable SSE2/SSE/MMX
   ADD_DEFINITIONS(-D__SSE2__ -D__SSE__ -D__MMX__)
   # Add compile and link options
-  add_compile_options("/arch:AVX" "/DWIN32" "/D_WINDOWS" "/EHsc")
+  add_compile_options("/arch:AVX" "/DWIN32" "/D_WINDOWS" "/EHsc" "/bigobj")
   add_link_options("/INCREMENTAL:NO" "/PDBALTPATH:%_PDB%")
 
   # Debug information format (embedded)
