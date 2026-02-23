@@ -107,15 +107,25 @@ def run_conan(
     kwargs["text"] = kwargs.get("text", True)
     args = [conan_app] + args
     logger.debug(args)
-    res = subprocess.run(
+    returncode = 0
+    lines = []
+    with subprocess.Popen(
         args,
-        shell=False,
-        check=False,
-        **kwargs
-    )
-    if res.returncode:
-        fail("Error while executing conan:\n%s\n%s", res.stdout, res.stderr)
-    return res
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
+        universal_newlines=True,
+        env=kwargs["env"]
+    ) as proc:
+        for line in proc.stdout:
+            line = line.rstrip()
+            logger.info(line)
+            lines += [line]
+
+        if proc.returncode:
+            fail("Error while executing conan...")
+
+        return lines
 
 
 def download(
@@ -208,6 +218,17 @@ def download(
         downloaded.extractall(destdir)
 
 
+def get_existing_config(config_file):
+    """Get existing configuration from existing global.conf"""
+    config_file = Path(config_file)
+    if not config_file.exists():
+        logger.info("No global.conf found")
+        return []
+    with config_file.open() as f:
+        # Minimal filtering: remove blank lines and lines starting with '#' (comments...)
+        return [l.rstrip() for l in f.readlines() if l.rstrip() and not l.startswith('#')]
+
+
 def show_build_info(destdir):
     """Show build information that should be bundled with the archive."""
     file_path = destdir / "build-info.json"
@@ -255,12 +276,11 @@ def conan_home():
     """Get Conan home path."""
     res = run_conan(
         ["config", "home"],
-        capture_output=True,
         text=True,
     )
-    if res.returncode:
-        fail("Error while executing conan:\n%s\n%s", res.stdout, res.stderr)
-    return Path(res.stdout.strip())
+    if not res:
+        raise RuntimeError("Cannot find conan home")
+    return Path(res[0].strip())
 
 
 def copy_global_conf(
@@ -280,7 +300,7 @@ def copy_global_conf(
     )
 
 
-def set_global_conf(cache_dir):
+def set_global_conf(cache_dir, existing_config):
     """Set global.conf file."""
     global_conf = conan_home() / "global.conf"
     global_conf.touch()
@@ -290,12 +310,14 @@ def set_global_conf(cache_dir):
 
         def write(entry):
             logger.info(" - %s", entry)
-            p.write(entry)
+            p.write(entry.rstrip())
             p.write("\n")
 
         write(f"core.cache:storage_path={cache_dir}")
         write(f"core.download:download_cache={cache_dir}")
         write(f"core:non_interactive=True")
+        for line in existing_config:
+            write(line)
 
 
 def main(
@@ -381,7 +403,21 @@ def main(
     preset_dir = output_dir.absolute() if os.name == "nt" else None
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # We need to get the existing configuration, from the existing
+    # global.conf.
+    logger_step("Getting existing config")
+    config_file = conan_home() / "global.conf"
+    logger.info("Reading %s", str(config_file))
+    existing_config = get_existing_config(config_file)
+    if not existing_config:
+        logger.info("<empty>")
+    else:
+        for line in existing_config:
+            logger.info(" - " + line)
+
     # Process
+    # We download in a separate, temporary environment
+    # and then we deploy in project output directory
     with tempfile.TemporaryDirectory(dir=preset_dir) as tmpdir:
 
         tmpdir = Path(tmpdir)
@@ -405,7 +441,7 @@ def main(
 
         # Set global.conf
         logger_step("Setting conan configuration")
-        set_global_conf(tmpdir)
+        set_global_conf(tmpdir, existing_config)
 
         # Initialize
         user = args.user or settings["Dependencies"]["user"]
@@ -440,16 +476,7 @@ def main(
 
         # Clean
         logger_step("Cleaning local cache")
-        res = run_conan(
-            [
-                "remove",
-                "-c",
-                "*",
-            ],
-            capture_output=True,
-        )
-        for line in res.stderr.splitlines():
-            logger.info(line)
+        res = run_conan(["remove", "-c", "*"])
 
         # Install
         logger_step("Installing")
@@ -460,40 +487,25 @@ def main(
                 "restore",
                 archive,
             ],
-            capture_output=True,
         )
-        for line in res.stderr.splitlines():
-            logger.info(line)
 
         # Check
         logger_step("Checking integrity")
-        res = run_conan(
-            [
-                "cache",
-                "check-integrity",
-                "*",
-            ],
-            capture_output=True,
-        )
-        for line in res.stderr.splitlines():
-            logger.info(line)
+        res = run_conan(["cache", "check-integrity", "*"])
         logger.info("Integrity check: OK")
 
         # Install profiles in conan home
         logger_step("Installing profiles")
         run_conan(["cache", "path", f"luxcoreconf/{release}@luxcore/luxcore"])
 
-        res = run_conan(
+        run_conan(
             [
                 "config",
                 "install-pkg",
                 "-vvv",
                 f"luxcoreconf/{release}@luxcore/luxcore",
-            ],
-            capture_output=True,
+            ]
         )
-        for line in res.stderr.splitlines():
-            logger.info(line)
 
         # Install profiles into destination ("deploy")
         src_profile_dir = conan_home() / "profiles"
@@ -501,7 +513,7 @@ def main(
         profile_dir.mkdir(parents=True, exist_ok=True)
         logger.info("")
         logger.info("Deploying profiles from %s to %s", src_profile_dir, profile_dir)
-        res = run_conan(
+        run_conan(
             [
                 "config",
                 "install",
@@ -509,11 +521,8 @@ def main(
                 f"--target-folder={str(profile_dir)}",
                 "-vvv",
                 src_profile_dir,
-            ],
-            capture_output=True,
+            ]
         )
-        for line in res.stderr.splitlines():
-            logger.info(line)
 
         # Generate & deploy
         logger_step("Generating...")
@@ -562,9 +571,9 @@ def main(
                     "conanfile.py",
                 ),
             ]
-            res = run_conan(main_block + end_block, capture_output=True)
-            for line in res.stderr.splitlines():
-                logger.info(line)
+
+            # conan is called here
+            run_conan(main_block + end_block)
 
         # Show presets
         res = subprocess.run(
