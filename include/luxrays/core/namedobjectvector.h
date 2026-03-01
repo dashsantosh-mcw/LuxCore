@@ -100,19 +100,10 @@ public:
 	/// destroyed. The object holder (unique_ptr) is returned
 	/// to caller for further finalization
 	template<typename T>
-	std::unique_ptr<T> DeleteObj(const std::string &name) {
-		auto oldObjPtr = DeleteObj<NamedObject>(name);
-		auto oldDerivedPtr = oldObjPtr ?
-			dynamic_uptr_cast<T>(std::move(oldObjPtr)) :
-			std::unique_ptr<T>();
-		return std::move(oldDerivedPtr);
-	}
+	std::unique_ptr<T> DeleteObj(const std::string &name);
 
-	// DeleteObj explicit instantiation for NamedObject
-	template<>
-	NamedObjectUPtr DeleteObj<NamedObject>(const std::string &name);
-
-	
+	template<>  // Specialization for NamedObject; other types will rely on it
+	std::unique_ptr<NamedObject> DeleteObj<NamedObject>(const std::string &name);
 
 	void DeleteObjs(const std::vector<std::string> &names);
 
@@ -185,11 +176,15 @@ template<>
 std::tuple< NamedObject&, std::unique_ptr<NamedObject> >
 NamedObjectVector::DefineObj(std::unique_ptr<NamedObject>&& obj);
 
-// Specialization (declaration) of DeleteObj for NamedObject class, so that
-// derived classes can rely on it
-template<>
-std::unique_ptr<NamedObject>
-NamedObjectVector::DeleteObj(const std::string &name);
+// Out-of-class definition for DeleteObj
+template<typename T>
+std::unique_ptr<T> NamedObjectVector::DeleteObj(const std::string &name) {
+	auto oldObjPtr = DeleteObj<NamedObject>(name);
+	auto oldDerivedPtr = oldObjPtr ?
+		dynamic_uptr_cast<T>(std::move(oldObjPtr)) :
+		std::unique_ptr<T>();
+	return std::move(oldDerivedPtr);
+}
 
 }  // Namespace luxrays
 
