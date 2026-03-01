@@ -102,8 +102,11 @@ public:
 	template<typename T>
 	std::unique_ptr<T> DeleteObj(const std::string &name);
 
+	// Workaround for gcc bug 85282 (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=85282)
+#ifndef __GNUG__
 	template<>  // Specialization for NamedObject; other types will rely on it
 	std::unique_ptr<NamedObject> DeleteObj<NamedObject>(const std::string &name);
+#endif
 
 	void DeleteObjs(const std::vector<std::string> &names);
 
@@ -169,12 +172,19 @@ private:
 };
 
 
-
 // Specialization (declaration) of DefineObj for NamedObject class, so that
 // derived classes can rely on it
 template<>
 std::tuple< NamedObject&, std::unique_ptr<NamedObject> >
 NamedObjectVector::DefineObj(std::unique_ptr<NamedObject>&& obj);
+
+
+// Workaround for gcc bug 85282 (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=85282)
+#ifdef __GNUG__
+template<>  // Specialization for NamedObject; other types will rely on it
+std::unique_ptr<NamedObject>
+NamedObjectVector::DeleteObj<NamedObject>(const std::string &name);
+#endif
 
 // Out-of-class definition for DeleteObj
 template<typename T>
@@ -185,6 +195,7 @@ std::unique_ptr<T> NamedObjectVector::DeleteObj(const std::string &name) {
 		std::unique_ptr<T>();
 	return std::move(oldDerivedPtr);
 }
+
 
 }  // Namespace luxrays
 
