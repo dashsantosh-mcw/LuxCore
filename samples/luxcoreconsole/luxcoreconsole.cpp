@@ -45,10 +45,12 @@ static string GetFileNameExt(const string &fileName) {
 static void BatchRendering(
 	const RenderConfigRPtr & config,
 	RenderStateRPtr startState,
-	Film& startFilm,
+	const std::unique_ptr<Film>& startFilm,
 	const bool showDevicesStats
 ) {
-	auto session = RenderSession::Create(config, startState, startFilm);
+	auto session = startFilm ?
+		RenderSession::Create(config, startState, *startFilm) :
+		RenderSession::Create(config);
 
 	const unsigned int haltTime = config->GetProperty("batch.halttime").Get<unsigned int>();
 	const unsigned int haltSpp = config->GetProperty("batch.haltspp").Get<unsigned int>(0);
@@ -258,7 +260,7 @@ int main(int argc, char *argv[]) {
 			config->Parse(props);
 		}
 
-		BatchRendering(config, startRenderState, *startFilm, showDevicesStats);
+		BatchRendering(config, startRenderState, startFilm, showDevicesStats);
 
 
 		LC_LOG("Done.");
