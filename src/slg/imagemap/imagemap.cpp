@@ -712,7 +712,9 @@ ImageMapStorageUPtr ImageMapStorageImpl<T, CHANNELS>::SelectChannel(
 			std::vector<ImageMapPixel<T, 3>> newPixels;
 			newPixels.reserve(pixelCount);
 			for (auto& p: pixels) {
-				newPixels.emplace_back(p[0]);
+				newPixels.emplace_back(
+					(std::initializer_list<T>){p[0], p[1], p[2]}
+				);
 			}
 			return std::make_unique<ImageMapStorageImpl<T, 3>>(
 				width, height, wrapType, filterType, std::move(newPixels)
@@ -896,7 +898,7 @@ void ImageMap::Init(
 
 	ImageSpec config;
 	config.attribute ("oiio:UnassociatedAlpha", 1);
-	std::unique_ptr<ImageInput> in(ImageInput::open(resolvedFileName, &config));
+	auto in = ImageInput::open(resolvedFileName, &config);
 
 	if (!in)
 		throw runtime_error(

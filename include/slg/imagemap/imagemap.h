@@ -21,6 +21,7 @@
 
 #include <Imath/half.h>
 
+#include <initializer_list>
 #include <string>
 #include <limits>
 #include <unordered_map>
@@ -60,10 +61,15 @@ class ImageMapPixel : std::array<T, CHANNELS> {
 public:
 	using BaseType = std::array<T, CHANNELS>;
 
-	ImageMapPixel(T v = 0) : BaseType{v} {}
+	explicit ImageMapPixel(T v = 0) : BaseType{v} {}
 
-	ImageMapPixel(T cs[CHANNELS]) {
+	explicit ImageMapPixel(T cs[CHANNELS]) {
 		std::copy(std::begin(cs), std::end(cs), this->begin());
+	}
+
+	explicit ImageMapPixel(std::initializer_list<T> init) {
+		assert(init.size() == CHANNELS);
+		std::copy(init.begin(), init.end(), this->begin());
 	}
 
 	~ImageMapPixel() { }
