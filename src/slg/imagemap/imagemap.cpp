@@ -713,7 +713,7 @@ ImageMapStorageUPtr ImageMapStorageImpl<T, CHANNELS>::SelectChannel(
 			newPixels.reserve(pixelCount);
 			for (auto& p: pixels) {
 				newPixels.emplace_back(
-					(std::initializer_list<T>){p[0], p[1], p[2]}
+					std::initializer_list<T>{p[0], p[1], p[2]}
 				);
 			}
 			return std::make_unique<ImageMapStorageImpl<T, 3>>(
