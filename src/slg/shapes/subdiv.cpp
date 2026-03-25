@@ -581,11 +581,164 @@ struct InterpolatedValues {
 	const int stride;
 };
 
+
+// Structure to represent an edge with sharpness information
+struct EdgeInfo {
+    int v0, v1;          // Vertex indices (always stored with v0 < v1)
+    float sharpness;     // Sharpness value (0.0 = smooth, 1.0 = sharp)
+    float creaseWeight;  // Crease weight for subdivision
+
+    EdgeInfo(int vertex0, int vertex1)
+        : v0(std::min(vertex0, vertex1)), v1(std::max(vertex0, vertex1)),
+          sharpness(0.0f), creaseWeight(0.0f) {}
+};
+
+// Calculate face normal for a triangle
+Vector calculateTriangleNormal(const ExtTriangleMesh &mesh, const Triangle &tri) {
+	auto vertices = std::span<Point>(mesh.GetVertices(), mesh.GetTotalVertexCount());
+    const Point &p0 = vertices[tri.v[0]];
+    const Point &p1 = vertices[tri.v[1]];
+    const Point &p2 = vertices[tri.v[2]];
+
+    const Vector edge1 = Vector(p1 - p0);
+    const Vector edge2 = Vector(p2 - p0);
+
+    return Normalize(Cross(edge1, edge2));
+}
+
+// Calculate dihedral angle between two adjacent triangles
+float calculateDihedralAngle(const Vector &normal1, const Vector &normal2,
+                           const Vector &edgeVector) {
+    // Calculate the angle between the two face normals
+    const float cosAngle = Dot(normal1, normal2);
+    const float angle = acosf(Clamp(cosAngle, -1.0f, 1.0f));
+
+    // Calculate the edge direction (normalized)
+    const Vector edgeDir = Normalize(edgeVector);
+
+    // Determine if the angle is convex or concave using cross product
+    const Vector crossProd = Cross(normal1, normal2);
+    const float sign = Dot(crossProd, edgeDir);
+
+    // Return the angle in the range [0, π]
+    return (sign >= 0) ? angle : M_PI - angle;
+}
+
+// Process edges to determine sharpness based on dihedral angles
+void processEdgesForSharpness(const ExtTriangleMesh &mesh,
+                             std::map<std::pair<int, int>, EdgeInfo> &edgeMap,
+                             float sharpnessThresholdRadians) {
+
+	auto triangles = std::span<Triangle>(mesh.GetTriangles(), mesh.GetTotalTriangleCount());
+	auto vertices = std::span<Point>(mesh.GetVertices(), mesh.GetTotalVertexCount());
+
+    // Clear any existing edge information
+    edgeMap.clear();
+
+    // First pass: build edge map
+	for (const auto& tri : triangles) {
+
+        // Process each edge of the triangle
+        for (int i = 0; i < 3; ++i) {
+            int v0 = tri.v[i];
+            int v1 = tri.v[(i + 1) % 3];
+
+            // Create a canonical edge key (always store with v0 < v1)
+            auto edgeKey = std::make_pair(std::min(v0, v1), std::max(v0, v1));
+
+            // If edge doesn't exist in map, create it
+            if (edgeMap.find(edgeKey) == edgeMap.end()) {
+                edgeMap.try_emplace(edgeKey, v0, v1);
+            }
+        }
+    }
+
+    // Second pass: calculate dihedral angles for edges shared by two triangles
+    for (auto &edgePair : edgeMap) {
+        EdgeInfo &edgeInfo = edgePair.second;
+        int v0 = edgeInfo.v0;
+        int v1 = edgeInfo.v1;
+
+        // Find all triangles that share this edge
+        std::vector<size_t> adjacentTris;
+        for (size_t triIndex = 0; triIndex < triangles.size(); ++triIndex) {
+            const Triangle &tri = triangles[triIndex];
+            // Check if triangle contains this edge (in either order)
+            if ((tri.v[0] == v0 && tri.v[1] == v1) ||
+                (tri.v[1] == v0 && tri.v[2] == v1) ||
+                (tri.v[2] == v0 && tri.v[0] == v1) ||
+                (tri.v[0] == v1 && tri.v[1] == v0) ||
+                (tri.v[1] == v1 && tri.v[2] == v0) ||
+                (tri.v[2] == v1 && tri.v[0] == v0)) {
+                adjacentTris.push_back(triIndex);
+            }
+        }
+
+        // If edge is on boundary (only one adjacent triangle), mark as sharp
+        if (adjacentTris.size() == 1) {
+            edgeInfo.sharpness = 1.0f;
+            edgeInfo.creaseWeight = 1.0f;
+            continue;
+        }
+
+        // For internal edges, calculate dihedral angle
+        if (adjacentTris.size() >= 2) {
+            const Triangle &tri1 = triangles[adjacentTris[0]];
+            const Triangle &tri2 = triangles[adjacentTris[1]];
+
+            const Vector normal1 = calculateTriangleNormal(mesh, tri1);
+            const Vector normal2 = calculateTriangleNormal(mesh, tri2);
+
+            // Calculate edge vector
+            const Vector edgeVector = Vector(vertices[v1] - vertices[v0]);
+            const float dihedralAngle = calculateDihedralAngle(normal1, normal2, edgeVector);
+
+            // Determine sharpness based on threshold
+            if (dihedralAngle > sharpnessThresholdRadians) {
+                edgeInfo.sharpness = 1.0f;
+                edgeInfo.creaseWeight = 1.0f;
+            } else {
+                edgeInfo.sharpness = 0.0f;
+                edgeInfo.creaseWeight = 0.0f;
+            }
+        }
+    }
+}
+
+// Debug function to output edge sharpness information
+void debugEdgeSharpness(const ExtTriangleMesh &mesh, float sharpnessThresholdRadians) {
+    std::map<std::pair<int, int>, EdgeInfo> edgeMap;
+    processEdgesForSharpness(mesh, edgeMap, sharpnessThresholdRadians);
+
+    int sharpCount = 0;
+    int smoothCount = 0;
+    int boundaryCount = 0;
+
+    for (const auto &edgePair : edgeMap) {
+        const EdgeInfo &edge = edgePair.second;
+        if (edge.sharpness > 0.5f) {
+            sharpCount++;
+        } else {
+            smoothCount++;
+        }
+    }
+
+    SLG_LOG("Edge sharpness analysis:");
+    SLG_LOG("  Total edges: " << edgeMap.size());
+    SLG_LOG("  Sharp edges: " << sharpCount << " (" <<
+           (100.0f * sharpCount / edgeMap.size()) << "%)");
+    SLG_LOG("  Smooth edges: " << smoothCount << " (" <<
+           (100.0f * smoothCount / edgeMap.size()) << "%)");
+}
+
+
 // Adaptive topology refiner factory function
 TopologyRefinerPtr createTopologyAdaptiveRefiner(
 	const int * vertIndicesPerFace,
 	int numVertices,
 	int numFaces,
+	const std::map<std::pair<int, int>, EdgeInfo>& edgeMap,
+	const float sharpnessThresholdRadians,
 	const Far::PatchTableFactory::Options& patchOptions
 ) {
 
@@ -607,6 +760,21 @@ TopologyRefinerPtr createTopologyAdaptiveRefiner(
 	desc.numVertsPerFace = vertsPerFace.data();
 	desc.vertIndicesPerFace = vertIndicesPerFace;
 
+	// Set creases (sharp edges)
+	std::vector<int> creases;
+	std::vector<float> creaseWeights;
+    for (const auto &edgePair : edgeMap) {
+        const EdgeInfo &edge = edgePair.second;
+		if (edge.sharpness > 0.5f) {  // TODO parameter
+			creases.push_back(edge.v0);
+			creases.push_back(edge.v1);
+			creaseWeights.push_back(10.0f);
+		}
+	}
+	desc.numCreases = creaseWeights.size();
+	desc.creaseVertexIndexPairs = creases.data();
+	desc.creaseWeights = creaseWeights.data();
+
 	// Create refiner
 	using RefinerFactory = Far::TopologyRefinerFactory<Far::TopologyDescriptor>;
     TopologyRefinerPtr refiner(
@@ -616,6 +784,7 @@ TopologyRefinerPtr createTopologyAdaptiveRefiner(
 		)
 	);
 	assert(refiner);
+
 
 	return refiner;
 
@@ -652,12 +821,17 @@ struct Surface {
 		patchTableOptions.endCapType =
 			Far::PatchTableFactory::Options::ENDCAP_BSPLINE_BASIS;
 
+		// Mark edges for sharpness
+		std::map<std::pair<int, int>, EdgeInfo> edgeMap;
+		processEdgesForSharpness(srcMesh, edgeMap, 0.5);
+
 		// Construct refiner
 		refiner = std::move(
 			createTopologyAdaptiveRefiner(
 				reinterpret_cast<const int *>(srcMesh.GetTriangles()),
 				srcMesh.GetTotalVertexCount(),
 				srcMesh.GetTotalTriangleCount(),
+				edgeMap,
 				patchTableOptions
 			)
 		);
@@ -699,7 +873,7 @@ struct Surface {
 	/// Input:
 	///           V2
 	///          / \
-	///		   /  \
+	///         /  \
 	///        /   \
 	///      V0----V1
 	///
