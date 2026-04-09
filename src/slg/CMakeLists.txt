@@ -490,9 +490,10 @@ SOURCE_GROUP("Source Files\\SLG Core Library" FILES ${SLG_CORE_SRCS})
 
 add_library(slg-core STATIC ${SLG_CORE_SRCS})
 
-target_link_libraries(slg-core PRIVATE
+target_link_libraries(slg-core PUBLIC
   luxrays
   boost::boost
+  Boost::serialization
   OpenColorIO::OpenColorIO
   OpenVDB::openvdb
   openexr::openexr
@@ -714,8 +715,9 @@ set(SLG_FILM_SRCS
 SOURCE_GROUP("Source Files\\SLG Film Library" FILES ${SLG_FILM_SRCS})
 
 add_library(slg-film STATIC ${SLG_FILM_SRCS})
-target_link_libraries(slg-film PRIVATE
+target_link_libraries(slg-film PUBLIC
     boost::boost
+    Boost::serialization
     OpenColorIO::OpenColorIO
     embree::embree
     oidn::oidn

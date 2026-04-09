@@ -85,6 +85,7 @@ target_link_libraries(luxcore PRIVATE
     bcd
     robin_hood::robin_hood
     boost::boost
+    Boost::serialization
     spdlog::spdlog_header_only
     openjph::openjph
     openimageio::openimageio
@@ -100,6 +101,7 @@ target_link_libraries(luxcore_static PRIVATE
     bcd
     robin_hood::robin_hood
     boost::boost
+    Boost::serialization
     spdlog::spdlog_header_only
     openjph::openjph
     openimageio::openimageio
