@@ -28,6 +28,7 @@ CONAN_ENV = {}
 URL_SUFFIXES = {
     "Linux-X64": "ubuntu-latest",
     "Windows-X64": "windows-latest",
+    "Windows-ARM64": "windows-11-arm",
     "macOS-ARM64": "macos-15-arm64",
     "macOS-X64": "macos-15-intel",
 }
@@ -47,7 +48,14 @@ def find_platform():
     if system == "Linux":
         res = "Linux-X64"
     elif system == "Windows":
-        res = "Windows-X64"
+        machine = platform.machine()
+        if machine.lower() == "arm64":
+            res = "Windows-ARM64"
+        elif machine.lower() in ("amd64", "x86_64"):
+            res = "Windows-X64"
+        else:
+            raise RuntimeError(f"Unknown machine for Windows: '{machine}'")
+        print(f"Detected Windows platform: {res}")
     elif system == "Darwin":
         machine = platform.machine()
         if machine == "arm64":
@@ -69,7 +77,7 @@ def build_url(
     suffix = URL_SUFFIXES[find_platform()]
 
     if not user:
-        user = "LuxCoreRender"
+        user = "dashsantosh-mcw"
 
     url = (
         "https://github.com",
@@ -77,7 +85,7 @@ def build_url(
         "LuxCoreDeps",
         "releases",
         "download",
-        f"v{release}",
+        f"v1.0.0",
         f"luxcore-deps-{suffix}.zip",
     )
 
