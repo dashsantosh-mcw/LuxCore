@@ -56,8 +56,8 @@ jobs:
     needs: [check-version]
     uses: ./.github/workflows/sample-builder.yml
     with:
-      repository: LuxCoreRender/LuxCore
-      version: ${{ inputs.release-version }}
+      repository: dashsantosh-mcw/LuxCore
+      version: '1.0.0'
 
   create-release:
     name: 'Create release'
