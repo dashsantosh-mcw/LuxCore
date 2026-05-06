@@ -59,7 +59,7 @@ jobs:
       fail-fast: false
       matrix:
         python-minor: [10, 11, 12, 13, 14]
-        os: [ubuntu-latest, windows-latest, macos-15-intel, macos-15]
+        os: [windows-11-arm]
     env:
       # Reminder: report all variables here to CIBW_ENVIRONMENT_PASS_LINUX
       BUILD_TYPE: ${{ github.event.inputs.build-type || 'Release' }}
@@ -157,7 +157,7 @@ jobs:
 
       - name: Prepare msvc
         if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756  # 1.13.0
 
       - name: Prepare Linux
         if: runner.os == 'Linux'
