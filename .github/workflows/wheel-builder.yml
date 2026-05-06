@@ -58,7 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-minor: [10, 11, 12, 13, 14]
+        python-minor: [11]
         os: [windows-11-arm]
     env:
       # Reminder: report all variables here to CIBW_ENVIRONMENT_PASS_LINUX
