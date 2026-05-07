@@ -75,12 +75,8 @@ def build_url(
 ):
     """Build the url to download from."""
     suffix = URL_SUFFIXES[find_platform()]
-    current_platform = find_platform()
 
-    if current_platform == "Windows-ARM64":
-        user = "dashsantosh-mcw"
-        release = "1.0.0" 
-    elif not user:
+    if not user:
         user = "LuxCoreRender"
 
     url = (
@@ -458,6 +454,11 @@ def main(
         # Initialize
         user = args.user or settings["Dependencies"]["user"]
         release = args.release or settings["Dependencies"]["release"]
+
+        if find_platform() == "Windows-ARM64":
+            user = "dashsantosh-mcw"
+            release = "1.0.0"
+
         url = build_url(
             user,
             release,
