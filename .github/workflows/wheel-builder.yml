@@ -63,9 +63,9 @@ jobs:
     env:
       # Reminder: report all variables here to CIBW_ENVIRONMENT_PASS_LINUX
       BUILD_TYPE: ${{ github.event.inputs.build-type || 'Release' }}
-      # CXX_VERSION: 20
-      # GCC_VERSION: 14
-      # GLIBC_VERSION: 2_28
+      CXX_VERSION: 20
+      GCC_VERSION: 14
+      GLIBC_VERSION: 2_28
       GH_TOKEN: ${{ github.token }}
       PYTHON_MINOR: ${{ matrix.python-minor }}
       OWNER: ${{ github.repository_owner }}
@@ -284,7 +284,7 @@ jobs:
           CIBW_BUILD_VERBOSITY: 1
           CIBW_BUILD: cp3${{ matrix.python-minor }}-*
           CIBW_SKIP: "*musllinux*"
-          CIBW_ARCHS: ARM64
+          CIBW_ARCHS: ${{ runner.arch == 'ARM64' && 'ARM64' || 'auto64' }}
           CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux_${{ env.GLIBC_VERSION }}_x86_64
           CIBW_ENVIRONMENT: >
             SKBUILD_CMAKE_ARGS='--preset conan-default;--log-level=VERBOSE;-DLUXCORE_VERSION=${{ steps.output-version.outputs.version }};-G Ninja Multi-Config'
@@ -374,12 +374,7 @@ jobs:
           CIBW_TEST_COMMAND_LINUX: pyluxcoretest
           CIBW_TEST_COMMAND_WINDOWS: |
             if '%CIBW_ARCHS%'=='ARM64' (
-              python -c "
-                import pyluxcore
-                # Use CPU engine, no CUDA needed
-                pyluxcore.Init()
-                print('LuxCore initialized successfully on ARM64')
-              "
+              python -c "import pyluxcore; pyluxcore.Init()"
             ) else (
               pyluxcoretest
             )

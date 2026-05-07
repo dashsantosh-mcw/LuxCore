@@ -78,15 +78,12 @@ def check(name, min_version=None, mandatory=True):
     # Existence
     if not (app := shutil.which(name)):
         return error("'%s' is missing!", display_name)
-    logger.info(f"app: '{app}'") 
 
     # Get version
     result = subprocess.run(
         [app, "--version"], capture_output=True, text=True, check=False
     )
-    logger.info(f"result: '{result}'") 
     output = result.stdout.strip() or result.stderr.strip()
-    logger.info(f"DEBUG: Raw output from conan --version is: '{output}'") # Add this line
     # Match version patterns like 1.2.3, 4.5, 2.0.1-alpha, etc.
     if match := re.search(r"\d+\.\d+(?:\.\d+)?(?:[-.\w]*)?", output):
         version_str = match.group(0)
