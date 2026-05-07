@@ -75,9 +75,13 @@ def build_url(
 ):
     """Build the url to download from."""
     suffix = URL_SUFFIXES[find_platform()]
+    current_platform = find_platform()
 
-    if not user:
+    if current_platform == "Windows-ARM64":
         user = "dashsantosh-mcw"
+        release = "1.0.0" 
+    elif not user:
+        user = "LuxCoreRender"
 
     url = (
         "https://github.com",
@@ -85,7 +89,7 @@ def build_url(
         "LuxCoreDeps",
         "releases",
         "download",
-        f"v1.0.0",
+        f"v{release}",
         f"luxcore-deps-{suffix}.zip",
     )
 
