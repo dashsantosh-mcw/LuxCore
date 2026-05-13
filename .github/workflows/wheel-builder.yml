@@ -116,7 +116,11 @@ jobs:
         shell: bash
         run: |
             _build_type=$(echo "${{ env.BUILD_TYPE }}" | tr '[:upper:]' '[:lower:]')
-            _conan_home=$(cygpath -w "${{ env.WORKSPACE }}/.conan2")
+            if [[ "${{ runner.os }}" == "Windows" ]]; then
+              _conan_home=$(cygpath -w "${{ env.WORKSPACE }}/.conan2")
+            else
+              _conan_home="${{ env.WORKSPACE }}/.conan2"
+            fi
             echo "CONAN_PRESET=conan-${_build_type}" >> $GITHUB_ENV
             echo "CONAN_HOME=${_conan_home}" >> $GITHUB_ENV
 
