@@ -85,11 +85,10 @@ def build_url(
         "LuxCoreDeps",
         "releases",
         "download",
-        "untagged-3b5d632c24e65fdf0282",
+        "v1.0.0-arm64beta"
         f"luxcore-deps-{suffix}.zip",
     )
     print("url : ",url)
-
     return "/".join(url)
 
 
