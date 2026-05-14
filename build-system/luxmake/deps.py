@@ -85,7 +85,7 @@ def build_url(
         "LuxCoreDeps",
         "releases",
         "download",
-        f"v1.0.0-arm64beta",
+        f"v1.0.0-arm64beta2",
         f"luxcore-deps-{suffix}.zip",
     )
 
