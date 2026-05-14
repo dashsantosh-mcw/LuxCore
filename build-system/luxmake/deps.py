@@ -85,10 +85,10 @@ def build_url(
         "LuxCoreDeps",
         "releases",
         "download",
-        "v1.0.0-arm64beta",
+        f"v{release}",
         f"luxcore-deps-{suffix}.zip",
     )
-    print("url : ",url)
+
     return "/".join(url)
 
 
@@ -457,7 +457,7 @@ def main(
 
         if find_platform() == "Windows-ARM64":
             user = "dashsantosh-mcw"
-            release = "1.0.0"
+            release = "1.0.0-arm64beta"
 
         url = build_url(
             user,
