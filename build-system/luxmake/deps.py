@@ -88,6 +88,7 @@ def build_url(
         "untagged-3b5d632c24e65fdf0282",
         f"luxcore-deps-{suffix}.zip",
     )
+    print("url : ",url)
 
     return "/".join(url)
 
