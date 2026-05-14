@@ -77,7 +77,7 @@ def build_url(
     suffix = URL_SUFFIXES[find_platform()]
 
     if not user:
-        user = "LuxCoreRender"
+        user = "dashsantosh-mcw"
 
     url = (
         "https://github.com",
@@ -85,7 +85,7 @@ def build_url(
         "LuxCoreDeps",
         "releases",
         "download",
-        f"v{release}",
+        f"v1.0.0-arm64beta",
         f"luxcore-deps-{suffix}.zip",
     )
 
@@ -454,11 +454,6 @@ def main(
         # Initialize
         user = args.user or settings["Dependencies"]["user"]
         release = args.release or settings["Dependencies"]["release"]
-
-        if find_platform() == "Windows-ARM64":
-            user = "dashsantosh-mcw"
-            release = "1.0.0-arm64beta"
-
         url = build_url(
             user,
             release,
