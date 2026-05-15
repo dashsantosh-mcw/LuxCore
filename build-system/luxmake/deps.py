@@ -81,11 +81,11 @@ def build_url(
 
     url = (
         "https://github.com",
-        "dashsantosh-mcw",
+        "shaikadilrasheed-mcw",
         "LuxCoreDeps",
         "releases",
         "download",
-        f"v1.0.0-ubuntu",
+        f"v1.0.0-arm64beta",
         f"luxcore-deps-{suffix}.zip",
     )
 
