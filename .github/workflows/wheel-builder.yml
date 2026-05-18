@@ -58,8 +58,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-minor: [10]
-        os: [macos-15]
+        python-minor: [10, 11, 12, 13, 14]
+        os: [ubuntu-latest, windows-latest, macos-15-intel, macos-15, windows-11-arm]
     env:
       # Reminder: report all variables here to CIBW_ENVIRONMENT_PASS_LINUX
       BUILD_TYPE: ${{ github.event.inputs.build-type || 'Release' }}
@@ -288,7 +288,7 @@ jobs:
           CIBW_BUILD_VERBOSITY: 1
           CIBW_BUILD: cp3${{ matrix.python-minor }}-*
           CIBW_SKIP: "*musllinux*"
-          CIBW_ARCHS: auto64
+          CIBW_ARCHS: ${{ runner.os == 'Windows' && runner.arch == 'ARM64' && 'ARM64' || 'auto64' }}
           CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux_${{ env.GLIBC_VERSION }}_x86_64
           CIBW_ENVIRONMENT: >
             SKBUILD_CMAKE_ARGS='--preset conan-default;--log-level=VERBOSE;-DLUXCORE_VERSION=${{ steps.output-version.outputs.version }};-G Ninja Multi-Config'
